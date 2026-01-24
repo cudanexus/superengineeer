@@ -40,7 +40,7 @@ Open your browser at **http://localhost:3000** to access the web UI.
 
 | Requirement | Version |
 |-------------|---------|
-| **Node.js** | 18.0.0 or higher |
+| **Node.js** | 20.0.0 or higher |
 | **Claude Code CLI** | Latest version |
 
 ### Installing Claude Code CLI
