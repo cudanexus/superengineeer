@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createFilesystemRouter, WindowsFilesystemService } from './filesystem';
+import { createFilesystemRouter, createFilesystemService } from './filesystem';
 import { createProjectsRouter } from './projects';
 import { createSettingsRouter } from './settings';
 import {
@@ -93,7 +93,7 @@ export function createApiRouter(deps: ApiRouterDependencies = {}): Router {
   });
 
   // Filesystem routes
-  const filesystemService = new WindowsFilesystemService();
+  const filesystemService = createFilesystemService();
   router.use('/fs', createFilesystemRouter(filesystemService));
 
   // Settings routes

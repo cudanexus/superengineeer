@@ -24,30 +24,8 @@ export interface DirectoryEntry {
   isDirectory: boolean;
 }
 
-export class WindowsFilesystemService implements FilesystemService {
-  async listDrives(): Promise<DriveInfo[]> {
-    const drives: DriveInfo[] = [];
-
-    for (let charCode = 65; charCode <= 90; charCode++) {
-      const letter = String.fromCharCode(charCode);
-      const drivePath = `${letter}:\\`;
-
-      if (await this.driveExists(drivePath)) {
-        drives.push({ name: `${letter}:`, path: drivePath });
-      }
-    }
-
-    return drives;
-  }
-
-  private async driveExists(drivePath: string): Promise<boolean> {
-    try {
-      await fs.promises.access(drivePath);
-      return true;
-    } catch {
-      return false;
-    }
-  }
+abstract class BaseFilesystemService implements FilesystemService {
+  abstract listDrives(): Promise<DriveInfo[]>;
 
   async listDirectory(dirPath: string): Promise<DirectoryEntry[]> {
     const normalizedPath = path.normalize(dirPath);
@@ -107,6 +85,77 @@ export class WindowsFilesystemService implements FilesystemService {
     const ext = path.extname(filePath).toLowerCase();
     return TEXT_FILE_EXTENSIONS.has(ext);
   }
+}
+
+export class WindowsFilesystemService extends BaseFilesystemService {
+  async listDrives(): Promise<DriveInfo[]> {
+    const drives: DriveInfo[] = [];
+
+    for (let charCode = 65; charCode <= 90; charCode++) {
+      const letter = String.fromCharCode(charCode);
+      const drivePath = `${letter}:\\`;
+
+      if (await this.driveExists(drivePath)) {
+        drives.push({ name: `${letter}:`, path: drivePath });
+      }
+    }
+
+    return drives;
+  }
+
+  private async driveExists(drivePath: string): Promise<boolean> {
+    try {
+      await fs.promises.access(drivePath);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
+export class UnixFilesystemService extends BaseFilesystemService {
+  async listDrives(): Promise<DriveInfo[]> {
+    const drives: DriveInfo[] = [{ name: '/', path: '/' }];
+
+    if (await this.directoryExists('/Volumes')) {
+      const volumes = await this.listMountedVolumes();
+      drives.push(...volumes);
+    }
+
+    return drives;
+  }
+
+  private async directoryExists(dirPath: string): Promise<boolean> {
+    try {
+      const stat = await fs.promises.stat(dirPath);
+      return stat.isDirectory();
+    } catch {
+      return false;
+    }
+  }
+
+  private async listMountedVolumes(): Promise<DriveInfo[]> {
+    try {
+      const entries = await fs.promises.readdir('/Volumes', { withFileTypes: true });
+
+      return entries
+        .filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
+        .map((entry) => ({
+          name: entry.name,
+          path: path.join('/Volumes', entry.name),
+        }));
+    } catch {
+      return [];
+    }
+  }
+}
+
+export function createFilesystemService(): FilesystemService {
+  if (process.platform === 'win32') {
+    return new WindowsFilesystemService();
+  }
+
+  return new UnixFilesystemService();
 }
 
 const TEXT_FILE_EXTENSIONS = new Set([
