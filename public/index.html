@@ -1,0 +1,997 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claudito - Agent Manager</title>
+  <script src="/vendor/tailwind.js"></script>
+  <script src="/vendor/jquery.min.js"></script>
+  <script src="/vendor/marked.min.js"></script>
+  <script src="/vendor/highlight.min.js"></script>
+  <link rel="stylesheet" href="/vendor/highlight-github-dark.min.css">
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+  <div id="app" class="flex h-screen">
+    <!-- Sidebar -->
+    <aside id="sidebar" class="w-64 bg-gray-800 border-r border-gray-700 flex flex-col">
+      <!-- Header -->
+      <div class="p-3 border-b border-gray-700 flex justify-between items-center">
+        <div>
+          <h1 class="text-base font-bold text-purple-400">Claudito</h1>
+          <p class="text-xs text-gray-400">Agent Manager</p>
+        </div>
+        <button id="btn-settings" class="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors" title="Settings">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Add Project Button -->
+      <div class="p-2">
+        <button id="btn-add-project" class="w-full bg-purple-600 hover:bg-purple-700 text-white py-1.5 px-3 rounded flex items-center justify-center gap-1.5 text-sm transition-colors">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+          </svg>
+          Add Project
+        </button>
+      </div>
+
+      <!-- Project List -->
+      <div class="flex-1 overflow-y-auto">
+        <div id="project-list" class="p-2 space-y-2">
+          <!-- Projects will be rendered here -->
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="p-2 border-t border-gray-700 text-xs text-gray-500">
+        <div class="flex justify-between items-center">
+          <div>
+            <span id="running-count" class="text-green-400">0</span>/<span id="max-concurrent">3</span> running
+          </div>
+          <div id="queue-info" class="hidden">
+            <span id="queued-count" class="text-yellow-400">0</span> queued
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col overflow-hidden">
+      <!-- Empty State -->
+      <div id="empty-state" class="flex-1 flex items-center justify-center">
+        <div class="text-center">
+          <svg class="w-12 h-12 mx-auto text-gray-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
+          </svg>
+          <h2 class="text-base font-semibold text-gray-400 mb-1">No Project Selected</h2>
+          <p class="text-xs text-gray-500">Select a project from the sidebar or add a new one</p>
+        </div>
+      </div>
+
+      <!-- Project Detail View -->
+      <div id="project-detail" class="flex-1 flex flex-col hidden relative overflow-hidden">
+        <!-- Loading Overlay -->
+        <div id="content-loading" class="content-loading-overlay hidden">
+          <div class="text-center">
+            <div class="loading-spinner mx-auto mb-2"></div>
+            <p class="text-sm text-gray-400" id="loading-message">Processing...</p>
+          </div>
+        </div>
+
+        <!-- Project Header -->
+        <header class="bg-gray-800 border-b border-gray-700 p-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <h2 id="project-name" class="text-base font-semibold"></h2>
+              <span id="project-status" class="status-badge"></span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <!-- Mode Selector -->
+              <div id="mode-selector" class="flex items-center bg-gray-700 rounded overflow-hidden text-sm">
+                <button id="btn-mode-interactive" class="py-1 px-2.5 transition-colors mode-btn mode-active" title="Interactive Mode - Chat with Claude">
+                  <svg class="w-3.5 h-3.5 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                  </svg>
+                  Interactive
+                </button>
+                <button id="btn-mode-autonomous" class="py-1 px-2.5 transition-colors mode-btn" title="Autonomous Mode - Run through roadmap automatically">
+                  <svg class="w-3.5 h-3.5 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                  </svg>
+                  Autonomous
+                </button>
+              </div>
+              <!-- Start/Stop only for autonomous mode -->
+              <button id="btn-start-agent" class="bg-green-600 hover:bg-green-700 text-white py-1 px-2.5 rounded flex items-center gap-1.5 text-sm transition-colors hidden">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                Start
+              </button>
+              <button id="btn-stop-agent" class="bg-red-600 hover:bg-red-700 text-white py-1 px-2.5 rounded flex items-center gap-1.5 text-sm transition-colors hidden">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/>
+                </svg>
+                Stop
+              </button>
+              <button id="btn-view-roadmap" class="bg-gray-700 hover:bg-gray-600 text-white py-1 px-2.5 rounded flex items-center gap-1.5 text-sm transition-colors">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+                </svg>
+                Roadmap
+              </button>
+              <button id="btn-toggle-debug" class="bg-gray-700 hover:bg-gray-600 text-white py-1 px-2.5 rounded flex items-center gap-1.5 text-sm transition-colors" title="Toggle Debug Panel">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
+                </svg>
+                Debug
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <!-- Main Content Area with Tabs -->
+        <div id="main-content-area" class="flex-1 overflow-hidden flex flex-col bg-gray-900 min-h-0">
+          <!-- Tab Bar -->
+          <div class="flex border-b border-gray-700 bg-gray-800">
+            <button id="tab-agent-output" class="tab-button active py-2 px-4 text-sm font-medium border-b-2 border-purple-500 text-white">
+              <svg class="w-4 h-4 inline-block mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+              </svg>
+              Agent Output
+            </button>
+            <button id="tab-project-files" class="tab-button py-2 px-4 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200">
+              <svg class="w-4 h-4 inline-block mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+              </svg>
+              Project Files
+            </button>
+          </div>
+
+          <!-- Agent Output Tab Content -->
+          <div id="tab-content-agent-output" class="tab-content flex-1 overflow-hidden flex flex-col">
+            <!-- Conversation toolbar -->
+            <div id="conversation-toolbar" class="flex items-center justify-between gap-2 p-2 border-b border-gray-700">
+              <div class="flex items-center gap-2">
+                <button id="btn-new-conversation" class="bg-gray-700 hover:bg-gray-600 text-white py-1 px-2 rounded flex items-center gap-1 text-xs transition-colors" title="Start a new conversation">
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                  </svg>
+                  New
+                </button>
+                <button id="btn-show-history" class="bg-gray-700 hover:bg-gray-600 text-white py-1 px-2 rounded flex items-center gap-1 text-xs transition-colors" title="View conversation history">
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                  </svg>
+                  History
+                </button>
+                <button id="btn-context-usage" class="bg-gray-700 hover:bg-gray-600 text-white py-1 px-2 rounded flex items-center gap-1 text-xs transition-colors" title="View context usage">
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                  </svg>
+                  Context Usage
+                </button>
+                <button id="btn-claude-files" class="bg-gray-700 hover:bg-gray-600 text-white py-1 px-2 rounded flex items-center gap-1 text-xs transition-colors" title="View and edit CLAUDE.md files">
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                  </svg>
+                  Claude Files
+                </button>
+                <button id="btn-tasks" class="bg-gray-700 hover:bg-gray-600 text-white py-1 px-2 rounded flex items-center gap-1 text-xs transition-colors relative" title="View current tasks">
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+                  </svg>
+                  Tasks
+                  <span id="tasks-badge" class="hidden absolute -top-1 -right-1 bg-purple-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-medium">0</span>
+                </button>
+                <span id="conversation-stats" class="text-xs text-gray-500 flex items-center gap-3"></span>
+              </div>
+              <div class="flex items-center gap-2">
+                <div id="agent-output-spinner" class="loading-spinner small hidden"></div>
+                <span id="agent-status-label" class="text-xs text-gray-400 hidden">Agent running...</span>
+                <!-- Font Size Controls -->
+                <div class="flex items-center gap-1 border-r border-gray-600 pr-2">
+                  <button id="btn-font-decrease" class="bg-gray-700 hover:bg-gray-600 text-white w-6 h-6 rounded flex items-center justify-center text-xs transition-colors" title="Decrease font size">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
+                    </svg>
+                  </button>
+                  <span id="font-size-display" class="text-xs text-gray-400 w-8 text-center">14px</span>
+                  <button id="btn-font-increase" class="bg-gray-700 hover:bg-gray-600 text-white w-6 h-6 rounded flex items-center justify-center text-xs transition-colors" title="Increase font size">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                  </button>
+                </div>
+                <!-- Auto-scroll is now handled automatically, button hidden -->
+                <button id="btn-toggle-scroll-lock" class="bg-gray-700 hover:bg-gray-600 text-white py-0.5 px-2 rounded flex items-center gap-1 text-xs transition-colors hidden" title="Auto-scroll enabled. Click to pause.">
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
+                  </svg>
+                  <span class="scroll-lock-text">Auto-scroll</span>
+                </button>
+              </div>
+            </div>
+            <div id="conversation-header" class="flex items-center justify-between gap-2 p-2 border-b border-gray-700 hidden">
+              <div class="flex items-center gap-2">
+                <div class="loading-spinner small"></div>
+                <span class="text-xs text-gray-400">Agent Output (live)</span>
+              </div>
+            </div>
+            <div id="conversation-container" class="flex-1 overflow-y-auto p-3">
+              <div id="conversation" class="space-y-2 font-mono text-sm">
+                <!-- Conversation messages will be rendered here -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Project Files Tab Content -->
+          <div id="tab-content-project-files" class="tab-content flex-1 overflow-hidden hidden">
+            <div class="flex h-full">
+              <!-- File Browser Sidebar -->
+              <div id="file-browser-sidebar" class="w-64 bg-gray-800 border-r border-gray-700 flex flex-col overflow-hidden">
+                <div class="p-2 border-b border-gray-700 flex items-center justify-between">
+                  <span class="text-xs font-semibold text-gray-400">Files</span>
+                  <button id="btn-refresh-files" class="p-1 text-gray-400 hover:text-white rounded transition-colors" title="Refresh">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                  </button>
+                </div>
+                <div id="file-browser-tree" class="flex-1 overflow-y-auto p-1 text-xs">
+                  <!-- File tree will be rendered here -->
+                </div>
+              </div>
+              <!-- File Editor Area -->
+              <div id="file-editor-area" class="flex-1 flex flex-col overflow-hidden">
+                <!-- Open File Tabs -->
+                <div id="open-file-tabs" class="flex bg-gray-800 border-b border-gray-700 overflow-x-auto">
+                  <!-- File tabs will be rendered here -->
+                </div>
+                <!-- File Content -->
+                <div id="file-editor-content" class="flex-1 overflow-hidden bg-gray-900 flex flex-col">
+                  <div id="file-editor-empty" class="flex-1 flex items-center justify-center text-gray-500 text-sm">
+                    <div class="text-center">
+                      <svg class="w-12 h-12 mx-auto mb-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                      </svg>
+                      <p>Select a file to view or edit</p>
+                    </div>
+                  </div>
+                  <div id="file-editor-wrapper" class="flex-1 overflow-hidden hidden">
+                    <div id="file-editor-toolbar" class="flex items-center justify-between p-2 bg-gray-800 border-b border-gray-700">
+                      <span id="file-editor-path" class="text-xs text-gray-400 truncate"></span>
+                      <div class="flex items-center gap-2">
+                        <span id="file-editor-modified" class="text-xs text-yellow-400 hidden">Modified</span>
+                        <button id="btn-save-file" class="bg-green-600 hover:bg-green-700 text-white py-1 px-2 rounded text-xs transition-colors hidden">
+                          <svg class="w-3 h-3 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
+                          </svg>
+                          Save
+                        </button>
+                      </div>
+                    </div>
+                    <div id="code-editor-container" class="code-editor-container w-full h-full bg-gray-900">
+                      <pre id="code-editor-backdrop" class="code-editor-backdrop"><code id="code-editor-highlight"></code></pre>
+                      <textarea id="file-editor-textarea" class="code-editor-textarea text-gray-100" spellcheck="false"></textarea>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Input Area for Interactive Mode -->
+        <div id="interactive-input-area" class="bg-gray-800 border-t border-gray-700 p-2">
+          <form id="form-send-message" class="flex gap-2 items-stretch">
+            <textarea
+              id="input-message"
+              name="message"
+              rows="3"
+              class="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm resize-none focus:outline-none focus:border-purple-500 placeholder-gray-500 textarea-auto-resize"
+              placeholder="Type a message to Claude... (Ctrl+Enter to send)"
+            ></textarea>
+            <button
+              type="submit"
+              id="btn-send-message"
+              class="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-4 rounded text-sm transition-colors flex items-center gap-1.5"
+            >
+              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+              </svg>
+              Send
+            </button>
+          </form>
+          <div id="input-hint" class="text-xs text-gray-500 mt-1">
+            <span id="input-hint-text">Ctrl+Enter to send, Enter for new line</span>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Add Project Modal -->
+  <div id="modal-add-project" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl">
+        <div class="p-3 border-b border-gray-700 flex items-center justify-between">
+          <h3 class="font-semibold">Add Project</h3>
+          <button class="modal-close text-gray-400 hover:text-white">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        <form id="form-add-project" class="p-3 space-y-3">
+          <div>
+            <label class="block text-xs font-medium text-gray-300 mb-1">Project Name</label>
+            <input type="text" name="name" id="input-project-name" required class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-purple-500" placeholder="My Project">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-300 mb-1">Project Path</label>
+            <div class="flex gap-2">
+              <input type="text" name="path" id="input-project-path" required class="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-purple-500" placeholder="Select a folder..." readonly>
+              <button type="button" id="btn-browse-folder" class="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1.5 rounded text-sm transition-colors">
+                Browse
+              </button>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <input type="checkbox" name="createNew" id="create-new" class="rounded bg-gray-700 border-gray-600 text-purple-500 focus:ring-purple-500">
+            <label for="create-new" class="text-xs text-gray-300">Create new project folder</label>
+          </div>
+          <div class="flex justify-end gap-2 pt-2">
+            <button type="button" class="modal-close px-3 py-1.5 text-sm text-gray-300 hover:text-white transition-colors">Cancel</button>
+            <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded text-sm transition-colors">Add Project</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Folder Browser Modal -->
+  <div id="modal-folder-browser" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl">
+        <div class="p-3 border-b border-gray-700 flex items-center justify-between">
+          <h3 class="font-semibold">Select Folder</h3>
+          <button class="modal-close text-gray-400 hover:text-white">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        <div class="folder-breadcrumb" id="folder-breadcrumb">
+          <!-- Breadcrumb will be rendered here -->
+        </div>
+        <div class="folder-browser" id="folder-browser">
+          <!-- Folder list will be rendered here -->
+        </div>
+        <div class="p-3 border-t border-gray-700">
+          <div class="flex items-center justify-between gap-3">
+            <div id="selected-path" class="text-xs truncate flex-1"></div>
+            <div class="flex gap-2 flex-shrink-0">
+              <button type="button" class="modal-close px-3 py-1.5 text-sm text-gray-300 hover:text-white transition-colors">Cancel</button>
+              <button type="button" id="btn-select-folder" class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded text-sm transition-colors">Select This Folder</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Roadmap Modal -->
+  <div id="modal-roadmap" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-6xl max-h-[85vh] flex flex-col">
+        <div class="p-3 border-b border-gray-700 flex items-center justify-between">
+          <h3 class="font-semibold">Project Roadmap</h3>
+          <button class="modal-close text-gray-400 hover:text-white">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        <div id="roadmap-content" class="flex-1 overflow-y-auto p-3 text-xs">
+          <!-- Roadmap content will be rendered here -->
+        </div>
+        <div class="p-3 border-t border-gray-700">
+          <!-- Run selected tasks section -->
+          <div id="roadmap-run-selected" class="hidden mb-3 p-2 bg-purple-900/30 border border-purple-600/50 rounded">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-sm text-purple-300">
+                <span id="roadmap-selected-count">0</span> item(s) selected
+              </span>
+              <div class="flex gap-2">
+                <button id="btn-clear-roadmap-selection" type="button" class="text-xs text-gray-400 hover:text-white transition-colors">
+                  Clear
+                </button>
+                <button id="btn-run-selected-tasks" type="button" class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded text-sm transition-colors flex items-center gap-1">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                  </svg>
+                  Run Selected
+                </button>
+              </div>
+            </div>
+          </div>
+          <form id="form-edit-roadmap" class="space-y-2">
+            <textarea name="editPrompt" id="input-edit-roadmap" rows="3" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm textarea-resizable" placeholder="Describe changes (e.g., 'Add a testing phase'). Ctrl+Enter to submit"></textarea>
+            <div class="flex items-center justify-between gap-2">
+              <span id="edit-roadmap-char-count" class="text-xs text-gray-400">0 characters</span>
+              <div class="flex gap-2">
+                <button id="btn-create-roadmap" type="button" class="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1.5 rounded text-sm transition-colors">
+                  Generate New
+                </button>
+                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-sm transition-colors">
+                  Modify
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create Roadmap Modal -->
+  <div id="modal-create-roadmap" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl">
+        <div class="p-3 border-b border-gray-700 flex items-center justify-between">
+          <h3 class="font-semibold">Generate Roadmap</h3>
+          <button class="modal-close text-gray-400 hover:text-white">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        <form id="form-create-roadmap" class="p-3 space-y-3">
+          <div>
+            <label class="block text-xs font-medium text-gray-300 mb-1">Describe your project</label>
+            <textarea name="prompt" required rows="3" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm textarea-resizable" placeholder="A web application that... (Ctrl+Enter to submit)"></textarea>
+          </div>
+          <p class="text-xs text-gray-400">Claude will generate a ROADMAP.md based on your description.</p>
+          <div class="flex justify-end gap-2 pt-1">
+            <button type="button" class="modal-close px-3 py-1.5 text-sm text-gray-300 hover:text-white transition-colors">Cancel</button>
+            <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded text-sm transition-colors">Generate</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm Delete Modal -->
+  <div id="modal-confirm-delete" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-sm">
+        <div class="p-3 border-b border-gray-700">
+          <h3 class="font-semibold text-red-400">Delete Project</h3>
+        </div>
+        <div class="p-3">
+          <p class="text-sm text-gray-300 mb-2">Are you sure you want to delete this project?</p>
+          <p class="text-sm font-medium" id="delete-project-name"></p>
+          <p class="text-xs text-gray-500 mt-2">This will only remove the project from Claudito. Files on disk will not be deleted.</p>
+        </div>
+        <div class="p-3 border-t border-gray-700 flex justify-end gap-2">
+          <button type="button" class="modal-close px-3 py-1.5 text-sm text-gray-300 hover:text-white transition-colors">Cancel</button>
+          <button type="button" id="btn-confirm-delete" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded text-sm transition-colors">Delete</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm Delete Task Modal -->
+  <div id="modal-confirm-delete-task" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-sm">
+        <div class="p-3 border-b border-gray-700">
+          <h3 class="font-semibold text-red-400">Delete Task</h3>
+        </div>
+        <div class="p-3">
+          <p class="text-sm text-gray-300 mb-2">Are you sure you want to delete this task?</p>
+          <p class="text-sm font-medium text-gray-200" id="delete-task-title"></p>
+          <p class="text-xs text-gray-500 mt-2">This will remove the task from the roadmap file.</p>
+        </div>
+        <div class="p-3 border-t border-gray-700 flex justify-end gap-2">
+          <button type="button" class="modal-close px-3 py-1.5 text-sm text-gray-300 hover:text-white transition-colors">Cancel</button>
+          <button type="button" id="btn-confirm-delete-task" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded text-sm transition-colors">Delete</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm Delete Milestone Modal -->
+  <div id="modal-confirm-delete-milestone" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-sm">
+        <div class="p-3 border-b border-gray-700">
+          <h3 class="font-semibold text-red-400">Delete Milestone</h3>
+        </div>
+        <div class="p-3">
+          <p class="text-sm text-gray-300 mb-2">Are you sure you want to delete this milestone?</p>
+          <p class="text-sm font-medium text-gray-200" id="delete-milestone-title"></p>
+          <p class="text-xs text-red-400 mt-2">This will remove the milestone and all its tasks from the roadmap.</p>
+        </div>
+        <div class="p-3 border-t border-gray-700 flex justify-end gap-2">
+          <button type="button" class="modal-close px-3 py-1.5 text-sm text-gray-300 hover:text-white transition-colors">Cancel</button>
+          <button type="button" id="btn-confirm-delete-milestone" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded text-sm transition-colors">Delete</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm Delete Phase Modal -->
+  <div id="modal-confirm-delete-phase" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-sm">
+        <div class="p-3 border-b border-gray-700">
+          <h3 class="font-semibold text-red-400">Delete Phase</h3>
+        </div>
+        <div class="p-3">
+          <p class="text-sm text-gray-300 mb-2">Are you sure you want to delete this entire phase?</p>
+          <p class="text-sm font-medium text-gray-200" id="delete-phase-title"></p>
+          <p class="text-xs text-red-400 mt-2">This will remove the phase and ALL its milestones and tasks from the roadmap.</p>
+        </div>
+        <div class="p-3 border-t border-gray-700 flex justify-end gap-2">
+          <button type="button" class="modal-close px-3 py-1.5 text-sm text-gray-300 hover:text-white transition-colors">Cancel</button>
+          <button type="button" id="btn-confirm-delete-phase" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded text-sm transition-colors">Delete</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div id="modal-settings" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-5xl">
+        <div class="p-3 border-b border-gray-700 flex items-center justify-between">
+          <h3 class="font-semibold">Settings</h3>
+          <button class="modal-close text-gray-400 hover:text-white">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        <form id="form-settings" class="p-3 space-y-4">
+          <div>
+            <label class="block text-xs font-medium text-gray-300 mb-1">Max Concurrent Agents</label>
+            <input type="number" name="maxConcurrentAgents" id="input-max-concurrent" min="1" max="10" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-purple-500">
+            <p class="text-xs text-gray-500 mt-1">Maximum agents that can run simultaneously (1-10)</p>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-300 mb-2">Claude Code Permissions</label>
+            <div class="space-y-2">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" name="dangerouslySkipPermissions" id="input-skip-permissions" class="rounded bg-gray-700 border-gray-600 text-purple-500 focus:ring-purple-500">
+                <span class="text-sm text-gray-300">Skip permission prompts</span>
+              </label>
+              <p class="text-xs text-gray-500 ml-6">Allow Claude to execute commands without confirmation (use with caution)</p>
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-300 mb-1">Agent Prompt Template</label>
+            <textarea name="agentPromptTemplate" id="input-agent-prompt" rows="8" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm font-mono textarea-resizable"></textarea>
+            <p class="text-xs text-gray-500 mt-1">Template for agent instructions. Available variables: ${var:project-name}, ${var:phase-title}, ${var:milestone-title}, ${var:milestone-item}</p>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-300 mb-2">Input Keybindings</label>
+            <div class="space-y-2">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" name="sendWithCtrlEnter" id="input-send-ctrl-enter" class="rounded bg-gray-700 border-gray-600 text-purple-500 focus:ring-purple-500">
+                <span class="text-sm text-gray-300">Use Ctrl+Enter to send messages</span>
+              </label>
+              <p class="text-xs text-gray-500 ml-6">When enabled, Enter adds a new line and Ctrl+Enter sends. When disabled, Enter sends and Shift+Enter adds a new line.</p>
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-300 mb-1">History Limit</label>
+            <input type="number" name="historyLimit" id="input-history-limit" min="5" max="100" class="w-32 bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-purple-500">
+            <p class="text-xs text-gray-500 mt-1">Maximum number of conversations shown in history (5-100)</p>
+          </div>
+          <div class="flex justify-end gap-2 pt-2 border-t border-gray-700">
+            <button type="button" class="modal-close px-3 py-1.5 text-sm text-gray-300 hover:text-white transition-colors">Cancel</button>
+            <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded text-sm transition-colors">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Roadmap Generation Progress Modal -->
+  <div id="modal-roadmap-progress" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-6xl max-h-[85vh] flex flex-col">
+        <div class="p-3 border-b border-gray-700 flex items-center justify-between">
+          <h3 class="font-semibold">Generating Roadmap...</h3>
+          <div id="roadmap-progress-spinner" class="loading-spinner"></div>
+        </div>
+        <div class="flex-1 overflow-y-auto p-3 bg-gray-900">
+          <div id="roadmap-progress-output" class="font-mono text-xs space-y-1 whitespace-pre-wrap">
+            <!-- Output will be rendered here -->
+          </div>
+        </div>
+        <div id="roadmap-question-input" class="p-3 border-t border-gray-700 hidden">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
+            <span class="text-xs text-yellow-400">Claude is asking a question</span>
+          </div>
+          <form id="form-roadmap-response" class="flex gap-2">
+            <textarea name="response" id="input-roadmap-response" rows="2" class="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm textarea-auto-resize" placeholder="Type your response... (Ctrl+Enter to send)"></textarea>
+            <button type="submit" class="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1.5 rounded text-sm transition-colors self-end">
+              Send
+            </button>
+          </form>
+        </div>
+        <div id="roadmap-progress-footer" class="p-3 border-t border-gray-700 hidden">
+          <button id="btn-close-roadmap-progress" class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded text-sm transition-colors">
+            View Roadmap
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Conversation History Dropdown -->
+  <div id="conversation-history-dropdown" class="hidden fixed bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 w-80 max-h-96 overflow-hidden">
+    <div class="p-2 border-b border-gray-700 flex items-center justify-between">
+      <span class="text-xs font-semibold text-gray-300">Conversation History</span>
+      <button id="btn-close-history" class="text-gray-400 hover:text-white p-1">
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <div id="conversation-history-list" class="overflow-y-auto max-h-80 p-1">
+      <!-- Conversation list will be rendered here -->
+    </div>
+  </div>
+
+  <!-- Rename Conversation Modal -->
+  <div id="modal-rename-conversation" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-sm">
+        <div class="p-3 border-b border-gray-700">
+          <h3 class="font-semibold">Rename Conversation</h3>
+        </div>
+        <div class="p-3">
+          <input type="text" id="input-conversation-label" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-purple-500" placeholder="Enter a name for this conversation">
+        </div>
+        <div class="p-3 border-t border-gray-700 flex justify-end gap-2">
+          <button type="button" class="modal-close px-3 py-1.5 text-sm text-gray-300 hover:text-white transition-colors">Cancel</button>
+          <button type="button" id="btn-confirm-rename" class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded text-sm transition-colors">Rename</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm New Conversation Modal -->
+  <div id="modal-confirm-new-conversation" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-sm">
+        <div class="p-3 border-b border-gray-700">
+          <h3 class="font-semibold">Start New Conversation?</h3>
+        </div>
+        <div class="p-3">
+          <p class="text-sm text-gray-300">This will start a fresh conversation. Your current conversation will be saved in history.</p>
+        </div>
+        <div class="p-3 border-t border-gray-700 flex justify-end gap-2">
+          <button type="button" class="modal-close px-3 py-1.5 text-sm text-gray-300 hover:text-white transition-colors">Cancel</button>
+          <button type="button" id="btn-confirm-new-conversation" class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded text-sm transition-colors">Start New</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm Delete File/Folder Modal -->
+  <div id="modal-confirm-delete-file" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-sm">
+        <div class="p-3 border-b border-gray-700">
+          <h3 class="font-semibold text-red-400">Delete <span id="delete-file-type">file</span>?</h3>
+        </div>
+        <div class="p-3">
+          <p class="text-sm text-gray-300">Are you sure you want to delete <strong id="delete-file-name" class="text-white"></strong>?</p>
+          <p class="text-xs text-red-400 mt-2" id="delete-folder-warning">This will delete all contents inside the folder.</p>
+        </div>
+        <div class="p-3 border-t border-gray-700 flex justify-end gap-2">
+          <button type="button" class="modal-close px-3 py-1.5 text-sm text-gray-300 hover:text-white transition-colors">Cancel</button>
+          <button type="button" id="btn-confirm-delete-file" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded text-sm transition-colors">Delete</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Queued Messages Modal -->
+  <div id="modal-queued-messages" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-lg max-h-[80vh] flex flex-col">
+        <div class="p-3 border-b border-gray-700 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <svg class="w-4 h-4 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <h3 class="font-semibold">Queued Messages</h3>
+          </div>
+          <button class="modal-close text-gray-400 hover:text-white">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        <div id="queued-messages-modal-content" class="p-4 overflow-y-auto">
+          <div class="text-gray-500 text-center py-4">No queued messages</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tasks Modal -->
+  <div id="modal-tasks" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-lg">
+        <div class="p-3 border-b border-gray-700 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+            </svg>
+            <h3 class="font-semibold">Current Tasks</h3>
+          </div>
+          <button class="modal-close text-gray-400 hover:text-white">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        <div id="tasks-modal-content" class="p-4">
+          <!-- Tasks will be rendered here -->
+          <div class="text-gray-500 text-center py-4">No active tasks</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Context Usage Modal -->
+  <div id="modal-context-usage" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-lg">
+        <div class="p-3 border-b border-gray-700 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+            </svg>
+            <h3 class="font-semibold">Context Usage</h3>
+          </div>
+          <button class="modal-close text-gray-400 hover:text-white">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        <div id="context-usage-content" class="p-4">
+          <!-- Context usage will be rendered here -->
+          <div class="text-gray-500 text-center py-4">Loading...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Claude Files Modal -->
+  <div id="modal-claude-files" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-5xl h-[85vh] flex flex-col">
+        <div class="p-3 border-b border-gray-700 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+            <h3 class="font-semibold">Claude Files (CLAUDE.md)</h3>
+          </div>
+          <button class="modal-close text-gray-400 hover:text-white">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        <div class="flex flex-1 overflow-hidden min-h-0">
+          <!-- File List Sidebar -->
+          <div id="claude-files-list" class="w-48 border-r border-gray-700 overflow-y-auto bg-gray-900/50 flex-shrink-0">
+            <!-- File list will be rendered here -->
+          </div>
+          <!-- File Editor with Preview -->
+          <div class="flex-1 flex flex-col overflow-hidden min-w-0">
+            <div id="claude-file-header" class="p-2 border-b border-gray-700 flex items-center justify-between bg-gray-800/50">
+              <div class="flex items-center gap-2">
+                <span id="claude-file-name" class="text-sm font-medium text-gray-300">Select a file</span>
+                <span id="claude-file-size" class="text-xs text-gray-500"></span>
+              </div>
+              <div class="flex items-center gap-2">
+                <button id="btn-toggle-claude-preview" class="bg-gray-700 hover:bg-gray-600 text-white px-2 py-1 rounded text-xs transition-colors flex items-center gap-1" title="Toggle preview">
+                  <svg id="claude-preview-icon" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                  </svg>
+                  <span id="claude-preview-btn-text">Preview</span>
+                </button>
+                <button id="btn-save-claude-file" class="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-3 py-1 rounded text-xs transition-colors hidden">
+                  Save Changes
+                </button>
+              </div>
+            </div>
+            <div class="flex-1 flex overflow-hidden min-h-0">
+              <!-- Editor Pane -->
+              <div id="claude-editor-pane" class="flex-1 p-2 overflow-hidden flex flex-col min-w-0">
+                <textarea id="claude-file-editor" class="w-full flex-1 bg-gray-900 text-gray-200 font-mono text-sm p-3 rounded border border-gray-700 focus:border-purple-500 focus:outline-none resize-none" placeholder="Select a file from the list to edit..."></textarea>
+              </div>
+              <!-- Preview Pane (hidden by default) -->
+              <div id="claude-preview-pane" class="flex-1 p-2 overflow-y-auto border-l border-gray-700 hidden min-w-0">
+                <div id="claude-file-preview" class="markdown-content prose prose-invert prose-sm max-w-none p-3"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tool Detail Modal -->
+  <div id="modal-tool-detail" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-7xl max-h-[90vh] flex flex-col">
+        <div class="p-3 border-b border-gray-700 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span id="tool-detail-icon"></span>
+            <h3 id="tool-detail-name" class="font-semibold text-purple-300"></h3>
+            <span id="tool-detail-status" class="tool-status"></span>
+          </div>
+          <button class="modal-close text-gray-400 hover:text-white">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        <div id="tool-detail-content" class="flex-1 overflow-y-auto p-3 bg-gray-900">
+          <!-- Tool details will be rendered here -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Debug Modal -->
+  <div id="modal-debug" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-6xl h-[85vh] flex flex-col">
+        <div class="p-3 border-b border-gray-700 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
+            </svg>
+            <h3 class="font-semibold">Debug Information</h3>
+          </div>
+          <div class="flex items-center gap-2">
+            <button id="btn-debug-refresh" class="bg-gray-700 hover:bg-gray-600 text-white py-1 px-2.5 rounded text-xs transition-colors flex items-center gap-1">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+              </svg>
+              Refresh
+            </button>
+            <button class="modal-close text-gray-400 hover:text-white">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <!-- Debug Tabs -->
+        <div class="flex border-b border-gray-700 bg-gray-900/50 overflow-x-auto">
+          <button class="debug-tab active py-2 px-4 text-sm font-medium border-b-2 border-purple-500 text-white whitespace-nowrap" data-tab="claude-io">
+            <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+            </svg>
+            Claude I/O
+          </button>
+          <button class="debug-tab py-2 px-4 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="process">
+            <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/>
+            </svg>
+            Process
+          </button>
+          <button class="debug-tab py-2 px-4 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="commands">
+            <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+            </svg>
+            Commands
+          </button>
+          <button class="debug-tab py-2 px-4 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="logs">
+            <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+            All Logs
+          </button>
+          <button class="debug-tab py-2 px-4 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="all-processes">
+            <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
+            </svg>
+            All Processes
+          </button>
+        </div>
+        <!-- Debug Tab Content -->
+        <div class="flex-1 overflow-y-auto p-4 bg-gray-900">
+          <!-- Claude I/O Tab (default) -->
+          <div id="debug-tab-claude-io" class="debug-tab-content">
+            <div id="debug-claude-io-content" class="space-y-2 font-mono text-xs">
+              <!-- Claude I/O logs will be rendered here -->
+            </div>
+          </div>
+          <!-- Process Tab -->
+          <div id="debug-tab-process" class="debug-tab-content hidden">
+            <div id="debug-process-content" class="space-y-4 text-sm">
+              <!-- Process info will be rendered here -->
+            </div>
+          </div>
+          <!-- Commands Tab -->
+          <div id="debug-tab-commands" class="debug-tab-content hidden">
+            <div id="debug-commands-content" class="space-y-4 text-sm">
+              <!-- Commands will be rendered here -->
+            </div>
+          </div>
+          <!-- All Logs Tab -->
+          <div id="debug-tab-logs" class="debug-tab-content hidden">
+            <div id="debug-logs-content" class="space-y-1 font-mono text-xs">
+              <!-- Logs will be rendered here -->
+            </div>
+          </div>
+          <!-- All Processes Tab -->
+          <div id="debug-tab-all-processes" class="debug-tab-content hidden">
+            <div id="debug-all-processes-content" class="space-y-4 text-sm">
+              <!-- All processes will be rendered here -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- File Context Menu -->
+  <div id="file-context-menu" class="hidden fixed bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 py-1 min-w-40">
+    <button id="context-menu-delete" class="w-full px-3 py-1.5 text-left text-sm text-red-400 hover:bg-gray-700 flex items-center gap-2">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+      </svg>
+      Delete
+    </button>
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toast-container" class="fixed bottom-4 right-4 space-y-2 z-50"></div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>

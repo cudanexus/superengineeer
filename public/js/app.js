@@ -1,0 +1,5013 @@
+// Claudito Frontend Application
+
+(function($) {
+  'use strict';
+
+  // Application state
+  const state = {
+    projects: [],
+    selectedProjectId: null,
+    conversations: {},
+    folderBrowser: {
+      currentPath: null
+    },
+    websocket: null,
+    resourceStatus: {
+      runningCount: 0,
+      maxConcurrent: 3,
+      queuedCount: 0,
+      queuedProjects: []
+    },
+    pendingDeleteId: null,
+    pendingDeleteTask: null,
+    pendingDeleteMilestone: null,
+    pendingDeletePhase: null,
+    debugPanelOpen: false,
+    debugRefreshInterval: null,
+    agentStatusInterval: null, // Polling interval for agent status
+    roadmapGenerating: false,
+    agentOutputScrollLock: false,
+    fontSize: 14, // Font size for Claude output (10-24px)
+    agentStarting: false, // Prevents concurrent agent starts
+    messageSending: false, // Prevents concurrent message sends
+    agentMode: 'interactive', // 'interactive' or 'autonomous'
+    currentAgentMode: null, // mode of currently running agent
+    currentConversationId: null,
+    currentConversationStats: null, // { messageCount, toolCallCount, userMessageCount, durationMs, startedAt }
+    currentConversationMetadata: null, // { contextUsage: { totalTokens, inputTokens, outputTokens, ... } }
+    conversationHistoryOpen: false,
+    readFileCache: {}, // Cache of recently read files: path -> content
+    queuedMessageCount: 0, // Number of messages waiting to be sent to agent
+    sendWithCtrlEnter: true, // Configurable: true = Ctrl+Enter to send, false = Enter to send
+    historyLimit: 25, // Maximum conversations shown in history
+    pendingRenameConversationId: null, // For rename modal
+    pendingDeleteFile: null, // { path, isDirectory, name } for file deletion confirmation
+    currentTodos: [], // Current task list from last TodoWrite
+    activeTab: 'agent-output', // 'agent-output' or 'project-files'
+    contextMenuTarget: null, // { path, isDir, name } for context menu actions
+    // File browser state
+    fileBrowser: {
+      expandedDirs: {},
+      selectedFile: null,
+      rootEntries: []
+    },
+    // Open files state
+    openFiles: [], // [{path, name, content, modified, originalContent}]
+    activeFilePath: null,
+    // Claude Files state
+    claudeFilesState: {
+      files: [],
+      currentFile: null // { path, name, content, originalContent, size, isGlobal }
+    }
+  };
+
+  // API functions
+  const api = {
+    getProjects: function() {
+      return $.get('/api/projects');
+    },
+    addProject: function(data) {
+      return $.post('/api/projects', data);
+    },
+    deleteProject: function(id) {
+      return $.ajax({ url: '/api/projects/' + id, method: 'DELETE' });
+    },
+    getProjectRoadmap: function(id) {
+      return $.get('/api/projects/' + id + '/roadmap');
+    },
+    startAgent: function(id) {
+      return $.post('/api/projects/' + id + '/agent/start');
+    },
+    stopAgent: function(id) {
+      return $.post('/api/projects/' + id + '/agent/stop');
+    },
+    generateRoadmap: function(id, prompt) {
+      return $.post('/api/projects/' + id + '/roadmap/generate', { prompt: prompt });
+    },
+    modifyRoadmap: function(id, prompt) {
+      return $.ajax({
+        url: '/api/projects/' + id + '/roadmap',
+        method: 'PUT',
+        contentType: 'application/json',
+        data: JSON.stringify({ prompt: prompt })
+      });
+    },
+    sendRoadmapResponse: function(id, response) {
+      return $.ajax({
+        url: '/api/projects/' + id + '/roadmap/respond',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ response: response })
+      });
+    },
+    getDrives: function() {
+      return $.get('/api/fs/drives');
+    },
+    browseFolder: function(path) {
+      return $.get('/api/fs/browse', { path: path });
+    },
+    readFile: function(path) {
+      return $.get('/api/fs/read', { path: path });
+    },
+    getAgentResourceStatus: function() {
+      return $.get('/api/agents/status');
+    },
+    removeFromQueue: function(id) {
+      return $.ajax({ url: '/api/projects/' + id + '/agent/queue', method: 'DELETE' });
+    },
+    getQueuedMessages: function(id) {
+      return $.get('/api/projects/' + id + '/agent/queue');
+    },
+    getSettings: function() {
+      return $.get('/api/settings');
+    },
+    updateSettings: function(settings) {
+      return $.ajax({
+        url: '/api/settings',
+        method: 'PUT',
+        contentType: 'application/json',
+        data: JSON.stringify(settings)
+      });
+    },
+    getDebugInfo: function(id) {
+      return $.get('/api/projects/' + id + '/debug');
+    },
+    getLoopStatus: function(id) {
+      return $.get('/api/projects/' + id + '/agent/loop');
+    },
+    deleteRoadmapTask: function(id, phaseId, milestoneId, taskIndex) {
+      return $.ajax({
+        url: '/api/projects/' + id + '/roadmap/task',
+        method: 'DELETE',
+        contentType: 'application/json',
+        data: JSON.stringify({ phaseId: phaseId, milestoneId: milestoneId, taskIndex: taskIndex })
+      });
+    },
+    deleteRoadmapMilestone: function(id, phaseId, milestoneId) {
+      return $.ajax({
+        url: '/api/projects/' + id + '/roadmap/milestone',
+        method: 'DELETE',
+        contentType: 'application/json',
+        data: JSON.stringify({ phaseId: phaseId, milestoneId: milestoneId })
+      });
+    },
+    deleteRoadmapPhase: function(id, phaseId) {
+      return $.ajax({
+        url: '/api/projects/' + id + '/roadmap/phase',
+        method: 'DELETE',
+        contentType: 'application/json',
+        data: JSON.stringify({ phaseId: phaseId })
+      });
+    },
+    startInteractiveAgent: function(id, message) {
+      return $.ajax({
+        url: '/api/projects/' + id + '/agent/interactive',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ message: message || '' })
+      });
+    },
+    sendAgentMessage: function(id, message) {
+      return $.ajax({
+        url: '/api/projects/' + id + '/agent/send',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ message: message })
+      });
+    },
+    getAgentStatus: function(id) {
+      return $.get('/api/projects/' + id + '/agent/status');
+    },
+    getConversations: function(id) {
+      return $.get('/api/projects/' + id + '/conversations');
+    },
+    getConversation: function(projectId, conversationId) {
+      return $.get('/api/projects/' + projectId + '/conversation', { conversationId: conversationId });
+    },
+    getContextUsage: function(id) {
+      return $.get('/api/projects/' + id + '/agent/context');
+    },
+    browseWithFiles: function(path) {
+      return $.get('/api/fs/browse-with-files', { path: path });
+    },
+    writeFile: function(path, content) {
+      return $.ajax({
+        url: '/api/fs/write',
+        method: 'PUT',
+        contentType: 'application/json',
+        data: JSON.stringify({ path: path, content: content })
+      });
+    },
+    getClaudeFiles: function(projectId) {
+      return $.get('/api/projects/' + projectId + '/claude-files');
+    },
+    saveClaudeFile: function(projectId, filePath, content) {
+      return $.ajax({
+        url: '/api/projects/' + projectId + '/claude-files',
+        method: 'PUT',
+        contentType: 'application/json',
+        data: JSON.stringify({ filePath: filePath, content: content })
+      });
+    },
+    renameConversation: function(projectId, conversationId, label) {
+      return $.ajax({
+        url: '/api/projects/' + projectId + '/conversations/' + conversationId,
+        method: 'PUT',
+        contentType: 'application/json',
+        data: JSON.stringify({ label: label })
+      });
+    },
+    deleteFileOrFolder: function(targetPath, isDirectory) {
+      return $.ajax({
+        url: '/api/fs/delete',
+        method: 'DELETE',
+        contentType: 'application/json',
+        data: JSON.stringify({ path: targetPath, isDirectory: isDirectory })
+      });
+    }
+  };
+
+  // Error code to user-friendly message mapping
+  var ERROR_MESSAGES = {
+    'NOT_FOUND': 'The requested resource was not found',
+    'VALIDATION_ERROR': 'Please check your input and try again',
+    'CONFLICT': 'This action conflicts with the current state',
+    'INTERNAL_ERROR': 'An unexpected error occurred. Please try again later',
+    'NETWORK_ERROR': 'Unable to connect to the server. Please check your connection',
+    'TIMEOUT': 'The request timed out. Please try again'
+  };
+
+  function getErrorMessage(xhr) {
+    if (xhr.status === 0) {
+      return ERROR_MESSAGES.NETWORK_ERROR;
+    }
+
+    if (xhr.responseJSON) {
+      var response = xhr.responseJSON;
+
+      if (response.error) {
+        return response.error;
+      }
+
+      if (response.code && ERROR_MESSAGES[response.code]) {
+        return ERROR_MESSAGES[response.code];
+      }
+    }
+
+    switch (xhr.status) {
+      case 400: return 'Invalid request. Please check your input';
+      case 404: return 'The requested resource was not found';
+      case 409: return 'This action conflicts with the current state';
+      case 500: return 'Server error. Please try again later';
+      case 503: return 'Service temporarily unavailable';
+      default: return 'An error occurred. Please try again';
+    }
+  }
+
+  // Toast notifications
+  function showToast(message, type) {
+    type = type || 'info';
+    var $toast = $('<div class="toast ' + type + '">' + escapeHtml(message) + '</div>');
+    $('#toast-container').append($toast);
+
+    setTimeout(function() {
+      $toast.fadeOut(200, function() { $(this).remove(); });
+    }, 3000);
+  }
+
+  function showErrorToast(xhr, defaultMessage) {
+    var message = getErrorMessage(xhr) || defaultMessage || 'An error occurred';
+    showToast(message, 'error');
+  }
+
+  function escapeHtml(text) {
+    var div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  // Read file cache management
+  var READ_FILE_CACHE_LIMIT = 10;
+  var READ_FILE_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+  function cacheReadFile(filePath) {
+    // Normalize path for consistent cache keys
+    var normalizedPath = filePath.replace(/\\/g, '/');
+
+    // Enforce cache limit - remove oldest entries if needed
+    var cacheKeys = Object.keys(state.readFileCache);
+
+    if (cacheKeys.length >= READ_FILE_CACHE_LIMIT) {
+      // Sort by timestamp and remove oldest
+      var oldest = cacheKeys.sort(function(a, b) {
+        return state.readFileCache[a].timestamp - state.readFileCache[b].timestamp;
+      })[0];
+      delete state.readFileCache[oldest];
+    }
+
+    // Read file content from backend and cache it
+    api.readFile(filePath)
+      .done(function(data) {
+        state.readFileCache[normalizedPath] = {
+          timestamp: Date.now(),
+          content: data.content
+        };
+      })
+      .fail(function() {
+        // Still mark as read even if we couldn't get content
+        state.readFileCache[normalizedPath] = {
+          timestamp: Date.now(),
+          content: null
+        };
+      });
+  }
+
+  function getCachedFileContent(filePath) {
+    var normalizedPath = filePath.replace(/\\/g, '/');
+    var cached = state.readFileCache[normalizedPath];
+
+    if (!cached) return null;
+
+    // Check if cache is expired
+    if (Date.now() - cached.timestamp > READ_FILE_CACHE_TTL) {
+      delete state.readFileCache[normalizedPath];
+      return null;
+    }
+
+    return cached.content;
+  }
+
+  function wasFileRead(filePath) {
+    var normalizedPath = filePath.replace(/\\/g, '/');
+    var cached = state.readFileCache[normalizedPath];
+
+    if (!cached) return false;
+
+    // Check if cache is expired
+    if (Date.now() - cached.timestamp > READ_FILE_CACHE_TTL) {
+      delete state.readFileCache[normalizedPath];
+      return false;
+    }
+
+    return true;
+  }
+
+  function clearReadFileCache() {
+    state.readFileCache = {};
+  }
+
+  // Modal functions
+  function openModal(modalId) {
+    $('#' + modalId).removeClass('hidden');
+  }
+
+  function closeModal(modalId) {
+    var $modal = $('#' + modalId);
+    $modal.addClass('hidden');
+
+    // Trigger close event for modals that need cleanup
+    if (modalId === 'modal-debug') {
+      closeDebugModal();
+    }
+  }
+
+  function closeAllModals() {
+    $('.modal').addClass('hidden');
+
+    // Clean up debug modal if it was open
+    if (state.debugPanelOpen) {
+      closeDebugModal();
+    }
+  }
+
+  function openToolDetailModal(toolData) {
+    var $modal = $('#modal-tool-detail');
+    var $content = $('#tool-detail-content');
+    var $name = $('#tool-detail-name');
+    var $icon = $('#tool-detail-icon');
+    var $status = $('#tool-detail-status');
+
+    // Set header
+    $name.text(toolData.name);
+    $icon.html(getToolIcon(toolData.name));
+    $status.removeClass('running completed failed').addClass(toolData.status);
+
+    // Render full tool details
+    var html = renderToolArgs(toolData.name, toolData.input);
+    $content.html(html);
+
+    openModal('modal-tool-detail');
+  }
+
+  function openContextUsageModal() {
+    var $content = $('#context-usage-content');
+    $content.html('<div class="text-gray-500 text-center py-4">Loading...</div>');
+    openModal('modal-context-usage');
+
+    if (!state.selectedProjectId) {
+      $content.html(renderNoProjectMessage());
+      return;
+    }
+
+    api.getContextUsage(state.selectedProjectId)
+      .done(function(data) {
+        $content.html(renderContextUsage(data.contextUsage));
+      })
+      .fail(function() {
+        $content.html(renderContextUsageError());
+      });
+  }
+
+  function openClaudeFilesModal() {
+    var $list = $('#claude-files-list');
+    $list.html('<div class="p-2 text-xs text-gray-500">Loading...</div>');
+    $('#claude-file-editor').val('').prop('disabled', true);
+    $('#claude-file-name').text('Select a file');
+    $('#claude-file-size').text('');
+    $('#btn-save-claude-file').addClass('hidden');
+    state.claudeFilesState.currentFile = null;
+
+    openModal('modal-claude-files');
+
+    if (!state.selectedProjectId) {
+      $list.html('<div class="p-2 text-xs text-gray-500">No project selected</div>');
+      return;
+    }
+
+    api.getClaudeFiles(state.selectedProjectId)
+      .done(function(data) {
+        state.claudeFilesState.files = data.files || [];
+        renderClaudeFilesList();
+
+        // Auto-select first file if available
+        if (data.files && data.files.length > 0) {
+          selectClaudeFile(data.files[0].path);
+        }
+      })
+      .fail(function() {
+        $list.html('<div class="p-2 text-xs text-red-400">Failed to load files</div>');
+      });
+  }
+
+  function renderClaudeFilesList() {
+    var $list = $('#claude-files-list');
+    var files = state.claudeFilesState.files;
+
+    if (files.length === 0) {
+      $list.html('<div class="p-2 text-xs text-gray-500">No CLAUDE.md files found</div>');
+      return;
+    }
+
+    var html = '';
+
+    files.forEach(function(file) {
+      var isSelected = state.claudeFilesState.currentFile &&
+                       state.claudeFilesState.currentFile.path === file.path;
+      var selectedClass = isSelected ? 'bg-purple-600/30 border-l-2 border-purple-500' : 'hover:bg-gray-700';
+      var icon = file.isGlobal
+        ? '<svg class="w-3 h-3 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>'
+        : '<svg class="w-3 h-3 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>';
+
+      html += '<div class="claude-file-item p-2 cursor-pointer ' + selectedClass + '" data-path="' + escapeHtml(file.path) + '">' +
+        '<div class="flex items-center gap-2">' +
+          icon +
+          '<span class="text-xs text-gray-300 truncate">' + escapeHtml(file.name) + '</span>' +
+        '</div>' +
+        '<div class="text-xs text-gray-500 mt-0.5 pl-5">' + formatFileSize(file.size) + '</div>' +
+      '</div>';
+    });
+
+    $list.html(html);
+  }
+
+  function selectClaudeFile(filePath) {
+    var file = state.claudeFilesState.files.find(function(f) { return f.path === filePath; });
+
+    if (!file) return;
+
+    state.claudeFilesState.currentFile = {
+      path: file.path,
+      name: file.name,
+      content: file.content,
+      originalContent: file.content,
+      size: file.size,
+      isGlobal: file.isGlobal
+    };
+
+    $('#claude-file-name').text(file.name);
+    $('#claude-file-size').text(formatFileSize(file.size));
+    $('#claude-file-editor').val(file.content).prop('disabled', false);
+    $('#btn-save-claude-file').addClass('hidden');
+    updateClaudeFilePreview();
+
+    renderClaudeFilesList();
+  }
+
+  function toggleClaudeFilePreview() {
+    var $previewPane = $('#claude-preview-pane');
+    var $editorPane = $('#claude-editor-pane');
+    var $btn = $('#btn-toggle-claude-preview');
+    var $btnText = $('#claude-preview-btn-text');
+    var $icon = $('#claude-preview-icon');
+    var isPreviewMode = !$previewPane.hasClass('hidden');
+
+    if (isPreviewMode) {
+      // Switch to edit view
+      $previewPane.addClass('hidden');
+      $editorPane.removeClass('hidden');
+      $btn.removeClass('bg-purple-600').addClass('bg-gray-700');
+      $btnText.text('Preview');
+      // Eye icon for preview
+      $icon.html('<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>');
+    } else {
+      // Switch to preview view
+      $previewPane.removeClass('hidden');
+      $editorPane.addClass('hidden');
+      $btn.addClass('bg-purple-600').removeClass('bg-gray-700');
+      $btnText.text('Edit');
+      // Pencil icon for edit
+      $icon.html('<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>');
+      updateClaudeFilePreview();
+    }
+  }
+
+  function updateClaudeFilePreview() {
+    var $preview = $('#claude-file-preview');
+    var $previewPane = $('#claude-preview-pane');
+
+    if ($previewPane.hasClass('hidden')) return;
+
+    var content = $('#claude-file-editor').val();
+
+    if (!content) {
+      $preview.html('<p class="text-gray-500">No content to preview</p>');
+      return;
+    }
+
+    // Render markdown with syntax highlighting
+    try {
+      var html = marked.parse(content);
+      $preview.html(html);
+      // Apply syntax highlighting to code blocks
+      $preview.find('pre code').each(function() {
+        hljs.highlightElement(this);
+      });
+    } catch (e) {
+      $preview.html('<p class="text-red-400">Error rendering preview</p>');
+    }
+  }
+
+  function saveClaudeFile() {
+    var currentFile = state.claudeFilesState.currentFile;
+
+    if (!currentFile || !state.selectedProjectId) return;
+
+    var newContent = $('#claude-file-editor').val();
+    var $btn = $('#btn-save-claude-file');
+
+    $btn.text('Saving...').prop('disabled', true);
+
+    api.saveClaudeFile(state.selectedProjectId, currentFile.path, newContent)
+      .done(function() {
+        currentFile.content = newContent;
+        currentFile.originalContent = newContent;
+        $btn.addClass('hidden').text('Save Changes').prop('disabled', false);
+        showToast('File saved', 'success');
+
+        // Update size in files list
+        var file = state.claudeFilesState.files.find(function(f) {
+          return f.path === currentFile.path;
+        });
+
+        if (file) {
+          file.content = newContent;
+          file.size = new Blob([newContent]).size;
+        }
+
+        renderClaudeFilesList();
+      })
+      .fail(function(xhr) {
+        $btn.text('Save Changes').prop('disabled', false);
+        showErrorToast(xhr, 'Failed to save file');
+      });
+  }
+
+  function formatFileSize(bytes) {
+    if (bytes === 0) return '0 B';
+    var units = ['B', 'KB', 'MB', 'GB'];
+    var i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return (bytes / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0) + ' ' + units[i];
+  }
+
+  function renderNoProjectMessage() {
+    return '<div class="text-center py-4">' +
+      '<svg class="w-8 h-8 mx-auto mb-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>' +
+      '</svg>' +
+      '<p class="text-gray-500 text-sm">No project selected</p>' +
+    '</div>';
+  }
+
+  function renderContextUsageError() {
+    return '<div class="text-center py-4">' +
+      '<svg class="w-8 h-8 mx-auto mb-2 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>' +
+      '</svg>' +
+      '<p class="text-red-400 text-sm">Failed to load context usage</p>' +
+    '</div>';
+  }
+
+  function renderContextUsage(usage) {
+    if (!usage) {
+      return '<div class="text-center py-4">' +
+        '<svg class="w-8 h-8 mx-auto mb-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>' +
+        '</svg>' +
+        '<p class="text-gray-500 text-sm">No context usage data available</p>' +
+        '<p class="text-gray-600 text-xs mt-1">Start an agent to see context usage</p>' +
+      '</div>';
+    }
+
+    var percentColor = getPercentColor(usage.percentUsed);
+    var percentBarWidth = Math.min(usage.percentUsed, 100);
+
+    return '<div class="space-y-4">' +
+      // Progress bar
+      '<div class="space-y-2">' +
+        '<div class="flex justify-between text-sm">' +
+          '<span class="text-gray-400">Context Window</span>' +
+          '<span class="' + percentColor + ' font-medium">' + usage.percentUsed + '%</span>' +
+        '</div>' +
+        '<div class="w-full bg-gray-700 rounded-full h-3">' +
+          '<div class="' + getPercentBarColor(usage.percentUsed) + ' h-3 rounded-full transition-all duration-300" style="width: ' + percentBarWidth + '%"></div>' +
+        '</div>' +
+        '<div class="flex justify-between text-xs text-gray-500">' +
+          '<span>' + formatNumber(usage.totalTokens) + ' tokens used</span>' +
+          '<span>' + formatNumber(usage.maxContextTokens) + ' max</span>' +
+        '</div>' +
+      '</div>' +
+
+      // Token breakdown
+      '<div class="border-t border-gray-700 pt-4">' +
+        '<h4 class="text-sm font-medium text-gray-300 mb-3">Token Breakdown</h4>' +
+        '<div class="grid grid-cols-2 gap-3">' +
+          renderTokenStat('Input', usage.inputTokens, 'text-blue-400') +
+          renderTokenStat('Output', usage.outputTokens, 'text-green-400') +
+          renderTokenStat('Cache Created', usage.cacheCreationInputTokens, 'text-yellow-400') +
+          renderTokenStat('Cache Read', usage.cacheReadInputTokens, 'text-purple-400') +
+        '</div>' +
+      '</div>' +
+
+      // Total
+      '<div class="border-t border-gray-700 pt-4">' +
+        '<div class="flex justify-between items-center">' +
+          '<span class="text-gray-400">Total Tokens</span>' +
+          '<span class="text-lg font-semibold text-white">' + formatNumber(usage.totalTokens) + '</span>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function renderTokenStat(label, value, colorClass) {
+    return '<div class="bg-gray-700/50 rounded-lg p-3">' +
+      '<div class="text-xs text-gray-500 mb-1">' + label + '</div>' +
+      '<div class="' + colorClass + ' font-medium">' + formatNumber(value) + '</div>' +
+    '</div>';
+  }
+
+  function getPercentColor(percent) {
+    if (percent < 50) return 'text-green-400';
+    if (percent < 75) return 'text-yellow-400';
+    if (percent < 90) return 'text-orange-400';
+    return 'text-red-400';
+  }
+
+  function getPercentBarColor(percent) {
+    if (percent < 50) return 'bg-green-500';
+    if (percent < 75) return 'bg-yellow-500';
+    if (percent < 90) return 'bg-orange-500';
+    return 'bg-red-500';
+  }
+
+  function formatNumber(num) {
+    if (num === undefined || num === null) return '0';
+    if (num >= 1000000) {
+      return (num / 1000000).toFixed(1) + 'M';
+    }
+    if (num >= 1000) {
+      return (num / 1000).toFixed(1) + 'K';
+    }
+    return num.toLocaleString();
+  }
+
+  // Project card rendering
+  function renderProjectCard(project) {
+    var statusClass = project.status || 'stopped';
+    var statusText = capitalizeFirst(statusClass);
+    var quickActions = renderQuickActions(project);
+
+    return '<div class="project-card" data-id="' + project.id + '">' +
+      '<div class="flex justify-between items-start">' +
+        '<div class="project-card-name flex-1 truncate">' + escapeHtml(project.name) + '</div>' +
+        quickActions +
+      '</div>' +
+      '<div class="project-card-path">' + escapeHtml(project.path) + '</div>' +
+      '<div class="project-card-status">' +
+        '<span class="status-badge ' + statusClass + '">' + statusText + '</span>' +
+        (statusClass === 'running' ? '<span class="running-indicator"></span>' : '') +
+      '</div>' +
+    '</div>';
+  }
+
+  function renderQuickActions(project) {
+    var status = project.status || 'stopped';
+    var deleteBtn = '<button class="quick-action delete" data-action="delete" data-id="' + project.id + '" title="Delete">' +
+      '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+      '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>';
+
+    // Show cancel button for queued status
+    if (status === 'queued') {
+      return '<div class="flex gap-1">' +
+        '<button class="quick-action cancel" data-action="cancel" data-id="' + project.id + '" title="Cancel">' +
+        '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>' +
+        '</div>';
+    }
+
+    // Only delete button in sidebar (no start/stop buttons)
+    return '<div class="flex gap-1">' + deleteBtn + '</div>';
+  }
+
+  function capitalizeFirst(str) {
+    return str.charAt(0).toUpperCase() + str.slice(1);
+  }
+
+  // Project list rendering
+  function renderProjectList() {
+    var $list = $('#project-list');
+    $list.empty();
+
+    if (state.projects.length === 0) {
+      $list.html('<div class="text-gray-500 text-sm text-center p-4">No projects yet</div>');
+      return;
+    }
+
+    state.projects.forEach(function(project) {
+      $list.append(renderProjectCard(project));
+    });
+
+    updateSelectedProject();
+    updateRunningCount();
+  }
+
+  function updateSelectedProject() {
+    $('.project-card').removeClass('selected');
+
+    if (state.selectedProjectId) {
+      $('.project-card[data-id="' + state.selectedProjectId + '"]').addClass('selected');
+    }
+  }
+
+  function updateRunningCount() {
+    var count = state.projects.filter(function(p) { return p.status === 'running'; }).length;
+    var queuedCount = state.projects.filter(function(p) { return p.status === 'queued'; }).length;
+
+    $('#running-count').text(count);
+    $('#max-concurrent').text(state.resourceStatus.maxConcurrent);
+    $('#queued-count').text(queuedCount);
+
+    if (queuedCount > 0) {
+      $('#queue-info').removeClass('hidden');
+    } else {
+      $('#queue-info').addClass('hidden');
+    }
+  }
+
+  function updateResourceStatus(resourceStatus) {
+    state.resourceStatus = resourceStatus;
+    $('#max-concurrent').text(resourceStatus.maxConcurrent);
+    $('#running-count').text(resourceStatus.runningCount);
+    $('#queued-count').text(resourceStatus.queuedCount);
+
+    if (resourceStatus.queuedCount > 0) {
+      $('#queue-info').removeClass('hidden');
+    } else {
+      $('#queue-info').addClass('hidden');
+    }
+  }
+
+  // Project detail rendering
+  function renderProjectDetail(project) {
+    if (!project) {
+      $('#project-detail').addClass('hidden');
+      $('#empty-state').removeClass('hidden');
+      $('#conversation-header').addClass('hidden');
+      return;
+    }
+
+    $('#empty-state').addClass('hidden');
+    $('#project-detail').removeClass('hidden');
+
+    $('#project-name').text(project.name);
+
+    updateProjectStatus(project);
+    renderConversation(project.id);
+  }
+
+  function updateProjectStatus(project) {
+    var statusClass = project.status || 'stopped';
+    var $badge = $('#project-status');
+
+    $badge.removeClass('stopped running error queued')
+          .addClass(statusClass)
+          .text(capitalizeFirst(statusClass));
+
+    if (statusClass === 'running') {
+      $('#conversation-header').removeClass('hidden');
+      $('#mode-selector').addClass('disabled');
+    } else if (statusClass === 'queued') {
+      $('#conversation-header').addClass('hidden');
+      $('#mode-selector').addClass('disabled');
+    } else {
+      $('#conversation-header').addClass('hidden');
+      $('#mode-selector').removeClass('disabled');
+      state.currentAgentMode = null;
+    }
+
+    updateStartStopButtons();
+    updateInputArea();
+  }
+
+  // Conversation rendering
+  function renderConversation(projectId) {
+    var $conv = $('#conversation');
+    var messages = state.conversations[projectId] || [];
+
+    $conv.empty();
+
+    // Filter messages based on debug mode
+    var filteredMessages = messages.filter(function(msg) {
+      // Skip debug messages unless debug panel is open
+      if (isDebugMessage(msg) && !state.debugPanelOpen) {
+        return false;
+      }
+
+      return true;
+    });
+
+    if (filteredMessages.length === 0) {
+      $conv.html('<div class="text-gray-500 text-center">No conversation yet</div>');
+      return;
+    }
+
+    filteredMessages.forEach(function(msg) {
+      $conv.append(renderMessage(msg));
+    });
+
+    scrollConversationToBottom();
+  }
+
+  function renderMessage(msg) {
+    var typeClass = msg.type || 'system';
+
+    if (msg.type === 'tool_use') {
+      return renderToolMessage(msg);
+    }
+
+    if (msg.type === 'question') {
+      return renderQuestionMessage(msg);
+    }
+
+    if (msg.type === 'permission') {
+      return renderPermissionMessage(msg);
+    }
+
+    if (msg.type === 'user') {
+      return '<div class="conversation-message user">' +
+        '<div class="message-header">' +
+          '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+            '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>' +
+          '</svg>' +
+          '<span class="message-sender">You</span>' +
+        '</div>' +
+        '<pre class="whitespace-pre-wrap">' + escapeHtml(msg.content) + '</pre>' +
+      '</div>';
+    }
+
+    // Render stdout/assistant messages with markdown and Claude icon
+    if (msg.type === 'stdout' || msg.type === 'assistant') {
+      var renderedContent = renderMarkdown(msg.content);
+      return '<div class="conversation-message ' + typeClass + ' markdown-content">' +
+        '<div class="message-header claude-header">' +
+          '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">' +
+            '<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>' +
+          '</svg>' +
+          '<span class="message-sender">Claude</span>' +
+        '</div>' +
+        '<div class="message-content">' + renderedContent + '</div>' +
+      '</div>';
+    }
+
+    return '<div class="conversation-message ' + typeClass + '">' +
+      '<pre class="whitespace-pre-wrap">' + escapeHtml(msg.content) + '</pre>' +
+    '</div>';
+  }
+
+  function renderMarkdown(content) {
+    if (typeof marked === 'undefined') {
+      return '<pre class="whitespace-pre-wrap">' + escapeHtml(content) + '</pre>';
+    }
+
+    try {
+      // Configure marked for safe rendering
+      marked.setOptions({
+        breaks: true,
+        gfm: true
+      });
+      return marked.parse(content);
+    } catch (e) {
+      return '<pre class="whitespace-pre-wrap">' + escapeHtml(content) + '</pre>';
+    }
+  }
+
+  function renderQuestionMessage(msg) {
+    var info = msg.questionInfo || {};
+    var question = info.question || msg.content;
+    var options = info.options || [];
+    var header = info.header || 'Question';
+
+    var html = '<div class="conversation-message question">' +
+      '<div class="question-header">' +
+        '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>' +
+        '</svg>' +
+        '<span class="question-label">' + escapeHtml(header) + '</span>' +
+      '</div>' +
+      '<div class="question-text">' + escapeHtml(question) + '</div>';
+
+    if (options.length > 0) {
+      html += '<div class="question-options">';
+
+      options.forEach(function(opt, index) {
+        html += '<button class="question-option" data-option-index="' + index + '" data-option-label="' + escapeHtml(opt.label) + '">' +
+          '<span class="option-label">' + escapeHtml(opt.label) + '</span>';
+
+        if (opt.description) {
+          html += '<span class="option-description">' + escapeHtml(opt.description) + '</span>';
+        }
+
+        html += '</button>';
+      });
+
+      // Add "Other" option for custom input
+      html += '<button class="question-option question-option-other" data-option-index="-1">' +
+        '<span class="option-label">Other...</span>' +
+        '<span class="option-description">Type a custom response</span>' +
+      '</button>';
+
+      html += '</div>';
+    }
+
+    html += '</div>';
+    return html;
+  }
+
+  function renderPermissionMessage(msg) {
+    var info = msg.permissionInfo || {};
+    var tool = info.tool || 'Unknown';
+    var action = info.action || msg.content;
+    var details = info.details || {};
+
+    var html = '<div class="conversation-message permission">' +
+      '<div class="permission-header">' +
+        '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>' +
+        '</svg>' +
+        '<span class="permission-label">Permission Request</span>' +
+        '<span class="permission-tool">' + escapeHtml(tool) + '</span>' +
+      '</div>' +
+      '<div class="permission-action">' + escapeHtml(action) + '</div>';
+
+    // Show details if available
+    if (details.file_path) {
+      html += '<div class="permission-detail"><span class="detail-label">File:</span> <code>' + escapeHtml(details.file_path) + '</code></div>';
+    }
+
+    if (details.command) {
+      html += '<div class="permission-detail"><span class="detail-label">Command:</span> <pre>' + escapeHtml(details.command) + '</pre></div>';
+    }
+
+    html += '<div class="permission-actions">' +
+      '<button class="permission-btn approve" data-response="yes">Approve</button>' +
+      '<button class="permission-btn deny" data-response="no">Deny</button>' +
+      '<button class="permission-btn always" data-response="always">Always Allow</button>' +
+    '</div>';
+
+    html += '</div>';
+    return html;
+  }
+
+  // Store tool data by ID for modal access (avoids JSON in HTML attributes)
+  var toolDataStore = {};
+
+  function renderToolMessage(msg) {
+    var toolInfo = msg.toolInfo || {};
+    var toolName = toolInfo.name || 'Tool';
+    var toolInput = toolInfo.input || {};
+    var toolId = toolInfo.id || ('tool-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9));
+    var status = toolInfo.status || 'running';
+    var iconHtml = getToolIcon(toolName);
+
+    // Store tool data in JavaScript object for modal access
+    toolDataStore[toolId] = {
+      name: toolName,
+      input: toolInput,
+      status: status
+    };
+
+    var html = '<div class="conversation-message tool-use" data-tool-id="' + escapeHtml(toolId) + '">' +
+      '<div class="tool-header">' +
+        iconHtml +
+        '<span class="tool-name">' + escapeHtml(toolName) + '</span>' +
+        '<span class="tool-status ' + status + '"></span>' +
+        '<span class="ml-auto text-xs text-gray-500">Click for details</span>' +
+      '</div>';
+
+    // Show tool arguments preview (limited diff lines)
+    html += renderToolArgsPreview(toolName, toolInput);
+
+    html += '</div>';
+    return html;
+  }
+
+  // Update tool status when result arrives
+  function updateToolStatus(toolId, status) {
+    var $tool = $('[data-tool-id="' + toolId + '"]');
+
+    if ($tool.length === 0) return;
+
+    // Update status indicator
+    $tool.find('.tool-status').removeClass('running completed failed').addClass(status);
+
+    // Update stored data
+    if (toolDataStore[toolId]) {
+      toolDataStore[toolId].status = status;
+    }
+  }
+
+  function getToolIcon(toolName) {
+    var icons = {
+      'Read': '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>',
+      'Write': '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>',
+      'Edit': '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>',
+      'Bash': '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>',
+      'Glob': '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>',
+      'Grep': '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>',
+      'Task': '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>'
+    };
+    return icons[toolName] || '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>';
+  }
+
+  function renderToolArgs(toolName, input) {
+    if (!input || Object.keys(input).length === 0) {
+      return '';
+    }
+
+    var html = '<div class="tool-args">';
+
+    switch (toolName) {
+      case 'Read':
+        if (input.file_path) {
+          html += '<div class="tool-arg"><span class="arg-label">Path:</span> <code class="arg-value file-path">' + escapeHtml(input.file_path) + '</code></div>';
+        }
+        break;
+
+      case 'Write':
+        if (input.file_path) {
+          html += '<div class="tool-arg"><span class="arg-label">Path:</span> <code class="arg-value file-path">' + escapeHtml(input.file_path) + '</code></div>';
+        }
+
+        if (input.content) {
+          // Check if we have cached content from a previous Read
+          var cachedContent = input.file_path ? getCachedFileContent(input.file_path) : null;
+
+          if (cachedContent !== null) {
+            // Show diff between previous content and new content
+            html += '<div class="tool-arg"><span class="text-blue-400 text-xs italic">Diff against previously read file</span></div>';
+            html += renderDiff(cachedContent, input.content, input.file_path);
+          } else {
+            // Show content being written as all additions (no previous content)
+            html += renderDiff('', input.content, input.file_path);
+          }
+        }
+        break;
+
+      case 'Edit':
+        if (input.file_path) {
+          html += '<div class="tool-arg"><span class="arg-label">Path:</span> <code class="arg-value file-path">' + escapeHtml(input.file_path) + '</code></div>';
+        }
+
+        if (input.old_string && input.new_string) {
+          html += renderDiff(input.old_string, input.new_string, input.file_path);
+        }
+        break;
+
+      case 'Bash':
+        if (input.command) {
+          html += '<div class="tool-arg"><pre class="arg-value bash-command">' + escapeHtml(input.command) + '</pre></div>';
+        }
+        break;
+
+      case 'Glob':
+        if (input.pattern) {
+          html += '<div class="tool-arg"><span class="arg-label">Pattern:</span> <code class="arg-value">' + escapeHtml(input.pattern) + '</code></div>';
+        }
+        break;
+
+      case 'Grep':
+        if (input.pattern) {
+          html += '<div class="tool-arg"><span class="arg-label">Pattern:</span> <code class="arg-value">' + escapeHtml(input.pattern) + '</code></div>';
+        }
+
+        if (input.path) {
+          html += '<div class="tool-arg"><span class="arg-label">Path:</span> <code class="arg-value file-path">' + escapeHtml(input.path) + '</code></div>';
+        }
+        break;
+
+      case 'TodoWrite':
+        // Handle both direct object and string input
+        var todoItems = input.todos;
+
+        if (typeof input === 'string') {
+          try {
+            var parsedInput = JSON.parse(input);
+            todoItems = parsedInput.todos;
+          } catch (e) {
+            // If parsing fails, show nothing
+          }
+        }
+
+        html += renderTodoList(todoItems || []);
+        break;
+
+      default:
+        // Show all inputs for unknown tools
+        for (var key in input) {
+          if (input.hasOwnProperty(key)) {
+            var value = typeof input[key] === 'string' ? input[key] : JSON.stringify(input[key]);
+            html += '<div class="tool-arg"><span class="arg-label">' + escapeHtml(key) + ':</span> <span class="arg-value">' + escapeHtml(truncateString(value, 100)) + '</span></div>';
+          }
+        }
+    }
+
+    html += '</div>';
+    return html;
+  }
+
+  function renderTodoList(todos) {
+    if (!todos || todos.length === 0) {
+      return '<div class="text-gray-500 text-xs italic">No tasks</div>';
+    }
+
+    var html = '<div class="todo-list space-y-1 mt-2">';
+
+    for (var i = 0; i < todos.length; i++) {
+      var todo = todos[i];
+      var statusIcon = getTodoStatusIcon(todo.status);
+      var statusClass = getTodoStatusClass(todo.status);
+
+      html += '<div class="todo-item flex items-start gap-2 p-2 rounded bg-gray-800/50 ' + statusClass + '">' +
+        '<span class="todo-icon flex-shrink-0 mt-0.5">' + statusIcon + '</span>' +
+        '<div class="todo-content flex-1 min-w-0">' +
+          '<div class="todo-text text-sm">' + escapeHtml(todo.content) + '</div>' +
+        '</div>' +
+        '<span class="todo-status-badge text-xs px-1.5 py-0.5 rounded ' + getStatusBadgeClass(todo.status) + '">' +
+          escapeHtml(formatTodoStatus(todo.status)) +
+        '</span>' +
+      '</div>';
+    }
+
+    html += '</div>';
+    return html;
+  }
+
+  function getTodoStatusIcon(status) {
+    switch (status) {
+      case 'completed':
+        return '<svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>' +
+        '</svg>';
+      case 'in_progress':
+        return '<svg class="w-4 h-4 text-yellow-400 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>' +
+        '</svg>';
+      case 'pending':
+      default:
+        return '<svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+          '<circle cx="12" cy="12" r="10" stroke-width="2"/>' +
+        '</svg>';
+    }
+  }
+
+  function getTodoStatusClass(status) {
+    switch (status) {
+      case 'completed':
+        return 'border-l-2 border-green-500/50';
+      case 'in_progress':
+        return 'border-l-2 border-yellow-500/50';
+      case 'pending':
+      default:
+        return 'border-l-2 border-gray-600/50';
+    }
+  }
+
+  function getStatusBadgeClass(status) {
+    switch (status) {
+      case 'completed':
+        return 'bg-green-900/50 text-green-400';
+      case 'in_progress':
+        return 'bg-yellow-900/50 text-yellow-400';
+      case 'pending':
+      default:
+        return 'bg-gray-700 text-gray-400';
+    }
+  }
+
+  function formatTodoStatus(status) {
+    switch (status) {
+      case 'completed':
+        return 'Done';
+      case 'in_progress':
+        return 'Working';
+      case 'pending':
+        return 'Pending';
+      default:
+        return status;
+    }
+  }
+
+  function updateCurrentTodos(input) {
+    var todoItems = input.todos;
+
+    if (typeof input === 'string') {
+      try {
+        var parsedInput = JSON.parse(input);
+        todoItems = parsedInput.todos;
+      } catch (e) {
+        return;
+      }
+    }
+
+    if (Array.isArray(todoItems)) {
+      state.currentTodos = todoItems;
+      updateTasksButtonBadge();
+      updateTasksModalContent();
+    }
+  }
+
+  function updateTasksButtonBadge() {
+    var $badge = $('#tasks-badge');
+    var todos = state.currentTodos;
+
+    if (!todos || todos.length === 0) {
+      $badge.addClass('hidden');
+      return;
+    }
+
+    var inProgress = todos.filter(function(t) { return t.status === 'in_progress'; }).length;
+    var pending = todos.filter(function(t) { return t.status === 'pending'; }).length;
+    var active = inProgress + pending;
+
+    if (active > 0) {
+      $badge.text(active).removeClass('hidden');
+    } else {
+      $badge.addClass('hidden');
+    }
+  }
+
+  function updateTasksModalContent() {
+    var $content = $('#tasks-modal-content');
+
+    if (!$('#modal-tasks').hasClass('hidden')) {
+      $content.html(renderTasksModalContent());
+    }
+  }
+
+  function renderTasksModalContent() {
+    var todos = state.currentTodos;
+
+    if (!todos || todos.length === 0) {
+      return '<div class="text-center py-8">' +
+        '<svg class="w-12 h-12 mx-auto mb-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>' +
+        '</svg>' +
+        '<p class="text-gray-400">No active tasks</p>' +
+        '<p class="text-gray-600 text-sm mt-1">Tasks will appear here when Claude starts working</p>' +
+      '</div>';
+    }
+
+    // Calculate stats
+    var completed = todos.filter(function(t) { return t.status === 'completed'; }).length;
+    var inProgress = todos.filter(function(t) { return t.status === 'in_progress'; }).length;
+    var pending = todos.filter(function(t) { return t.status === 'pending'; }).length;
+    var total = todos.length;
+    var percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+    var html = '';
+
+    // Progress bar
+    html += '<div class="mb-4">' +
+      '<div class="flex justify-between text-xs text-gray-400 mb-1">' +
+        '<span>' + completed + ' of ' + total + ' completed</span>' +
+        '<span>' + percent + '%</span>' +
+      '</div>' +
+      '<div class="w-full bg-gray-700 rounded-full h-2">' +
+        '<div class="bg-green-500 h-2 rounded-full transition-all duration-300" style="width: ' + percent + '%"></div>' +
+      '</div>' +
+      '<div class="flex gap-4 mt-2 text-xs">' +
+        '<span class="text-green-400">' + completed + ' done</span>' +
+        '<span class="text-yellow-400">' + inProgress + ' in progress</span>' +
+        '<span class="text-gray-400">' + pending + ' pending</span>' +
+      '</div>' +
+    '</div>';
+
+    // Task list
+    html += '<div class="space-y-2 max-h-80 overflow-y-auto">';
+
+    for (var i = 0; i < todos.length; i++) {
+      var todo = todos[i];
+      var statusIcon = getTodoStatusIcon(todo.status);
+      var statusClass = getTodoStatusClass(todo.status);
+      var activeText = todo.status === 'in_progress' && todo.activeForm ? todo.activeForm : '';
+
+      html += '<div class="todo-item flex items-start gap-3 p-3 rounded-lg bg-gray-800/50 border border-gray-700 ' + statusClass + '">' +
+        '<span class="todo-icon flex-shrink-0 mt-0.5">' + statusIcon + '</span>' +
+        '<div class="todo-content flex-1 min-w-0">' +
+          '<div class="todo-text text-sm text-gray-200">' + escapeHtml(todo.content) + '</div>' +
+          (activeText ? '<div class="text-xs text-yellow-400 mt-1 italic">' + escapeHtml(activeText) + '</div>' : '') +
+        '</div>' +
+        '<span class="todo-status-badge text-xs px-2 py-0.5 rounded font-medium ' + getStatusBadgeClass(todo.status) + '">' +
+          escapeHtml(formatTodoStatus(todo.status)) +
+        '</span>' +
+      '</div>';
+    }
+
+    html += '</div>';
+
+    return html;
+  }
+
+  function openTasksModal() {
+    $('#tasks-modal-content').html(renderTasksModalContent());
+    openModal('modal-tasks');
+  }
+
+  // Preview version - shows limited diff lines for inline display
+  function renderToolArgsPreview(toolName, input) {
+    if (!input || Object.keys(input).length === 0) {
+      return '';
+    }
+
+    var html = '<div class="tool-args">';
+
+    switch (toolName) {
+      case 'Read':
+        if (input.file_path) {
+          html += '<div class="tool-arg"><span class="arg-label">Path:</span> <code class="arg-value file-path">' + escapeHtml(input.file_path) + '</code></div>';
+        }
+        break;
+
+      case 'Write':
+        if (input.file_path) {
+          html += '<div class="tool-arg"><span class="arg-label">Path:</span> <code class="arg-value file-path">' + escapeHtml(input.file_path) + '</code></div>';
+        }
+
+        if (input.content) {
+          var cachedContent = input.file_path ? getCachedFileContent(input.file_path) : null;
+
+          if (cachedContent !== null) {
+            html += '<div class="tool-arg"><span class="text-blue-400 text-xs italic">Diff against previously read file</span></div>';
+            html += renderDiffPreview(cachedContent, input.content, input.file_path);
+          } else {
+            html += renderDiffPreview('', input.content, input.file_path);
+          }
+        }
+        break;
+
+      case 'Edit':
+        if (input.file_path) {
+          html += '<div class="tool-arg"><span class="arg-label">Path:</span> <code class="arg-value file-path">' + escapeHtml(input.file_path) + '</code></div>';
+        }
+
+        if (input.old_string && input.new_string) {
+          html += renderDiffPreview(input.old_string, input.new_string, input.file_path);
+        }
+        break;
+
+      case 'Bash':
+        if (input.command) {
+          var cmd = input.command;
+
+          if (cmd.length > 200) {
+            cmd = cmd.substring(0, 200) + '...';
+          }
+
+          html += '<div class="tool-arg"><pre class="arg-value bash-command">' + escapeHtml(cmd) + '</pre></div>';
+        }
+        break;
+
+      case 'Glob':
+        if (input.pattern) {
+          html += '<div class="tool-arg"><span class="arg-label">Pattern:</span> <code class="arg-value">' + escapeHtml(input.pattern) + '</code></div>';
+        }
+        break;
+
+      case 'Grep':
+        if (input.pattern) {
+          html += '<div class="tool-arg"><span class="arg-label">Pattern:</span> <code class="arg-value">' + escapeHtml(input.pattern) + '</code></div>';
+        }
+
+        if (input.path) {
+          html += '<div class="tool-arg"><span class="arg-label">Path:</span> <code class="arg-value file-path">' + escapeHtml(input.path) + '</code></div>';
+        }
+        break;
+
+      case 'TodoWrite':
+        // Handle both direct object and string input
+        var todos = input.todos;
+
+        if (typeof input === 'string') {
+          try {
+            var parsed = JSON.parse(input);
+            todos = parsed.todos;
+          } catch (e) {
+            // If parsing fails, show nothing
+          }
+        }
+
+        html += renderTodoListPreview(todos || []);
+        break;
+
+      default:
+        for (var key in input) {
+          if (input.hasOwnProperty(key)) {
+            var value = typeof input[key] === 'string' ? input[key] : JSON.stringify(input[key]);
+            html += '<div class="tool-arg"><span class="arg-label">' + escapeHtml(key) + ':</span> <span class="arg-value">' + escapeHtml(truncateString(value, 100)) + '</span></div>';
+          }
+        }
+    }
+
+    html += '</div>';
+    return html;
+  }
+
+  function renderTodoListPreview(todos) {
+    if (!todos || todos.length === 0) {
+      return '<div class="text-gray-500 text-xs italic">No tasks</div>';
+    }
+
+    // Count by status
+    var completed = 0;
+    var inProgress = 0;
+    var pending = 0;
+
+    for (var i = 0; i < todos.length; i++) {
+      switch (todos[i].status) {
+        case 'completed': completed++; break;
+        case 'in_progress': inProgress++; break;
+        default: pending++;
+      }
+    }
+
+    // Summary line
+    var html = '<div class="todo-preview flex items-center gap-3 text-xs">';
+    html += '<span class="text-gray-400">' + todos.length + ' task' + (todos.length !== 1 ? 's' : '') + ':</span>';
+
+    if (completed > 0) {
+      html += '<span class="text-green-400">' + completed + ' done</span>';
+    }
+
+    if (inProgress > 0) {
+      html += '<span class="text-yellow-400">' + inProgress + ' active</span>';
+    }
+
+    if (pending > 0) {
+      html += '<span class="text-gray-500">' + pending + ' pending</span>';
+    }
+
+    html += '</div>';
+
+    // Show first few tasks
+    var maxPreview = 3;
+    html += '<div class="todo-items-preview mt-1 space-y-0.5">';
+
+    for (var j = 0; j < Math.min(todos.length, maxPreview); j++) {
+      var todo = todos[j];
+      var icon = getTodoStatusIconSmall(todo.status);
+      html += '<div class="flex items-center gap-1.5 text-xs">' +
+        icon +
+        '<span class="' + getTodoTextClass(todo.status) + ' truncate">' + escapeHtml(truncateString(todo.content, 50)) + '</span>' +
+      '</div>';
+    }
+
+    if (todos.length > maxPreview) {
+      html += '<div class="text-gray-500 text-xs">+' + (todos.length - maxPreview) + ' more...</div>';
+    }
+
+    html += '</div>';
+    return html;
+  }
+
+  function getTodoStatusIconSmall(status) {
+    switch (status) {
+      case 'completed':
+        return '<svg class="w-3 h-3 text-green-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>' +
+        '</svg>';
+      case 'in_progress':
+        return '<svg class="w-3 h-3 text-yellow-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>' +
+        '</svg>';
+      case 'pending':
+      default:
+        return '<svg class="w-3 h-3 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+          '<circle cx="12" cy="12" r="10" stroke-width="2"/>' +
+        '</svg>';
+    }
+  }
+
+  function getTodoTextClass(status) {
+    switch (status) {
+      case 'completed':
+        return 'text-green-400 line-through opacity-70';
+      case 'in_progress':
+        return 'text-yellow-400';
+      case 'pending':
+      default:
+        return 'text-gray-400';
+    }
+  }
+
+  var DIFF_PREVIEW_LINES = 15;
+
+  // Map file extensions to highlight.js language names
+  var extensionToLanguage = {
+    'js': 'javascript',
+    'jsx': 'javascript',
+    'ts': 'typescript',
+    'tsx': 'typescript',
+    'py': 'python',
+    'rb': 'ruby',
+    'java': 'java',
+    'c': 'c',
+    'cpp': 'cpp',
+    'h': 'c',
+    'hpp': 'cpp',
+    'cs': 'csharp',
+    'go': 'go',
+    'rs': 'rust',
+    'php': 'php',
+    'swift': 'swift',
+    'kt': 'kotlin',
+    'scala': 'scala',
+    'sh': 'bash',
+    'bash': 'bash',
+    'zsh': 'bash',
+    'ps1': 'powershell',
+    'sql': 'sql',
+    'html': 'xml',
+    'htm': 'xml',
+    'xml': 'xml',
+    'svg': 'xml',
+    'css': 'css',
+    'scss': 'scss',
+    'sass': 'scss',
+    'less': 'less',
+    'json': 'json',
+    'yaml': 'yaml',
+    'yml': 'yaml',
+    'toml': 'ini',
+    'ini': 'ini',
+    'md': 'markdown',
+    'markdown': 'markdown',
+    'dockerfile': 'dockerfile',
+    'makefile': 'makefile',
+    'vue': 'xml',
+    'svelte': 'xml'
+  };
+
+  function getLanguageFromPath(filePath) {
+    if (!filePath) return null;
+
+    var fileName = filePath.split(/[/\\]/).pop().toLowerCase();
+
+    // Handle special filenames
+    if (fileName === 'dockerfile') return 'dockerfile';
+    if (fileName === 'makefile') return 'makefile';
+    if (fileName.startsWith('.')) fileName = fileName.substring(1);
+
+    var ext = fileName.split('.').pop();
+    return extensionToLanguage[ext] || null;
+  }
+
+  function highlightCode(code, language) {
+    if (!language || typeof hljs === 'undefined') {
+      return escapeHtml(code);
+    }
+
+    try {
+      var result = hljs.highlight(code, { language: language, ignoreIllegals: true });
+      return result.value;
+    } catch (e) {
+      // Fallback to escaped HTML if highlighting fails
+      return escapeHtml(code);
+    }
+  }
+
+  // Full diff for modal - side by side
+  function renderDiff(oldStr, newStr, filePath) {
+    var alignedDiff = computeAlignedDiff(oldStr, newStr);
+    return renderDiffSideBySide(alignedDiff, alignedDiff.length, filePath);
+  }
+
+  // Preview diff - side by side with limit
+  function renderDiffPreview(oldStr, newStr, filePath) {
+    var alignedDiff = computeAlignedDiff(oldStr, newStr);
+    var hasMore = alignedDiff.length > DIFF_PREVIEW_LINES;
+    var html = renderDiffSideBySide(alignedDiff, DIFF_PREVIEW_LINES, filePath);
+
+    if (hasMore) {
+      var moreCount = alignedDiff.length - DIFF_PREVIEW_LINES;
+      html += '<div class="diff-more-indicator">... ' + moreCount + ' more lines (click to view full diff)</div>';
+    }
+
+    return html;
+  }
+
+  // Compute aligned diff for side-by-side display
+  function computeAlignedDiff(oldStr, newStr) {
+    var diff = computeDiff(oldStr, newStr);
+    var aligned = [];
+
+    for (var i = 0; i < diff.length; i++) {
+      var line = diff[i];
+
+      if (line.type === 'unchanged') {
+        aligned.push({ left: line.content, right: line.content, type: 'unchanged' });
+      } else if (line.type === 'remove') {
+        // Check if next line is add (potential change pair)
+        if (i + 1 < diff.length && diff[i + 1].type === 'add') {
+          aligned.push({ left: line.content, right: diff[i + 1].content, type: 'change' });
+          i++; // Skip the add line
+        } else {
+          aligned.push({ left: line.content, right: '', type: 'remove' });
+        }
+      } else if (line.type === 'add') {
+        aligned.push({ left: '', right: line.content, type: 'add' });
+      } else if (line.type === 'change') {
+        aligned.push({ left: line.oldContent || '', right: line.content, type: 'change' });
+      }
+    }
+
+    return aligned;
+  }
+
+  function renderDiffSideBySide(alignedDiff, maxLines, filePath) {
+    var linesToShow = Math.min(alignedDiff.length, maxLines);
+    var language = getLanguageFromPath(filePath);
+
+    var html = '<div class="tool-diff side-by-side">';
+
+    // Old side (original)
+    html += '<div class="diff-side old">';
+    html += '<div class="diff-side-header">Original</div>';
+    html += '<div class="diff-side-content">';
+
+    for (var i = 0; i < linesToShow; i++) {
+      var row = alignedDiff[i];
+      var leftClass = 'diff-line';
+
+      if (row.type === 'unchanged') leftClass += ' diff-unchanged';
+      else if (row.type === 'remove') leftClass += ' diff-remove';
+      else if (row.type === 'change') leftClass += ' diff-change';
+      else if (row.type === 'add') leftClass += ' diff-empty';
+
+      var leftContent = row.left ? highlightCode(row.left, language) : '';
+      html += '<div class="' + leftClass + '">';
+      html += '<span class="diff-content">' + leftContent + '</span>';
+      html += '</div>';
+    }
+
+    html += '</div></div>';
+
+    // New side (modified)
+    html += '<div class="diff-side new">';
+    html += '<div class="diff-side-header">New</div>';
+    html += '<div class="diff-side-content">';
+
+    for (var j = 0; j < linesToShow; j++) {
+      var row2 = alignedDiff[j];
+      var rightClass = 'diff-line';
+
+      if (row2.type === 'unchanged') rightClass += ' diff-unchanged';
+      else if (row2.type === 'add') rightClass += ' diff-add';
+      else if (row2.type === 'change') rightClass += ' diff-change';
+      else if (row2.type === 'remove') rightClass += ' diff-empty';
+
+      var rightContent = row2.right ? highlightCode(row2.right, language) : '';
+      html += '<div class="' + rightClass + '">';
+      html += '<span class="diff-content">' + rightContent + '</span>';
+      html += '</div>';
+    }
+
+    html += '</div></div>';
+    html += '</div>';
+
+    return html;
+  }
+
+  function computeDiff(oldStr, newStr) {
+    var oldLines = oldStr.split('\n');
+    var newLines = newStr.split('\n');
+    var result = [];
+
+    // Simple LCS-based diff
+    var lcs = computeLCS(oldLines, newLines);
+    var oldIdx = 0;
+    var newIdx = 0;
+    var lcsIdx = 0;
+
+    while (oldIdx < oldLines.length || newIdx < newLines.length) {
+      if (lcsIdx < lcs.length && oldIdx < oldLines.length && oldLines[oldIdx] === lcs[lcsIdx]) {
+        if (newIdx < newLines.length && newLines[newIdx] === lcs[lcsIdx]) {
+          // Unchanged line
+          result.push({ type: 'unchanged', content: oldLines[oldIdx] });
+          oldIdx++;
+          newIdx++;
+          lcsIdx++;
+        } else {
+          // Line added in new
+          result.push({ type: 'add', content: newLines[newIdx] });
+          newIdx++;
+        }
+      } else if (lcsIdx < lcs.length && newIdx < newLines.length && newLines[newIdx] === lcs[lcsIdx]) {
+        // Line removed from old
+        result.push({ type: 'remove', content: oldLines[oldIdx] });
+        oldIdx++;
+      } else if (oldIdx < oldLines.length && newIdx < newLines.length) {
+        // Both lines differ - check if it's a modification
+        if (isSimilar(oldLines[oldIdx], newLines[newIdx])) {
+          result.push({ type: 'change', content: newLines[newIdx], oldContent: oldLines[oldIdx] });
+        } else {
+          result.push({ type: 'remove', content: oldLines[oldIdx] });
+          result.push({ type: 'add', content: newLines[newIdx] });
+        }
+        oldIdx++;
+        newIdx++;
+      } else if (oldIdx < oldLines.length) {
+        result.push({ type: 'remove', content: oldLines[oldIdx] });
+        oldIdx++;
+      } else if (newIdx < newLines.length) {
+        result.push({ type: 'add', content: newLines[newIdx] });
+        newIdx++;
+      } else {
+        break;
+      }
+    }
+
+    return result;
+  }
+
+  function computeLCS(arr1, arr2) {
+    var m = arr1.length;
+    var n = arr2.length;
+    var dp = [];
+
+    for (var i = 0; i <= m; i++) {
+      dp[i] = [];
+      for (var j = 0; j <= n; j++) {
+        dp[i][j] = 0;
+      }
+    }
+
+    for (var i = 1; i <= m; i++) {
+      for (var j = 1; j <= n; j++) {
+        if (arr1[i - 1] === arr2[j - 1]) {
+          dp[i][j] = dp[i - 1][j - 1] + 1;
+        } else {
+          dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+        }
+      }
+    }
+
+    // Backtrack to find LCS
+    var lcs = [];
+    var i = m, j = n;
+    while (i > 0 && j > 0) {
+      if (arr1[i - 1] === arr2[j - 1]) {
+        lcs.unshift(arr1[i - 1]);
+        i--;
+        j--;
+      } else if (dp[i - 1][j] > dp[i][j - 1]) {
+        i--;
+      } else {
+        j--;
+      }
+    }
+
+    return lcs;
+  }
+
+  function isSimilar(str1, str2) {
+    // Check if strings are similar (for detecting modifications vs add/remove)
+    if (!str1 || !str2) return false;
+    var len1 = str1.length;
+    var len2 = str2.length;
+    if (Math.abs(len1 - len2) > Math.max(len1, len2) * 0.5) return false;
+
+    // Simple similarity: share at least 40% of characters in same positions
+    var matches = 0;
+    var minLen = Math.min(len1, len2);
+    for (var i = 0; i < minLen; i++) {
+      if (str1[i] === str2[i]) matches++;
+    }
+    return matches / Math.max(len1, len2) > 0.4;
+  }
+
+  function truncateString(str, maxLen) {
+    if (str.length <= maxLen) return str;
+    return str.substring(0, maxLen - 3) + '...';
+  }
+
+  function scrollConversationToBottom() {
+    if (state.agentOutputScrollLock) return;
+
+    var $container = $('#conversation-container');
+    $container.scrollTop($container[0].scrollHeight);
+  }
+
+  // Check if a message is a debug/system message that should only show in debug mode
+  function isDebugMessage(message) {
+    return message.type === 'system';
+  }
+
+  function appendMessage(projectId, message) {
+    if (!state.conversations[projectId]) {
+      state.conversations[projectId] = [];
+    }
+    state.conversations[projectId].push(message);
+
+    // Update real-time stats
+    updateStatsFromMessage(message);
+
+    // Cache Read tool file paths for diff comparison with Write
+    if (message.type === 'tool_use' && message.toolInfo) {
+      var toolInfo = message.toolInfo;
+
+      if (toolInfo.name === 'Read' && toolInfo.input && toolInfo.input.file_path) {
+        cacheReadFile(toolInfo.input.file_path);
+      }
+
+      // Track TodoWrite tool calls to update task state
+      if (toolInfo.name === 'TodoWrite' && toolInfo.input) {
+        updateCurrentTodos(toolInfo.input);
+      }
+    }
+
+    if (state.selectedProjectId === projectId) {
+      // Skip debug messages unless debug panel is open
+      if (isDebugMessage(message) && !state.debugPanelOpen) {
+        return;
+      }
+
+      // Remove waiting indicator when response arrives (not for user messages)
+      if (message.type !== 'user') {
+        removeWaitingIndicator();
+      }
+
+      // Mark previous running tools as completed when non-tool content arrives
+      if (message.type !== 'tool_use' && message.type !== 'user') {
+        markRunningToolsComplete();
+      }
+
+      var $conv = $('#conversation');
+
+      // Clear "No conversation yet" placeholder if present
+      if ($conv.find('.text-gray-500.text-center').length > 0) {
+        $conv.empty();
+      }
+
+      $conv.append(renderMessage(message));
+      scrollConversationToBottom();
+    }
+  }
+
+  function updateStatsFromMessage(message) {
+    // Initialize stats if needed
+    if (!state.currentConversationStats) {
+      state.currentConversationStats = {
+        messageCount: 0,
+        toolCallCount: 0,
+        userMessageCount: 0,
+        durationMs: 0,
+        startedAt: message.timestamp || new Date().toISOString()
+      };
+    }
+
+    var stats = state.currentConversationStats;
+
+    // Increment message count
+    stats.messageCount++;
+
+    // Increment tool call count
+    if (message.type === 'tool_use') {
+      stats.toolCallCount++;
+    }
+
+    // Increment user message count
+    if (message.type === 'user') {
+      stats.userMessageCount++;
+    }
+
+    // Update duration based on latest message timestamp
+    if (message.timestamp && stats.startedAt) {
+      var startTime = new Date(stats.startedAt).getTime();
+      var endTime = new Date(message.timestamp).getTime();
+      stats.durationMs = Math.max(0, endTime - startTime);
+    }
+
+    // Update context usage from agent message if available
+    if (message.contextUsage) {
+      if (!state.currentConversationMetadata) {
+        state.currentConversationMetadata = {};
+      }
+      state.currentConversationMetadata.contextUsage = message.contextUsage;
+    }
+
+    // Update the display
+    updateConversationStats();
+  }
+
+  function markRunningToolsComplete() {
+    $('.tool-status.running').removeClass('running').addClass('completed');
+  }
+
+  // Roadmap rendering
+  function renderRoadmap(data) {
+    var $container = $('#roadmap-content');
+
+    if (!data || !data.parsed) {
+      $container.html('<div class="text-gray-500 text-center">No roadmap found</div>');
+      return;
+    }
+
+    var parsed = data.parsed;
+    var html = renderOverallProgress(parsed.overallProgress);
+    html += renderPhases(parsed.phases, parsed.currentPhase, parsed.currentMilestone);
+
+    $container.html(html);
+  }
+
+  function renderOverallProgress(progress) {
+    return '<div class="mb-4 p-3 bg-gray-800 rounded">' +
+      '<div class="flex justify-between text-sm mb-1">' +
+        '<span class="text-gray-300">Overall Progress</span>' +
+        '<span class="text-gray-400">' + progress + '%</span>' +
+      '</div>' +
+      '<div class="w-full bg-gray-700 rounded-full h-2">' +
+        '<div class="bg-green-500 h-2 rounded-full" style="width: ' + progress + '%"></div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function renderPhases(phases, currentPhase, currentMilestone) {
+    var html = '';
+
+    phases.forEach(function(phase) {
+      var isCurrent = phase.id === currentPhase;
+      var phaseClass = isCurrent ? 'border-blue-500' : 'border-gray-700';
+
+      html += '<div class="mb-3 border-l-2 ' + phaseClass + ' pl-3">' +
+        '<div class="flex items-center justify-between group mb-2">' +
+          '<span class="text-sm font-medium text-gray-200">' + escapeHtml(phase.title) + '</span>' +
+          '<button class="btn-delete-phase opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 p-0.5 transition-opacity" ' +
+            'data-phase-id="' + escapeHtml(phase.id) + '" ' +
+            'data-phase-title="' + escapeHtml(phase.title) + '" ' +
+            'title="Delete phase">' +
+            '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+              '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>' +
+            '</svg>' +
+          '</button>' +
+        '</div>';
+
+      phase.milestones.forEach(function(milestone) {
+        html += renderMilestone(phase.id, milestone, milestone.id === currentMilestone);
+      });
+
+      html += '</div>';
+    });
+
+    return html;
+  }
+
+  function renderMilestone(phaseId, milestone, isCurrent) {
+    var progress = milestone.totalCount > 0
+      ? Math.round((milestone.completedCount / milestone.totalCount) * 100)
+      : 0;
+    var bgClass = isCurrent ? 'bg-blue-900/30' : 'bg-gray-800/50';
+    var barColor = progress === 100 ? 'bg-green-500' : 'bg-blue-500';
+    var milestoneKey = phaseId + '-' + milestone.id;
+    var isExpanded = getMilestoneExpanded(milestoneKey);
+    var chevronClass = isExpanded ? 'rotate-90' : '';
+    var isMilestoneComplete = milestone.totalCount > 0 && milestone.completedCount === milestone.totalCount;
+    var milestoneDisabled = isMilestoneComplete ? 'disabled title="All tasks completed"' : '';
+
+    var html = '<div class="mb-2 p-2 ' + bgClass + ' rounded text-xs milestone-container group/milestone">' +
+      '<div class="milestone-header flex items-center gap-2 cursor-pointer select-none" data-milestone-key="' + escapeHtml(milestoneKey) + '">' +
+        '<input type="checkbox" class="roadmap-select-milestone w-3 h-3 accent-purple-500 cursor-pointer" ' +
+          'data-phase-id="' + escapeHtml(phaseId) + '" ' +
+          'data-milestone-id="' + escapeHtml(milestone.id) + '" ' +
+          'data-milestone-title="' + escapeHtml(milestone.title) + '" ' +
+          milestoneDisabled + ' ' +
+          'onclick="event.stopPropagation();" />' +
+        '<svg class="w-3 h-3 text-gray-400 transition-transform duration-200 milestone-chevron ' + chevronClass + '" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>' +
+        '</svg>' +
+        '<span class="flex-1 text-gray-300">' + escapeHtml(milestone.title) + '</span>' +
+        '<span class="text-gray-500">' + milestone.completedCount + '/' + milestone.totalCount + '</span>' +
+        '<button class="btn-delete-milestone opacity-0 group-hover/milestone:opacity-100 text-red-400 hover:text-red-300 p-0.5 transition-opacity" ' +
+          'data-phase-id="' + escapeHtml(phaseId) + '" ' +
+          'data-milestone-id="' + escapeHtml(milestone.id) + '" ' +
+          'data-milestone-title="' + escapeHtml(milestone.title) + '" ' +
+          'onclick="event.stopPropagation();" ' +
+          'title="Delete milestone">' +
+          '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+            '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>' +
+          '</svg>' +
+        '</button>' +
+      '</div>' +
+      '<div class="w-full bg-gray-700 rounded-full h-1 mt-1">' +
+        '<div class="' + barColor + ' h-1 rounded-full transition-all duration-300" style="width: ' + progress + '%"></div>' +
+      '</div>';
+
+    // Render individual tasks with delete buttons and selection checkboxes (expandable)
+    if (milestone.tasks && milestone.tasks.length > 0) {
+      var displayStyle = isExpanded ? '' : 'display: none;';
+      html += '<div class="milestone-tasks space-y-1 mt-2 overflow-hidden transition-all duration-200" style="' + displayStyle + '">';
+
+      milestone.tasks.forEach(function(task, index) {
+        var completedClass = task.completed ? 'text-gray-500 line-through' : 'text-gray-300';
+        var checkboxIcon = task.completed
+          ? '<svg class="w-3 h-3 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>'
+          : '<svg class="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" stroke-width="2"/></svg>';
+
+        html += '<div class="flex items-center gap-2 group">' +
+          '<input type="checkbox" class="roadmap-select-task w-3 h-3 accent-purple-500 cursor-pointer" ' +
+            'data-phase-id="' + escapeHtml(phaseId) + '" ' +
+            'data-milestone-id="' + escapeHtml(milestone.id) + '" ' +
+            'data-task-index="' + index + '" ' +
+            'data-task-title="' + escapeHtml(task.title) + '" ' +
+            (task.completed ? 'disabled title="Already completed"' : '') + ' />' +
+          '<span class="flex-shrink-0">' + checkboxIcon + '</span>' +
+          '<span class="flex-1 ' + completedClass + '">' + escapeHtml(task.title) + '</span>' +
+          '<button class="btn-delete-task opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 p-0.5 transition-opacity" ' +
+            'data-phase-id="' + escapeHtml(phaseId) + '" ' +
+            'data-milestone-id="' + escapeHtml(milestone.id) + '" ' +
+            'data-task-index="' + index + '" ' +
+            'data-task-title="' + escapeHtml(task.title) + '" ' +
+            'title="Delete task">' +
+            '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+              '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>' +
+            '</svg>' +
+          '</button>' +
+        '</div>';
+      });
+
+      html += '</div>';
+    }
+
+    html += '</div>';
+    return html;
+  }
+
+  function getMilestoneExpanded(key) {
+    var stored = localStorage.getItem('claudito-milestone-expanded');
+    var expanded = stored ? JSON.parse(stored) : {};
+    return expanded[key] === true;
+  }
+
+  function setMilestoneExpanded(key, isExpanded) {
+    var stored = localStorage.getItem('claudito-milestone-expanded');
+    var expanded = stored ? JSON.parse(stored) : {};
+    expanded[key] = isExpanded;
+    localStorage.setItem('claudito-milestone-expanded', JSON.stringify(expanded));
+  }
+
+  function toggleMilestoneExpanded(key) {
+    var isExpanded = getMilestoneExpanded(key);
+    setMilestoneExpanded(key, !isExpanded);
+    return !isExpanded;
+  }
+
+  // Roadmap selection functions
+  function getSelectedRoadmapItems() {
+    var items = [];
+
+    // Collect selected milestones
+    $('.roadmap-select-milestone:checked').each(function() {
+      var $checkbox = $(this);
+      items.push({
+        type: 'milestone',
+        phaseId: $checkbox.data('phase-id'),
+        milestoneId: $checkbox.data('milestone-id'),
+        title: $checkbox.data('milestone-title')
+      });
+    });
+
+    // Collect selected tasks (only those not under a selected milestone)
+    var selectedMilestoneIds = items
+      .filter(function(item) { return item.type === 'milestone'; })
+      .map(function(item) { return item.milestoneId; });
+
+    $('.roadmap-select-task:checked:not(:disabled)').each(function() {
+      var $checkbox = $(this);
+      var milestoneId = $checkbox.data('milestone-id');
+
+      // Skip if the milestone is already selected (to avoid duplicates)
+      if (selectedMilestoneIds.indexOf(milestoneId) === -1) {
+        items.push({
+          type: 'task',
+          phaseId: $checkbox.data('phase-id'),
+          milestoneId: milestoneId,
+          taskIndex: $checkbox.data('task-index'),
+          title: $checkbox.data('task-title')
+        });
+      }
+    });
+
+    return items;
+  }
+
+  function updateRoadmapSelectionUI() {
+    var items = getSelectedRoadmapItems();
+    var $section = $('#roadmap-run-selected');
+    var $count = $('#roadmap-selected-count');
+
+    if (items.length > 0) {
+      $section.removeClass('hidden');
+      $count.text(items.length);
+    } else {
+      $section.addClass('hidden');
+    }
+  }
+
+  function clearRoadmapSelection() {
+    $('.roadmap-select-milestone, .roadmap-select-task').prop('checked', false);
+    updateRoadmapSelectionUI();
+  }
+
+  function runSelectedRoadmapTasks() {
+    var items = getSelectedRoadmapItems();
+
+    if (items.length === 0) {
+      showToast('No items selected', 'error');
+      return;
+    }
+
+    // Generate the prompt
+    var prompt = generateRoadmapTaskPrompt(items);
+
+    // Close the roadmap modal
+    closeModal('modal-roadmap');
+
+    // Clear selection for next time
+    clearRoadmapSelection();
+
+    // Start interactive agent if not running, or send message if running
+    var project = findProjectById(state.selectedProjectId);
+
+    if (project && project.status === 'running') {
+      // Agent is already running, send the message directly
+      doSendMessage(prompt);
+    } else {
+      // Agent not running, start interactive agent with the prompt
+      startInteractiveAgentWithMessage(prompt);
+    }
+  }
+
+  function generateRoadmapTaskPrompt(items) {
+    var lines = ['Please work on the following roadmap items:\n'];
+
+    items.forEach(function(item, index) {
+      if (item.type === 'milestone') {
+        lines.push((index + 1) + '. **Milestone**: ' + item.title);
+        lines.push('   Complete all pending tasks in this milestone.\n');
+      } else {
+        lines.push((index + 1) + '. **Task**: ' + item.title + '\n');
+      }
+    });
+
+    lines.push('\nFor each item, please:');
+    lines.push('1. Implement the required changes');
+    lines.push('2. Test your changes');
+    lines.push('3. Update the ROADMAP.md to mark completed items with [x]');
+
+    return lines.join('\n');
+  }
+
+  // Debug modal
+  function openDebugModal() {
+    state.debugPanelOpen = true;
+    openModal('modal-debug');
+    refreshDebugInfo();
+    startDebugAutoRefresh();
+  }
+
+  function closeDebugModal() {
+    state.debugPanelOpen = false;
+    stopDebugAutoRefresh();
+  }
+
+  function startDebugAutoRefresh() {
+    stopDebugAutoRefresh();
+    state.debugRefreshInterval = setInterval(refreshDebugInfo, 2000);
+  }
+
+  function stopDebugAutoRefresh() {
+    if (state.debugRefreshInterval) {
+      clearInterval(state.debugRefreshInterval);
+      state.debugRefreshInterval = null;
+    }
+  }
+
+  function refreshDebugInfo() {
+    if (!state.selectedProjectId || !state.debugPanelOpen) return;
+
+    api.getDebugInfo(state.selectedProjectId, 100)
+      .done(function(data) {
+        renderDebugModal(data);
+      })
+      .fail(function() {
+        $('#debug-process-content').html('<div class="text-red-400">Failed to load debug info</div>');
+      });
+  }
+
+  function renderDebugModal(data) {
+    renderDebugProcessTab(data);
+    renderDebugCommandsTab(data);
+    renderDebugLogsTab(data);
+    renderDebugAllProcessesTab(data);
+  }
+
+  function renderDebugProcessTab(data) {
+    var html = '';
+
+    // Current Agent Process
+    html += '<div class="bg-gray-800 rounded-lg p-4">';
+    html += '<h4 class="text-gray-300 font-semibold mb-3 flex items-center gap-2">';
+    html += '<svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">';
+    html += '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/>';
+    html += '</svg>Current Agent Process</h4>';
+
+    if (data.processInfo) {
+      html += '<div class="grid grid-cols-2 gap-4">';
+      html += '<div class="bg-gray-900 rounded p-3">';
+      html += '<div class="text-gray-500 text-xs mb-1">Process ID</div>';
+      html += '<div class="text-green-400 font-mono text-lg">' + data.processInfo.pid + '</div>';
+      html += '</div>';
+      html += '<div class="bg-gray-900 rounded p-3">';
+      html += '<div class="text-gray-500 text-xs mb-1">Started At</div>';
+      html += '<div class="text-gray-300">' + formatDateTime(data.processInfo.startedAt) + '</div>';
+      html += '</div>';
+      html += '</div>';
+      html += '<div class="bg-gray-900 rounded p-3 mt-3">';
+      html += '<div class="text-gray-500 text-xs mb-1">Working Directory</div>';
+      html += '<div class="text-gray-300 font-mono text-sm break-all">' + escapeHtml(data.processInfo.cwd) + '</div>';
+      html += '</div>';
+    } else {
+      html += '<div class="text-gray-500 text-center py-4">No agent process running</div>';
+    }
+
+    html += '</div>';
+
+    // Loop State
+    html += '<div class="bg-gray-800 rounded-lg p-4 mt-4">';
+    html += '<h4 class="text-gray-300 font-semibold mb-3 flex items-center gap-2">';
+    html += '<svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">';
+    html += '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>';
+    html += '</svg>Autonomous Loop State</h4>';
+
+    if (data.loopState && data.loopState.isLooping) {
+      html += '<div class="bg-gray-900 rounded p-3">';
+      html += '<div class="flex items-center gap-2 mb-3">';
+      html += '<span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>';
+      html += '<span class="text-green-400 font-medium">Loop Running</span>';
+      html += '</div>';
+
+      if (data.loopState.currentMilestone) {
+        var milestone = data.loopState.currentMilestone;
+        html += '<div class="space-y-2">';
+        html += '<div><span class="text-gray-500">Phase:</span> <span class="text-gray-300">' + escapeHtml(milestone.phaseTitle) + '</span></div>';
+        html += '<div><span class="text-gray-500">Milestone:</span> <span class="text-gray-300">' + escapeHtml(milestone.milestoneTitle) + '</span></div>';
+        html += '<div><span class="text-gray-500">Pending Tasks:</span> <span class="text-yellow-400">' + milestone.pendingTasks.length + '</span></div>';
+
+        if (milestone.pendingTasks.length > 0) {
+          html += '<div class="mt-2 pl-4 border-l-2 border-gray-700">';
+
+          milestone.pendingTasks.forEach(function(task) {
+            html += '<div class="text-gray-400 text-sm py-0.5">' + escapeHtml(task) + '</div>';
+          });
+
+          html += '</div>';
+        }
+      }
+
+      if (data.loopState.currentConversationId) {
+        html += '<div class="mt-3 pt-3 border-t border-gray-700">';
+        html += '<span class="text-gray-500 text-xs">Conversation ID:</span>';
+        html += '<div class="text-gray-400 font-mono text-xs break-all">' + escapeHtml(data.loopState.currentConversationId) + '</div>';
+        html += '</div>';
+      }
+
+      html += '</div>';
+    } else {
+      html += '<div class="text-gray-500 text-center py-4">Autonomous loop not running</div>';
+    }
+
+    html += '</div>';
+
+    $('#debug-process-content').html(html);
+  }
+
+  function renderDebugCommandsTab(data) {
+    var html = '';
+
+    html += '<div class="bg-gray-800 rounded-lg p-4">';
+    html += '<h4 class="text-gray-300 font-semibold mb-3 flex items-center gap-2">';
+    html += '<svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">';
+    html += '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>';
+    html += '</svg>Last Executed Command</h4>';
+
+    if (data.lastCommand) {
+      html += '<div class="relative">';
+      html += '<pre class="bg-gray-900 rounded p-4 text-sm text-gray-300 whitespace-pre-wrap break-all font-mono overflow-x-auto">' + escapeHtml(data.lastCommand) + '</pre>';
+      html += '<button onclick="copyToClipboard(\'' + escapeHtml(data.lastCommand.replace(/'/g, "\\'").replace(/\n/g, '\\n')) + '\')" class="absolute top-2 right-2 bg-gray-700 hover:bg-gray-600 text-gray-300 px-2 py-1 rounded text-xs transition-colors">Copy</button>';
+      html += '</div>';
+    } else {
+      html += '<div class="text-gray-500 text-center py-4">No command executed yet</div>';
+    }
+
+    html += '</div>';
+
+    $('#debug-commands-content').html(html);
+  }
+
+  function renderDebugLogsTab(data) {
+    var html = '';
+
+    html += '<div class="flex items-center justify-between mb-3">';
+    html += '<span class="text-gray-400 text-sm">Showing ' + data.recentLogs.length + ' recent log entries</span>';
+    html += '</div>';
+
+    if (data.recentLogs && data.recentLogs.length > 0) {
+      html += '<div class="bg-gray-800 rounded-lg overflow-hidden">';
+
+      data.recentLogs.forEach(function(log, index) {
+        var levelClass = getLevelClass(log.level);
+        var levelBgClass = getLevelBgClass(log.level);
+        var borderClass = index < data.recentLogs.length - 1 ? 'border-b border-gray-700' : '';
+
+        html += '<div class="p-2 ' + borderClass + ' ' + levelBgClass + '">';
+        html += '<div class="flex items-start gap-3">';
+        html += '<span class="text-gray-500 text-xs whitespace-nowrap">' + formatLogTime(log.timestamp) + '</span>';
+        html += '<span class="' + levelClass + ' text-xs font-semibold w-12">' + log.level.toUpperCase() + '</span>';
+        html += '<span class="text-gray-300 flex-1 break-all">' + escapeHtml(log.message) + '</span>';
+        html += '</div>';
+
+        if (log.context && Object.keys(log.context).length > 0) {
+          html += '<div class="mt-1 ml-24 text-xs text-gray-500 font-mono">';
+          html += escapeHtml(JSON.stringify(log.context));
+          html += '</div>';
+        }
+
+        html += '</div>';
+      });
+
+      html += '</div>';
+    } else {
+      html += '<div class="text-gray-500 text-center py-8">No logs yet</div>';
+    }
+
+    $('#debug-logs-content').html(html);
+  }
+
+  function renderDebugAllProcessesTab(data) {
+    var html = '';
+
+    html += '<div class="bg-gray-800 rounded-lg p-4">';
+    html += '<h4 class="text-gray-300 font-semibold mb-3 flex items-center gap-2">';
+    html += '<svg class="w-4 h-4 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">';
+    html += '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>';
+    html += '</svg>All Tracked Processes (' + (data.trackedProcesses ? data.trackedProcesses.length : 0) + ')</h4>';
+
+    if (data.trackedProcesses && data.trackedProcesses.length > 0) {
+      html += '<div class="space-y-2">';
+
+      data.trackedProcesses.forEach(function(proc) {
+        var isCurrentProject = proc.projectId === state.selectedProjectId;
+        var borderColor = isCurrentProject ? 'border-purple-500' : 'border-gray-700';
+        var badge = isCurrentProject ? '<span class="text-xs bg-purple-500 text-white px-2 py-0.5 rounded">Current</span>' : '';
+
+        html += '<div class="bg-gray-900 rounded p-3 border-l-2 ' + borderColor + '">';
+        html += '<div class="flex items-center justify-between mb-2">';
+        html += '<div class="flex items-center gap-2">';
+        html += '<span class="text-green-400 font-mono">PID: ' + proc.pid + '</span>';
+        html += badge;
+        html += '</div>';
+        html += '<span class="text-gray-500 text-xs">' + formatDateTime(proc.startedAt) + '</span>';
+        html += '</div>';
+        html += '<div class="text-gray-400 text-sm">Project: <span class="text-gray-300">' + escapeHtml(proc.projectId) + '</span></div>';
+        html += '</div>';
+      });
+
+      html += '</div>';
+    } else {
+      html += '<div class="text-gray-500 text-center py-4">No tracked processes</div>';
+    }
+
+    html += '</div>';
+
+    $('#debug-all-processes-content').html(html);
+  }
+
+  function getLevelBgClass(level) {
+    switch (level) {
+      case 'error': return 'bg-red-900/20';
+      case 'warn': return 'bg-yellow-900/20';
+      default: return '';
+    }
+  }
+
+  function formatDateTime(isoString) {
+    try {
+      var date = new Date(isoString);
+      return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+    } catch (e) {
+      return isoString;
+    }
+  }
+
+  function getLevelClass(level) {
+    switch (level) {
+      case 'error': return 'text-red-400';
+      case 'warn': return 'text-yellow-400';
+      case 'info': return 'text-blue-400';
+      case 'debug': return 'text-gray-400';
+      default: return 'text-gray-400';
+    }
+  }
+
+  function formatTime(isoString) {
+    try {
+      return new Date(isoString).toLocaleTimeString();
+    } catch (e) {
+      return isoString;
+    }
+  }
+
+  function formatLogTime(isoString) {
+    try {
+      var date = new Date(isoString);
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    } catch (e) {
+      return '';
+    }
+  }
+
+  // Global function for copy button
+  window.copyToClipboard = function(text) {
+    navigator.clipboard.writeText(text).then(function() {
+      showToast('Copied to clipboard', 'success');
+    }).catch(function() {
+      showToast('Failed to copy', 'error');
+    });
+  };
+
+  // Folder browser
+  function openFolderBrowser() {
+    state.folderBrowser.currentPath = null;
+    openModal('modal-folder-browser');
+    loadDrives();
+  }
+
+  function loadDrives() {
+    $('#folder-browser').html('<div class="p-3 text-gray-400 text-xs">Loading drives...</div>');
+    $('#folder-breadcrumb').empty();
+
+    api.getDrives()
+      .done(function(drives) {
+        renderDrives(drives);
+      })
+      .fail(function() {
+        $('#folder-browser').html('<div class="p-3 text-red-400 text-xs">Failed to load drives</div>');
+      });
+  }
+
+  function renderDrives(drives) {
+    var $browser = $('#folder-browser');
+    $browser.empty();
+
+    drives.forEach(function(drive) {
+      $browser.append(renderFolderItem(drive.name, drive.path, true));
+    });
+
+    renderBreadcrumb(null);
+  }
+
+  function loadFolder(folderPath) {
+    state.folderBrowser.currentPath = folderPath;
+    $('#folder-browser').html('<div class="p-3 text-gray-400 text-xs">Loading...</div>');
+
+    api.browseFolder(folderPath)
+      .done(function(entries) {
+        renderFolderEntries(entries, folderPath);
+      })
+      .fail(function() {
+        $('#folder-browser').html('<div class="p-3 text-red-400 text-xs">Failed to load folder</div>');
+      });
+  }
+
+  function renderFolderEntries(entries, currentPath) {
+    var $browser = $('#folder-browser');
+    $browser.empty();
+
+    if (entries.length === 0) {
+      $browser.html('<div class="p-3 text-gray-500 text-xs">No subfolders</div>');
+    } else {
+      entries.forEach(function(entry) {
+        $browser.append(renderFolderItem(entry.name, entry.path, entry.isDirectory));
+      });
+    }
+
+    renderBreadcrumb(currentPath);
+  }
+
+  function renderFolderItem(name, itemPath, isDirectory) {
+    var icon = isDirectory ? getFolderIcon() : getFileIcon();
+
+    return '<div class="folder-item" data-path="' + escapeHtml(itemPath) + '">' +
+      '<span class="folder-icon">' + icon + '</span>' +
+      '<span class="folder-name">' + escapeHtml(name) + '</span>' +
+    '</div>';
+  }
+
+  function getFolderIcon() {
+    return '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="text-yellow-500">' +
+      '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" ' +
+      'd="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>';
+  }
+
+  function getFileIcon() {
+    return '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="text-gray-400">' +
+      '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" ' +
+      'd="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>';
+  }
+
+  function renderBreadcrumb(currentPath) {
+    var $breadcrumb = $('#folder-breadcrumb');
+    $breadcrumb.empty();
+
+    $breadcrumb.append('<span class="folder-breadcrumb-item" data-path="">Drives</span>');
+
+    if (currentPath) {
+      var parts = splitPath(currentPath);
+      var accumulated = '';
+
+      parts.forEach(function(part, index) {
+        accumulated += (index === 0) ? part : '\\' + part;
+        $breadcrumb.append('<span class="folder-breadcrumb-separator">/</span>');
+        $breadcrumb.append('<span class="folder-breadcrumb-item" data-path="' + escapeHtml(accumulated) + '">' + escapeHtml(part) + '</span>');
+      });
+    }
+
+    updateSelectedPathDisplay();
+  }
+
+  function splitPath(pathStr) {
+    return pathStr.split(/[\\\/]/).filter(function(p) { return p.length > 0; });
+  }
+
+  function updateSelectedPathDisplay() {
+    var currentPath = state.folderBrowser.currentPath;
+
+    if (currentPath) {
+      $('#selected-path').html('<span class="text-gray-300">Current folder:</span> <span class="text-purple-400">' + escapeHtml(currentPath) + '</span>');
+    } else {
+      $('#selected-path').html('<span class="text-gray-500">Navigate to a folder to select it</span>');
+    }
+  }
+
+  function extractFolderName(folderPath) {
+    var parts = splitPath(folderPath);
+    return parts.length > 0 ? parts[parts.length - 1] : '';
+  }
+
+  function confirmFolderSelection() {
+    var selected = state.folderBrowser.currentPath;
+
+    if (selected) {
+      $('#input-project-path').val(selected);
+      var folderName = extractFolderName(selected);
+
+      if (folderName && !$('#input-project-name').val()) {
+        $('#input-project-name').val(folderName);
+      }
+      closeModal('modal-folder-browser');
+    } else {
+      showToast('Please navigate to a folder first', 'error');
+    }
+  }
+
+  // Event handlers
+  function setupEventHandlers() {
+    setupModalHandlers();
+    setupProjectHandlers();
+    setupAgentHandlers();
+    setupFormHandlers();
+    setupFolderBrowserHandlers();
+  }
+
+  function setupModalHandlers() {
+    $('#btn-add-project').on('click', function() {
+      openModal('modal-add-project');
+    });
+
+    $('#btn-settings').on('click', function() {
+      loadAndShowSettings();
+    });
+
+    $('#btn-view-roadmap').on('click', function() {
+      loadAndShowRoadmap();
+    });
+
+    $('#btn-toggle-debug').on('click', function() {
+      openDebugModal();
+    });
+
+    $('#btn-debug-refresh').on('click', function() {
+      refreshDebugInfo();
+    });
+
+    // Debug modal tab handlers
+    $(document).on('click', '.debug-tab', function() {
+      var $tab = $(this);
+      var tabName = $tab.data('tab');
+
+      // Update tab active states
+      $('.debug-tab').removeClass('active border-purple-500 text-white').addClass('border-transparent text-gray-400');
+      $tab.addClass('active border-purple-500 text-white').removeClass('border-transparent text-gray-400');
+
+      // Show/hide tab content
+      $('.debug-tab-content').addClass('hidden');
+      $('#debug-tab-' + tabName).removeClass('hidden');
+    });
+
+    $('#btn-create-roadmap').on('click', function() {
+      closeModal('modal-roadmap');
+      openModal('modal-create-roadmap');
+    });
+
+    $('#btn-close-roadmap-progress').on('click', function() {
+      closeModal('modal-roadmap-progress');
+      loadAndShowRoadmap();
+    });
+
+    $('.modal-close').on('click', function() {
+      closeAllModals();
+    });
+
+    $('.modal-backdrop').on('click', function() {
+      closeAllModals();
+    });
+
+    // Tool message click handler - open detail modal
+    $(document).on('click', '.conversation-message.tool-use', function() {
+      var toolId = $(this).attr('data-tool-id');
+      var toolData = toolDataStore[toolId];
+
+      if (toolData) {
+        openToolDetailModal(toolData);
+      }
+    });
+
+    // Milestone expand/collapse toggle
+    $(document).on('click', '.milestone-header', function(e) {
+      var $header = $(this);
+      var key = $header.data('milestone-key');
+      var isExpanded = toggleMilestoneExpanded(key);
+      var $container = $header.closest('.milestone-container');
+      var $tasks = $container.find('.milestone-tasks');
+      var $chevron = $header.find('.milestone-chevron');
+
+      if (isExpanded) {
+        $tasks.slideDown(200);
+        $chevron.addClass('rotate-90');
+      } else {
+        $tasks.slideUp(200);
+        $chevron.removeClass('rotate-90');
+      }
+    });
+
+    // Delete task button in roadmap
+    $(document).on('click', '.btn-delete-task', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      var $btn = $(this);
+      state.pendingDeleteTask = {
+        phaseId: $btn.data('phase-id'),
+        milestoneId: $btn.data('milestone-id'),
+        taskIndex: $btn.data('task-index'),
+        taskTitle: $btn.data('task-title')
+      };
+      $('#delete-task-title').text(state.pendingDeleteTask.taskTitle);
+      openModal('modal-confirm-delete-task');
+    });
+
+    $('#btn-confirm-delete-task').on('click', function() {
+      confirmDeleteTask();
+    });
+
+    // Delete milestone button in roadmap
+    $(document).on('click', '.btn-delete-milestone', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      var $btn = $(this);
+      state.pendingDeleteMilestone = {
+        phaseId: $btn.data('phase-id'),
+        milestoneId: $btn.data('milestone-id'),
+        milestoneTitle: $btn.data('milestone-title')
+      };
+      $('#delete-milestone-title').text(state.pendingDeleteMilestone.milestoneTitle);
+      openModal('modal-confirm-delete-milestone');
+    });
+
+    $('#btn-confirm-delete-milestone').on('click', function() {
+      confirmDeleteMilestone();
+    });
+
+    // Delete phase button in roadmap
+    $(document).on('click', '.btn-delete-phase', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      var $btn = $(this);
+      state.pendingDeletePhase = {
+        phaseId: $btn.data('phase-id'),
+        phaseTitle: $btn.data('phase-title')
+      };
+      $('#delete-phase-title').text(state.pendingDeletePhase.phaseTitle);
+      openModal('modal-confirm-delete-phase');
+    });
+
+    $('#btn-confirm-delete-phase').on('click', function() {
+      confirmDeletePhase();
+    });
+
+    // Roadmap selection handlers
+    $(document).on('change', '.roadmap-select-milestone', function() {
+      var $checkbox = $(this);
+      var milestoneId = $checkbox.data('milestone-id');
+      var isChecked = $checkbox.is(':checked');
+
+      // Select/deselect all tasks under this milestone
+      $('.roadmap-select-task[data-milestone-id="' + milestoneId + '"]:not(:disabled)').prop('checked', isChecked);
+      updateRoadmapSelectionUI();
+    });
+
+    $(document).on('change', '.roadmap-select-task', function() {
+      updateRoadmapSelectionUI();
+    });
+
+    $('#btn-clear-roadmap-selection').on('click', function() {
+      clearRoadmapSelection();
+    });
+
+    $('#btn-run-selected-tasks').on('click', function() {
+      runSelectedRoadmapTasks();
+    });
+
+    // Font size controls for agent output
+    $('#btn-font-decrease').on('click', function() {
+      if (state.fontSize > 10) {
+        state.fontSize -= 2;
+        updateFontSize();
+      }
+    });
+
+    $('#btn-font-increase').on('click', function() {
+      if (state.fontSize < 24) {
+        state.fontSize += 2;
+        updateFontSize();
+      }
+    });
+
+    // Scroll lock toggle for agent output
+    $('#btn-toggle-scroll-lock').on('click', function() {
+      state.agentOutputScrollLock = !state.agentOutputScrollLock;
+      updateScrollLockButton();
+    });
+
+    // Detect manual scroll in agent output
+    $('#conversation-container').on('scroll', function() {
+      var $container = $(this);
+      var isNearBottom = $container[0].scrollHeight - $container.scrollTop() - $container.outerHeight() < 50;
+
+      if (!isNearBottom && !state.agentOutputScrollLock) {
+        // User scrolled up - pause auto-scroll
+        state.agentOutputScrollLock = true;
+        updateScrollLockButton();
+      } else if (isNearBottom && state.agentOutputScrollLock) {
+        // User scrolled back to bottom - re-enable auto-scroll
+        state.agentOutputScrollLock = false;
+        updateScrollLockButton();
+      }
+    });
+
+    $(document).on('keydown', function(e) {
+      if (e.key === 'Escape') closeAllModals();
+    });
+  }
+
+  function loadAndShowSettings() {
+    api.getSettings()
+      .done(function(settings) {
+        $('#input-max-concurrent').val(settings.maxConcurrentAgents);
+        $('#input-skip-permissions').prop('checked', settings.claudePermissions.dangerouslySkipPermissions);
+        $('#input-agent-prompt').val(settings.agentPromptTemplate || '');
+        $('#input-send-ctrl-enter').prop('checked', settings.sendWithCtrlEnter !== false);
+        $('#input-history-limit').val(settings.historyLimit || 25);
+        openModal('modal-settings');
+      })
+      .fail(function(xhr) {
+        showErrorToast(xhr, 'Failed to load settings');
+      });
+  }
+
+  function handleSaveSettings($form) {
+    var newSendWithCtrlEnter = $('#input-send-ctrl-enter').is(':checked');
+    var historyLimit = parseInt($('#input-history-limit').val(), 10) || 25;
+    var settings = {
+      maxConcurrentAgents: parseInt($('#input-max-concurrent').val(), 10),
+      claudePermissions: {
+        dangerouslySkipPermissions: $('#input-skip-permissions').is(':checked')
+      },
+      agentPromptTemplate: $('#input-agent-prompt').val(),
+      sendWithCtrlEnter: newSendWithCtrlEnter,
+      historyLimit: historyLimit
+    };
+
+    api.updateSettings(settings)
+      .done(function(updated) {
+        state.resourceStatus.maxConcurrent = updated.maxConcurrentAgents;
+        state.sendWithCtrlEnter = updated.sendWithCtrlEnter !== false;
+        state.historyLimit = updated.historyLimit || 25;
+        updateRunningCount();
+        updateInputHint();
+        closeAllModals();
+        showToast('Settings saved', 'success');
+      })
+      .fail(function(xhr) {
+        showErrorToast(xhr, 'Failed to save settings');
+      });
+  }
+
+  function updateInputHint() {
+    if (state.sendWithCtrlEnter) {
+      $('#input-hint-text').text('Ctrl+Enter to send, Enter for new line');
+      $('#input-message').attr('placeholder', 'Type a message to Claude... (Ctrl+Enter to send)');
+    } else {
+      $('#input-hint-text').text('Enter to send, Shift+Enter for new line');
+      $('#input-message').attr('placeholder', 'Type a message to Claude... (Enter to send, Shift+Enter for new line)');
+    }
+  }
+
+  function setupProjectHandlers() {
+    $('#project-list').on('click', '.project-card', function(e) {
+      if ($(e.target).closest('.quick-action').length) {
+        return; // Don't select when clicking quick action
+      }
+      var projectId = $(this).data('id');
+      selectProject(projectId);
+    });
+
+    $('#project-list').on('click', '.quick-action', function(e) {
+      e.stopPropagation();
+      var $btn = $(this);
+      var action = $btn.data('action');
+      var projectId = $btn.data('id');
+      handleQuickAction(action, projectId);
+    });
+  }
+
+  function setQuickActionLoading(projectId, isLoading) {
+    var $card = $('.project-card[data-id="' + projectId + '"]');
+    var $buttons = $card.find('.quick-action');
+
+    if (isLoading) {
+      $buttons.addClass('loading').prop('disabled', true);
+    } else {
+      $buttons.removeClass('loading').prop('disabled', false);
+    }
+  }
+
+  function showContentLoading(message) {
+    $('#loading-message').text(message || 'Processing...');
+    $('#content-loading').removeClass('hidden');
+  }
+
+  function hideContentLoading() {
+    $('#content-loading').addClass('hidden');
+  }
+
+  function handleQuickAction(action, projectId) {
+    if (action === 'delete') {
+      showDeleteConfirmation(projectId);
+      return;
+    }
+
+    if (action === 'start' && state.agentStarting) return;
+
+    setQuickActionLoading(projectId, true);
+
+    if (state.selectedProjectId === projectId && (action === 'start' || action === 'stop')) {
+      showContentLoading(action === 'start' ? 'Starting agent...' : 'Stopping agent...');
+    }
+
+    switch (action) {
+      case 'start':
+        state.agentStarting = true;
+        api.startAgent(projectId)
+          .done(function() {
+            showToast('Agent starting...', 'info');
+          })
+          .fail(function(xhr) {
+            showErrorToast(xhr, 'Failed to start agent');
+          })
+          .always(function() {
+            state.agentStarting = false;
+            setQuickActionLoading(projectId, false);
+            hideContentLoading();
+          });
+        break;
+      case 'stop':
+        api.stopAgent(projectId)
+          .done(function() {
+            showToast('Agent stopping...', 'info');
+          })
+          .fail(function(xhr) {
+            showErrorToast(xhr, 'Failed to stop agent');
+          })
+          .always(function() {
+            setQuickActionLoading(projectId, false);
+            hideContentLoading();
+          });
+        break;
+      case 'cancel':
+        api.removeFromQueue(projectId)
+          .done(function() {
+            updateProjectStatusById(projectId, 'stopped');
+            showToast('Removed from queue', 'success');
+          })
+          .fail(function(xhr) {
+            showErrorToast(xhr, 'Failed to remove from queue');
+          })
+          .always(function() {
+            setQuickActionLoading(projectId, false);
+            hideContentLoading();
+          });
+        break;
+    }
+  }
+
+  function showDeleteConfirmation(projectId) {
+    var project = findProjectById(projectId);
+
+    if (!project) return;
+
+    state.pendingDeleteId = projectId;
+    $('#delete-project-name').text(project.name);
+    openModal('modal-confirm-delete');
+  }
+
+  function confirmDeleteProject() {
+    var projectId = state.pendingDeleteId;
+
+    if (!projectId) return;
+
+    api.deleteProject(projectId)
+      .done(function() {
+        state.projects = state.projects.filter(function(p) { return p.id !== projectId; });
+
+        if (state.selectedProjectId === projectId) {
+          state.selectedProjectId = null;
+          renderProjectDetail(null);
+        }
+
+        renderProjectList();
+        closeAllModals();
+        showToast('Project deleted', 'success');
+        state.pendingDeleteId = null;
+      })
+      .fail(function(xhr) {
+        showErrorToast(xhr, 'Failed to delete project');
+      });
+  }
+
+  function confirmDeleteTask() {
+    var task = state.pendingDeleteTask;
+
+    if (!task || !state.selectedProjectId) return;
+
+    api.deleteRoadmapTask(state.selectedProjectId, task.phaseId, task.milestoneId, task.taskIndex)
+      .done(function(data) {
+        closeModal('modal-confirm-delete-task');
+        renderRoadmap(data);
+        showToast('Task deleted', 'success');
+        state.pendingDeleteTask = null;
+      })
+      .fail(function(xhr) {
+        showErrorToast(xhr, 'Failed to delete task');
+      });
+  }
+
+  function confirmDeleteMilestone() {
+    var milestone = state.pendingDeleteMilestone;
+
+    if (!milestone || !state.selectedProjectId) return;
+
+    api.deleteRoadmapMilestone(state.selectedProjectId, milestone.phaseId, milestone.milestoneId)
+      .done(function(data) {
+        closeModal('modal-confirm-delete-milestone');
+        renderRoadmap(data);
+        showToast('Milestone deleted', 'success');
+        state.pendingDeleteMilestone = null;
+      })
+      .fail(function(xhr) {
+        showErrorToast(xhr, 'Failed to delete milestone');
+      });
+  }
+
+  function confirmDeletePhase() {
+    var phase = state.pendingDeletePhase;
+
+    if (!phase || !state.selectedProjectId) return;
+
+    api.deleteRoadmapPhase(state.selectedProjectId, phase.phaseId)
+      .done(function(data) {
+        closeModal('modal-confirm-delete-phase');
+        renderRoadmap(data);
+        showToast('Phase deleted', 'success');
+        state.pendingDeletePhase = null;
+      })
+      .fail(function(xhr) {
+        showErrorToast(xhr, 'Failed to delete phase');
+      });
+  }
+
+  function updateScrollLockButton() {
+    var $btn = $('#btn-toggle-scroll-lock');
+
+    if (state.agentOutputScrollLock) {
+      $btn.addClass('bg-yellow-600').removeClass('bg-gray-700');
+      $btn.attr('title', 'Auto-scroll paused. Click to resume.');
+    } else {
+      $btn.removeClass('bg-yellow-600').addClass('bg-gray-700');
+      $btn.attr('title', 'Auto-scroll enabled. Click to pause.');
+    }
+  }
+
+  function updateFontSize() {
+    var size = state.fontSize + 'px';
+
+    // Set CSS variable on document root for global scaling
+    document.documentElement.style.setProperty('--claudito-font-size', size);
+
+    $('#font-size-display').text(size);
+
+    // Persist to localStorage
+    localStorage.setItem('claudito-font-size', state.fontSize);
+  }
+
+  function loadFontSize() {
+    var savedSize = localStorage.getItem('claudito-font-size');
+
+    if (savedSize) {
+      state.fontSize = parseInt(savedSize, 10);
+
+      if (state.fontSize < 10) state.fontSize = 10;
+      if (state.fontSize > 24) state.fontSize = 24;
+    }
+
+    updateFontSize();
+  }
+
+  function setupAgentHandlers() {
+    $('#btn-start-agent').on('click', function() {
+      startSelectedAgent();
+    });
+
+    $('#btn-stop-agent').on('click', function() {
+      stopSelectedAgent();
+    });
+
+    // Mode toggle handlers
+    $('#btn-mode-interactive').on('click', function() {
+      setAgentMode('interactive');
+    });
+
+    $('#btn-mode-autonomous').on('click', function() {
+      setAgentMode('autonomous');
+    });
+
+    // Message form handler
+    $('#form-send-message').on('submit', function(e) {
+      e.preventDefault();
+      sendMessage();
+    });
+
+    // New conversation button - show confirmation dialog
+    $('#btn-new-conversation').on('click', function() {
+      showNewConversationConfirmation();
+    });
+
+    // Confirm new conversation
+    $('#btn-confirm-new-conversation').on('click', function() {
+      closeModal('modal-confirm-new-conversation');
+      startNewConversation();
+    });
+
+    // History button
+    $('#btn-show-history').on('click', function(e) {
+      e.stopPropagation();
+      toggleConversationHistory();
+    });
+
+    // Close history button
+    $('#btn-close-history').on('click', function() {
+      closeConversationHistory();
+    });
+
+    // Context usage button
+    $('#btn-context-usage').on('click', function() {
+      openContextUsageModal();
+    });
+
+    // Claude Files button
+    $('#btn-claude-files').on('click', function() {
+      openClaudeFilesModal();
+    });
+
+    // Tasks button
+    $('#btn-tasks').on('click', function() {
+      openTasksModal();
+    });
+
+    // Queued messages indicator (dynamically created, so use delegation)
+    $(document).on('click', '#queued-messages-indicator', function() {
+      openQueuedMessagesModal();
+    });
+
+    // Save Claude file button
+    $('#btn-save-claude-file').on('click', function() {
+      saveClaudeFile();
+    });
+
+    // Claude file editor change detection
+    $('#claude-file-editor').on('input', function() {
+      var currentFile = state.claudeFilesState && state.claudeFilesState.currentFile;
+
+      if (currentFile) {
+        var hasChanges = $(this).val() !== currentFile.originalContent;
+        $('#btn-save-claude-file').toggleClass('hidden', !hasChanges);
+        updateClaudeFilePreview();
+      }
+    });
+
+    // Claude file preview toggle
+    $('#btn-toggle-claude-preview').on('click', function() {
+      toggleClaudeFilePreview();
+    });
+
+    // Claude file list click handler
+    $(document).on('click', '.claude-file-item', function() {
+      var filePath = $(this).data('path');
+      selectClaudeFile(filePath);
+    });
+
+    // Click on conversation history item (but not on rename button)
+    $(document).on('click', '.conversation-history-item', function(e) {
+      if ($(e.target).closest('.btn-rename-conversation').length) {
+        return; // Don't load if clicking rename button
+      }
+
+      var conversationId = $(this).data('conversation-id');
+      loadConversation(conversationId);
+      closeConversationHistory();
+    });
+
+    // Rename conversation button click
+    $(document).on('click', '.btn-rename-conversation', function(e) {
+      e.stopPropagation();
+      var conversationId = $(this).data('conversation-id');
+      var currentLabel = $(this).data('current-label');
+      showRenameConversationModal(conversationId, currentLabel);
+    });
+
+    // Confirm rename conversation
+    $('#btn-confirm-rename').on('click', function() {
+      confirmRenameConversation();
+    });
+
+    // Enter key in rename input
+    $('#input-conversation-label').on('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        confirmRenameConversation();
+      }
+    });
+
+    // Close history dropdown when clicking outside
+    $(document).on('click', function(e) {
+      if (state.conversationHistoryOpen &&
+          !$(e.target).closest('#conversation-history-dropdown').length &&
+          !$(e.target).closest('#btn-show-history').length) {
+        closeConversationHistory();
+      }
+    });
+
+    // Message input - configurable send key
+    $('#input-message').on('keydown', function(e) {
+      if (e.key === 'Enter') {
+        if (state.sendWithCtrlEnter) {
+          // Ctrl+Enter to send mode
+          if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            sendMessage();
+          }
+          // Plain Enter adds newline (default behavior)
+        } else {
+          // Enter to send mode (Shift+Enter for newline)
+          if (!e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+          }
+        }
+      }
+    });
+
+    // Permission button click handler
+    $(document).on('click', '.permission-btn', function() {
+      var $btn = $(this);
+      var response = $btn.data('response');
+
+      // Send response to agent
+      sendPermissionResponse(response);
+
+      // Disable all buttons in this permission request
+      $btn.closest('.permission-actions').find('.permission-btn').prop('disabled', true);
+      $btn.addClass('selected');
+    });
+
+    // Question option click handler
+    $(document).on('click', '.question-option', function() {
+      var $btn = $(this);
+      var optionIndex = $btn.data('option-index');
+      var optionLabel = $btn.data('option-label');
+
+      if (optionIndex === -1) {
+        // "Other" option - focus the input
+        $('#input-message').focus();
+        return;
+      }
+
+      // Send the selected option as response
+      sendQuestionResponse(optionLabel);
+
+      // Disable all options in this question
+      $btn.closest('.question-options').find('.question-option').prop('disabled', true);
+      $btn.addClass('selected');
+    });
+  }
+
+  function showNewConversationConfirmation() {
+    if (!state.selectedProjectId) return;
+
+    // If no messages in current conversation, just start new without confirmation
+    var currentMessages = state.conversations[state.selectedProjectId] || [];
+
+    if (currentMessages.length === 0) {
+      startNewConversation();
+      return;
+    }
+
+    openModal('modal-confirm-new-conversation');
+  }
+
+  function startNewConversation() {
+    if (!state.selectedProjectId) return;
+
+    // Clear read file cache when starting new conversation
+    clearReadFileCache();
+
+    // Clear tasks when starting new conversation
+    state.currentTodos = [];
+    updateTasksButtonBadge();
+
+    // Clear current conversation on server
+    $.ajax({
+      url: '/api/projects/' + state.selectedProjectId + '/conversation/clear',
+      method: 'POST'
+    }).always(function() {
+      // Clear local state regardless of server response
+      state.currentConversationId = null;
+      state.currentConversationStats = null;
+      state.currentConversationMetadata = null;
+      state.conversations[state.selectedProjectId] = [];
+      renderConversation(state.selectedProjectId);
+      updateConversationStats();
+      showToast('New conversation started', 'info');
+    });
+  }
+
+  function showRenameConversationModal(conversationId, currentLabel) {
+    state.pendingRenameConversationId = conversationId;
+    $('#input-conversation-label').val(currentLabel || '');
+    openModal('modal-rename-conversation');
+    // Focus input after modal opens
+    setTimeout(function() {
+      $('#input-conversation-label').focus().select();
+    }, 100);
+  }
+
+  function confirmRenameConversation() {
+    if (!state.selectedProjectId || !state.pendingRenameConversationId) return;
+
+    var newLabel = $('#input-conversation-label').val().trim();
+
+    if (!newLabel) {
+      showToast('Please enter a name', 'error');
+      return;
+    }
+
+    api.renameConversation(state.selectedProjectId, state.pendingRenameConversationId, newLabel)
+      .done(function() {
+        closeModal('modal-rename-conversation');
+        loadConversationHistoryList();
+        showToast('Conversation renamed', 'success');
+        state.pendingRenameConversationId = null;
+      })
+      .fail(function(xhr) {
+        showErrorToast(xhr, 'Failed to rename conversation');
+      });
+  }
+
+  function toggleConversationHistory() {
+    if (state.conversationHistoryOpen) {
+      closeConversationHistory();
+    } else {
+      openConversationHistory();
+    }
+  }
+
+  function openConversationHistory() {
+    if (!state.selectedProjectId) return;
+
+    state.conversationHistoryOpen = true;
+
+    // Position dropdown near the button
+    var $btn = $('#btn-show-history');
+    var offset = $btn.offset();
+    var $dropdown = $('#conversation-history-dropdown');
+
+    $dropdown.css({
+      top: offset.top + $btn.outerHeight() + 4,
+      left: offset.left
+    });
+
+    $dropdown.removeClass('hidden');
+    loadConversationHistoryList();
+  }
+
+  function closeConversationHistory() {
+    state.conversationHistoryOpen = false;
+    $('#conversation-history-dropdown').addClass('hidden');
+  }
+
+  function loadConversationHistoryList() {
+    if (!state.selectedProjectId) return;
+
+    var $list = $('#conversation-history-list');
+    $list.html('<div class="p-2 text-xs text-gray-500">Loading...</div>');
+
+    $.get('/api/projects/' + state.selectedProjectId + '/conversations', { limit: state.historyLimit })
+      .done(function(data) {
+        renderConversationHistory(data.conversations || []);
+      })
+      .fail(function() {
+        $list.html('<div class="p-2 text-xs text-red-400">Failed to load history</div>');
+      });
+  }
+
+  function renderConversationHistory(conversations) {
+    var $list = $('#conversation-history-list');
+    $list.empty();
+
+    if (conversations.length === 0) {
+      $list.html('<div class="p-2 text-xs text-gray-500">No conversations yet</div>');
+      return;
+    }
+
+    conversations.forEach(function(conv) {
+      var isActive = conv.id === state.currentConversationId;
+      var activeClass = isActive ? ' active' : '';
+      var date = formatConversationDate(conv.createdAt);
+      // Use custom label, or itemRef taskTitle, or default
+      var itemRef = conv.itemRef || conv.milestoneItem;
+      var label = conv.label || (itemRef ? itemRef.taskTitle : 'Interactive Session');
+      var messageCount = conv.messages ? conv.messages.length : 0;
+
+      $list.append(
+        '<div class="conversation-history-item' + activeClass + '" data-conversation-id="' + conv.id + '">' +
+          '<div class="conv-row flex items-center justify-between">' +
+            '<div class="conv-label flex-1 min-w-0">' + escapeHtml(truncateString(label, 35)) + '</div>' +
+            '<button class="btn-rename-conversation p-1 text-gray-500 hover:text-white rounded transition-colors flex-shrink-0" data-conversation-id="' + conv.id + '" data-current-label="' + escapeHtml(label) + '" title="Rename">' +
+              '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+                '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>' +
+              '</svg>' +
+            '</button>' +
+          '</div>' +
+          '<div class="conv-meta">' +
+            '<span class="conv-date">' + date + '</span>' +
+            '<span class="conv-messages">' + messageCount + ' msgs</span>' +
+          '</div>' +
+        '</div>'
+      );
+    });
+  }
+
+  function formatConversationDate(isoString) {
+    try {
+      var date = new Date(isoString);
+      var now = new Date();
+      var diffMs = now - date;
+      var diffMins = Math.floor(diffMs / 60000);
+      var diffHours = Math.floor(diffMs / 3600000);
+      var diffDays = Math.floor(diffMs / 86400000);
+
+      if (diffMins < 1) return 'Just now';
+      if (diffMins < 60) return diffMins + 'm ago';
+      if (diffHours < 24) return diffHours + 'h ago';
+      if (diffDays < 7) return diffDays + 'd ago';
+
+      return date.toLocaleDateString();
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function loadConversation(conversationId) {
+    if (!state.selectedProjectId) return;
+
+    state.currentConversationId = conversationId;
+
+    api.getConversation(state.selectedProjectId, conversationId)
+      .done(function(data) {
+        state.conversations[state.selectedProjectId] = data.messages || [];
+        state.currentConversationStats = data.stats || null;
+        state.currentConversationMetadata = data.metadata || null;
+        renderConversation(state.selectedProjectId);
+        updateConversationStats();
+      })
+      .fail(function(xhr) {
+        showErrorToast(xhr, 'Failed to load conversation');
+      });
+  }
+
+  function formatDuration(ms) {
+    if (!ms || ms < 0) return '';
+
+    var seconds = Math.floor(ms / 1000);
+    var minutes = Math.floor(seconds / 60);
+    var hours = Math.floor(minutes / 60);
+
+    if (hours > 0) {
+      return hours + 'h ' + (minutes % 60) + 'm';
+    }
+
+    if (minutes > 0) {
+      return minutes + 'm ' + (seconds % 60) + 's';
+    }
+
+    return seconds + 's';
+  }
+
+  function formatTokenCount(tokens) {
+    if (tokens >= 1000000) {
+      return (tokens / 1000000).toFixed(1) + 'M';
+    }
+
+    if (tokens >= 1000) {
+      return (tokens / 1000).toFixed(1) + 'k';
+    }
+
+    return tokens.toString();
+  }
+
+  function updateConversationStats() {
+    var $stats = $('#conversation-stats');
+    var stats = state.currentConversationStats;
+    var metadata = state.currentConversationMetadata;
+
+    if (!stats || stats.messageCount === 0) {
+      $stats.html('<span class="text-gray-600">New session</span>');
+      return;
+    }
+
+    var parts = [];
+
+    // Duration
+    if (stats.durationMs && stats.durationMs > 0) {
+      parts.push('<span title="Duration">' + formatDuration(stats.durationMs) + '</span>');
+    }
+
+    // Message count
+    parts.push('<span title="Messages">' + stats.messageCount + ' msgs</span>');
+
+    // Tool calls
+    if (stats.toolCallCount > 0) {
+      parts.push('<span title="Tool calls">' + stats.toolCallCount + ' tools</span>');
+    }
+
+    // Total tokens from metadata
+    if (metadata && metadata.contextUsage && metadata.contextUsage.totalTokens > 0) {
+      var tokens = metadata.contextUsage.totalTokens;
+      var formatted = formatTokenCount(tokens);
+      parts.push('<span title="Total tokens used">' + formatted + ' tokens</span>');
+    }
+
+    $stats.html(parts.join('<span class="text-gray-600 mx-1">|</span>'));
+  }
+
+  function sendPermissionResponse(response) {
+    if (!response || !state.selectedProjectId) return;
+
+    var project = findProjectById(state.selectedProjectId);
+
+    if (!project || project.status !== 'running') return;
+
+    api.sendAgentMessage(state.selectedProjectId, response)
+      .fail(function(xhr) {
+        showErrorToast(xhr, 'Failed to send permission response');
+      });
+  }
+
+  function sendQuestionResponse(response) {
+    if (!response || !state.selectedProjectId) return;
+
+    var project = findProjectById(state.selectedProjectId);
+
+    if (!project || project.status !== 'running') return;
+
+    // Add user response to conversation
+    appendMessage(state.selectedProjectId, {
+      type: 'user',
+      content: response,
+      timestamp: new Date().toISOString()
+    });
+
+    api.sendAgentMessage(state.selectedProjectId, response)
+      .fail(function(xhr) {
+        showErrorToast(xhr, 'Failed to send response');
+      });
+  }
+
+  function setAgentMode(mode) {
+    state.agentMode = mode;
+    updateModeButtons();
+    updateStartStopButtons();
+    updateInputArea();
+  }
+
+  function updateModeButtons() {
+    if (state.agentMode === 'interactive') {
+      $('#btn-mode-interactive').addClass('mode-active');
+      $('#btn-mode-autonomous').removeClass('mode-active');
+    } else {
+      $('#btn-mode-interactive').removeClass('mode-active');
+      $('#btn-mode-autonomous').addClass('mode-active');
+    }
+  }
+
+  function updateStartStopButtons() {
+    var project = findProjectById(state.selectedProjectId);
+    var isRunning = project && project.status === 'running';
+    var isInteractive = state.agentMode === 'interactive';
+
+    if (isInteractive) {
+      // Interactive mode: hide start button, only show stop when running
+      $('#btn-start-agent').addClass('hidden');
+
+      if (isRunning) {
+        $('#btn-stop-agent').removeClass('hidden');
+      } else {
+        $('#btn-stop-agent').addClass('hidden');
+      }
+    } else {
+      // Autonomous mode: show start/stop based on status
+      if (isRunning) {
+        $('#btn-start-agent').addClass('hidden');
+        $('#btn-stop-agent').removeClass('hidden');
+      } else {
+        $('#btn-start-agent').removeClass('hidden');
+        $('#btn-stop-agent').addClass('hidden');
+      }
+    }
+  }
+
+  function updateInputArea() {
+    var project = findProjectById(state.selectedProjectId);
+    var isRunning = project && project.status === 'running';
+    var isInteractive = state.currentAgentMode === 'interactive';
+    var isInteractiveMode = state.agentMode === 'interactive';
+
+    // Interactive mode: always enable input (will auto-start agent if needed)
+    if (isInteractiveMode) {
+      $('#input-message').prop('disabled', false);
+      $('#btn-send-message').prop('disabled', false);
+      updateInputHint();
+    } else if (isRunning && !isInteractive) {
+      // Autonomous mode running
+      $('#input-message').prop('disabled', true);
+      $('#btn-send-message').prop('disabled', true);
+      $('#input-hint-text').text('Agent is running in autonomous mode');
+    } else {
+      // Autonomous mode not running
+      $('#input-message').prop('disabled', true);
+      $('#btn-send-message').prop('disabled', true);
+      $('#input-hint-text').text('Click Start to run the autonomous agent loop');
+    }
+  }
+
+  function sendMessage() {
+    if (state.messageSending || state.agentStarting) return;
+
+    var $input = $('#input-message');
+    var message = $input.val().trim();
+
+    if (!message || !state.selectedProjectId) return;
+
+    var project = findProjectById(state.selectedProjectId);
+
+    if (!project) return;
+
+    // If agent is not running in interactive mode, start it first
+    if (project.status !== 'running' && state.agentMode === 'interactive') {
+      startInteractiveAgentWithMessage(message);
+      return;
+    }
+
+    if (project.status !== 'running') return;
+
+    doSendMessage(message);
+  }
+
+  function doSendMessage(message) {
+    if (state.messageSending) return;
+
+    var $input = $('#input-message');
+
+    state.messageSending = true;
+
+    // Disable input while sending
+    $input.prop('disabled', true);
+    $('#btn-send-message').prop('disabled', true);
+
+    // Add user message to conversation
+    appendMessage(state.selectedProjectId, {
+      type: 'user',
+      content: message,
+      timestamp: new Date().toISOString()
+    });
+
+    // Show waiting indicator
+    showWaitingIndicator();
+
+    api.sendAgentMessage(state.selectedProjectId, message)
+      .done(function() {
+        $input.val('').trigger('input');
+      })
+      .fail(function(xhr) {
+        showErrorToast(xhr, 'Failed to send message');
+        removeWaitingIndicator();
+      })
+      .always(function() {
+        state.messageSending = false;
+        $input.prop('disabled', false);
+        $('#btn-send-message').prop('disabled', false);
+        $input.focus();
+      });
+  }
+
+  function startInteractiveAgentWithMessage(message) {
+    if (state.agentStarting) return;
+
+    var $input = $('#input-message');
+    var projectId = state.selectedProjectId;
+
+    state.agentStarting = true;
+
+    // Disable input while starting
+    $input.prop('disabled', true);
+    $('#btn-send-message').prop('disabled', true);
+    showContentLoading('Starting agent...');
+
+    api.startInteractiveAgent(projectId, message)
+      .done(function() {
+        state.currentAgentMode = 'interactive';
+        updateProjectStatusById(projectId, 'running');
+        startAgentStatusPolling(projectId);
+
+        // Add user message to conversation
+        appendMessage(projectId, {
+          type: 'user',
+          content: message,
+          timestamp: new Date().toISOString()
+        });
+
+        // Clear input and show waiting
+        $input.val('').trigger('input');
+        showWaitingIndicator();
+        updateInputArea();
+      })
+      .fail(function(xhr) {
+        showErrorToast(xhr, 'Failed to start agent');
+      })
+      .always(function() {
+        state.agentStarting = false;
+        hideContentLoading();
+        $input.prop('disabled', false);
+        $('#btn-send-message').prop('disabled', false);
+        $input.focus();
+      });
+  }
+
+  function showWaitingIndicator() {
+    removeWaitingIndicator(); // Remove any existing one first
+    var html = '<div id="waiting-indicator" class="flex items-center gap-2 text-gray-400 text-sm py-2">' +
+      '<div class="loading-spinner small"></div>' +
+      '<span>Waiting for Claude response...</span>' +
+    '</div>';
+    $('#conversation').append(html);
+    scrollConversationToBottom();
+  }
+
+  function removeWaitingIndicator() {
+    $('#waiting-indicator').remove();
+  }
+
+  function setupTextareaKeyHandlers() {
+    // Prevent Enter from submitting forms in textareas
+    // Allow Ctrl+Enter (or Cmd+Enter on Mac) to submit
+    $(document).on('keydown', 'textarea', function(e) {
+      if (e.key === 'Enter') {
+        if (e.ctrlKey || e.metaKey) {
+          // Ctrl+Enter or Cmd+Enter: submit the form
+          e.preventDefault();
+          var $form = $(this).closest('form');
+
+          if ($form.length) {
+            $form.submit();
+          }
+        }
+        // Plain Enter: allow default behavior (newline)
+        // Do nothing - let the textarea handle it naturally
+      }
+    });
+  }
+
+  function setupCharacterCountHandlers() {
+    var $textarea = $('#input-edit-roadmap');
+    var $charCount = $('#edit-roadmap-char-count');
+
+    function updateCharCount() {
+      var length = $textarea.val().length;
+      var text = length === 1 ? '1 character' : length + ' characters';
+      $charCount.text(text);
+    }
+
+    $textarea.on('input', updateCharCount);
+
+    // Reset character count when form is reset
+    $('#form-edit-roadmap').on('reset', function() {
+      setTimeout(function() {
+        updateCharCount();
+      }, 0);
+    });
+  }
+
+  function setupAutoResizeTextareas() {
+    function autoResize(textarea) {
+      var $textarea = $(textarea);
+      var maxHeight = parseInt($textarea.css('max-height'), 10) || 300;
+
+      // Reset height to auto to calculate scroll height
+      textarea.style.height = 'auto';
+
+      // Calculate new height
+      var newHeight = Math.min(textarea.scrollHeight, maxHeight);
+      textarea.style.height = newHeight + 'px';
+
+      // Add expanded class if content exceeds max height
+      if (textarea.scrollHeight > maxHeight) {
+        $textarea.addClass('expanded');
+      } else {
+        $textarea.removeClass('expanded');
+      }
+    }
+
+    // Apply auto-resize to all textareas with the class
+    $(document).on('input', '.textarea-auto-resize', function() {
+      autoResize(this);
+    });
+
+    // Reset height when form is reset
+    $(document).on('reset', 'form', function() {
+      var $form = $(this);
+
+      setTimeout(function() {
+        $form.find('.textarea-auto-resize').each(function() {
+          this.style.height = 'auto';
+          $(this).removeClass('expanded');
+        });
+      }, 0);
+    });
+
+    // Initialize existing auto-resize textareas
+    $('.textarea-auto-resize').each(function() {
+      autoResize(this);
+    });
+  }
+
+  function setupFormHandlers() {
+    $('#form-add-project').on('submit', function(e) {
+      e.preventDefault();
+      handleAddProject($(this));
+    });
+
+    $('#form-create-roadmap').on('submit', function(e) {
+      e.preventDefault();
+      handleCreateRoadmap($(this));
+    });
+
+    $('#form-edit-roadmap').on('submit', function(e) {
+      e.preventDefault();
+      handleEditRoadmap($(this));
+    });
+
+    $('#form-roadmap-response').on('submit', function(e) {
+      e.preventDefault();
+      handleRoadmapResponse($(this));
+    });
+
+    $('#form-settings').on('submit', function(e) {
+      e.preventDefault();
+      handleSaveSettings($(this));
+    });
+
+    setupTextareaKeyHandlers();
+    setupCharacterCountHandlers();
+    setupAutoResizeTextareas();
+
+    $('#btn-browse-folder').on('click', function() {
+      openFolderBrowser();
+    });
+
+    $('#btn-select-folder').on('click', function() {
+      confirmFolderSelection();
+    });
+
+    $('#btn-confirm-delete').on('click', function() {
+      confirmDeleteProject();
+    });
+  }
+
+  function setupFolderBrowserHandlers() {
+    $('#folder-browser').on('click', '.folder-item', function() {
+      var itemPath = $(this).data('path');
+      loadFolder(itemPath);
+    });
+
+    $('#folder-breadcrumb').on('click', '.folder-breadcrumb-item', function() {
+      var itemPath = $(this).data('path');
+
+      if (itemPath === '') {
+        loadDrives();
+      } else {
+        loadFolder(itemPath);
+      }
+    });
+  }
+
+  // Action handlers
+  function selectProject(projectId) {
+    var previousId = state.selectedProjectId;
+
+    if (previousId && previousId !== projectId) {
+      unsubscribeFromProject(previousId);
+      stopAgentStatusPolling(); // Stop polling for previous project
+      clearReadFileCache(); // Clear read file cache when switching projects
+      // Clear tasks when switching projects
+      state.currentTodos = [];
+      updateTasksButtonBadge();
+    }
+
+    state.selectedProjectId = projectId;
+    state.currentAgentMode = null; // Reset on project change
+    var project = findProjectById(projectId);
+
+    subscribeToProject(projectId);
+    loadConversationHistory(projectId);
+    updateSelectedProject();
+    renderProjectDetail(project);
+    loadAgentStatus(projectId);
+
+    // Refresh debug panel if open
+    if (state.debugPanelOpen) {
+      refreshDebugInfo();
+    }
+  }
+
+  function loadAgentStatus(projectId) {
+    api.getAgentStatus(projectId)
+      .done(function(data) {
+        if (data.status === 'running' && data.mode) {
+          state.currentAgentMode = data.mode;
+          state.queuedMessageCount = data.queuedMessageCount || 0;
+          showAgentRunningIndicator(true);
+          updateQueuedMessagesDisplay();
+          startAgentStatusPolling(projectId); // Start polling for running agent
+        } else {
+          showAgentRunningIndicator(false);
+          state.queuedMessageCount = 0;
+          updateQueuedMessagesDisplay();
+          stopAgentStatusPolling();
+        }
+
+        updateInputArea();
+        $('#mode-selector').toggleClass('disabled', data.status === 'running');
+      })
+      .fail(function() {
+        updateInputArea();
+        showAgentRunningIndicator(false);
+        state.queuedMessageCount = 0;
+        updateQueuedMessagesDisplay();
+        stopAgentStatusPolling();
+      });
+
+    // Also get current conversation from project
+    $.get('/api/projects/' + projectId)
+      .done(function(project) {
+        state.currentConversationId = project.currentConversationId || null;
+        // Stats will be updated when loadConversationHistory completes
+      });
+  }
+
+  function showAgentRunningIndicator(running) {
+    if (running) {
+      $('#agent-output-spinner').removeClass('hidden');
+      $('#agent-status-label').removeClass('hidden');
+    } else {
+      $('#agent-output-spinner').addClass('hidden');
+      $('#agent-status-label').addClass('hidden');
+    }
+  }
+
+  function loadConversationHistory(projectId) {
+    $.get('/api/projects/' + projectId + '/conversation')
+      .done(function(data) {
+        state.conversations[projectId] = data.messages || [];
+        state.currentConversationStats = data.stats || null;
+        state.currentConversationMetadata = data.metadata || null;
+
+        if (state.selectedProjectId === projectId) {
+          renderConversation(projectId);
+          updateConversationStats();
+        }
+      });
+  }
+
+  function findProjectById(id) {
+    return state.projects.find(function(p) { return p.id === id; });
+  }
+
+  function handleAddProject($form) {
+    var formData = {
+      name: $form.find('[name="name"]').val(),
+      path: $form.find('[name="path"]').val(),
+      createNew: $form.find('[name="createNew"]').is(':checked')
+    };
+
+    api.addProject(formData)
+      .done(function(project) {
+        state.projects.push(project);
+        renderProjectList();
+        closeAllModals();
+        $form[0].reset();
+        showToast('Project added successfully', 'success');
+        selectProject(project.id);
+      })
+      .fail(function(xhr) {
+        showErrorToast(xhr, 'Failed to add project');
+      });
+  }
+
+  function loadAndShowRoadmap() {
+    if (!state.selectedProjectId) return;
+
+    api.getProjectRoadmap(state.selectedProjectId)
+      .done(function(data) {
+        renderRoadmap(data);
+        openModal('modal-roadmap');
+      })
+      .fail(function() {
+        renderRoadmap(null);
+        openModal('modal-roadmap');
+      });
+  }
+
+  function handleCreateRoadmap($form) {
+    var prompt = $form.find('[name="prompt"]').val();
+
+    if (!prompt || !state.selectedProjectId) {
+      showToast('Please enter a project description', 'error');
+      return;
+    }
+
+    closeAllModals();
+    showRoadmapProgress();
+    $form[0].reset();
+
+    api.generateRoadmap(state.selectedProjectId, prompt)
+      .done(function(result) {
+        if (result.success) {
+          showToast('Roadmap generated successfully', 'success');
+        }
+      })
+      .fail(function(xhr) {
+        state.roadmapGenerating = false;
+        $('#roadmap-progress-spinner').addClass('hidden');
+        showErrorToast(xhr, 'Failed to generate roadmap');
+      });
+  }
+
+  function handleEditRoadmap($form) {
+    var prompt = $form.find('[name="editPrompt"]').val();
+
+    if (!prompt || !state.selectedProjectId) {
+      showToast('Please describe the changes you want', 'error');
+      return;
+    }
+
+    closeAllModals();
+    showRoadmapProgress();
+    $form[0].reset();
+
+    api.modifyRoadmap(state.selectedProjectId, prompt)
+      .done(function(result) {
+        state.roadmapGenerating = false;
+        $('#roadmap-progress-spinner').addClass('hidden');
+        $('#roadmap-question-input').addClass('hidden');
+        $('#roadmap-progress-footer').removeClass('hidden');
+        showToast('Roadmap modified successfully', 'success');
+      })
+      .fail(function(xhr) {
+        state.roadmapGenerating = false;
+        $('#roadmap-progress-spinner').addClass('hidden');
+        $('#roadmap-question-input').addClass('hidden');
+        showErrorToast(xhr, 'Failed to modify roadmap');
+      });
+  }
+
+  function handleRoadmapResponse($form) {
+    var response = $form.find('[name="response"]').val();
+
+    if (!response || !state.selectedProjectId) {
+      return;
+    }
+
+    $form[0].reset();
+    $('#roadmap-question-input').addClass('hidden');
+
+    api.sendRoadmapResponse(state.selectedProjectId, response)
+      .fail(function(xhr) {
+        showErrorToast(xhr, 'Failed to send response');
+        $('#roadmap-question-input').removeClass('hidden');
+      });
+  }
+
+  function startSelectedAgent() {
+    if (!state.selectedProjectId) return;
+
+    if (state.agentStarting) return;
+
+    var projectId = state.selectedProjectId;
+    var mode = state.agentMode;
+
+    state.agentStarting = true;
+    setQuickActionLoading(projectId, true);
+    showContentLoading('Starting agent...');
+    $('#btn-start-agent').prop('disabled', true);
+    $('#mode-selector').addClass('disabled');
+
+    var startPromise;
+
+    if (mode === 'interactive') {
+      startPromise = api.startInteractiveAgent(projectId);
+    } else {
+      startPromise = api.startAgent(projectId);
+    }
+
+    startPromise
+      .done(function() {
+        state.currentAgentMode = mode;
+        updateProjectStatusById(projectId, 'running');
+        startAgentStatusPolling(projectId);
+        appendMessage(projectId, {
+          type: 'system',
+          content: mode === 'interactive' ?
+            'Interactive session started. Type a message to begin.' :
+            'Autonomous agent started...'
+        });
+        showToast('Agent started in ' + mode + ' mode', 'success');
+        updateInputArea();
+      })
+      .fail(function(xhr) {
+        showErrorToast(xhr, 'Failed to start agent');
+        $('#mode-selector').removeClass('disabled');
+      })
+      .always(function() {
+        state.agentStarting = false;
+        setQuickActionLoading(projectId, false);
+        hideContentLoading();
+        $('#btn-start-agent').prop('disabled', false);
+      });
+  }
+
+  function stopSelectedAgent() {
+    if (!state.selectedProjectId) return;
+
+    var projectId = state.selectedProjectId;
+    setQuickActionLoading(projectId, true);
+    showContentLoading('Stopping agent...');
+    $('#btn-stop-agent').prop('disabled', true);
+
+    api.stopAgent(projectId)
+      .done(function() {
+        updateProjectStatusById(projectId, 'stopped');
+        stopAgentStatusPolling();
+        appendMessage(projectId, {
+          type: 'system',
+          content: 'Agent stopped.'
+        });
+        showToast('Agent stopped', 'success');
+      })
+      .fail(function(xhr) {
+        showErrorToast(xhr, 'Failed to stop agent');
+      })
+      .always(function() {
+        setQuickActionLoading(projectId, false);
+        hideContentLoading();
+        $('#btn-stop-agent').prop('disabled', false);
+      });
+  }
+
+  // Agent status polling - check every 1.5 seconds if agent is still running
+  function startAgentStatusPolling(projectId) {
+    stopAgentStatusPolling();
+    state.agentStatusInterval = setInterval(function() {
+      checkAgentStatus(projectId);
+    }, 1500);
+  }
+
+  function stopAgentStatusPolling() {
+    if (state.agentStatusInterval) {
+      clearInterval(state.agentStatusInterval);
+      state.agentStatusInterval = null;
+    }
+  }
+
+  function checkAgentStatus(projectId) {
+    api.getAgentStatus(projectId)
+      .done(function(response) {
+        var project = findProjectById(projectId);
+        var actualStatus = response.status || 'stopped';
+
+        // Update queued message count
+        var oldQueuedCount = state.queuedMessageCount;
+        state.queuedMessageCount = response.queuedMessageCount || 0;
+
+        if (state.queuedMessageCount !== oldQueuedCount) {
+          updateQueuedMessagesDisplay();
+        }
+
+        // If agent stopped but UI shows running, update UI
+        if (actualStatus !== 'running' && project && project.status === 'running') {
+          updateProjectStatusById(projectId, actualStatus);
+          stopAgentStatusPolling();
+          state.currentAgentMode = null;
+          state.queuedMessageCount = 0;
+          updateQueuedMessagesDisplay();
+          updateInputArea();
+        }
+      })
+      .fail(function() {
+        // On error, assume agent stopped
+        stopAgentStatusPolling();
+      });
+  }
+
+  function updateQueuedMessagesDisplay() {
+    var $indicator = $('#queued-messages-indicator');
+    var count = state.queuedMessageCount;
+    var messageText = count === 1 ? 'message' : 'messages';
+
+    if (count > 0) {
+      if ($indicator.length === 0) {
+        // Create indicator if it doesn't exist
+        var html = '<button id="queued-messages-indicator" class="flex items-center gap-1 text-xs text-yellow-400 bg-yellow-900/30 hover:bg-yellow-900/50 px-2 py-0.5 rounded cursor-pointer transition-colors" title="Click to view queued messages">' +
+          '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+            '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>' +
+          '</svg>' +
+          '<span class="queued-text">' + count + ' queued ' + messageText + '</span>' +
+        '</button>';
+        $('#agent-status-label').after(html);
+      } else {
+        $indicator.find('.queued-text').text(count + ' queued ' + messageText);
+      }
+    } else {
+      $indicator.remove();
+    }
+  }
+
+  function openQueuedMessagesModal() {
+    if (!state.selectedProjectId) {
+      return;
+    }
+
+    api.getQueuedMessages(state.selectedProjectId)
+      .done(function(data) {
+        var messages = data.messages || [];
+        var $content = $('#queued-messages-modal-content');
+
+        if (messages.length === 0) {
+          $content.html('<div class="text-gray-500 text-center py-4">No queued messages</div>');
+        } else {
+          var html = '<div class="space-y-3">';
+
+          for (var i = 0; i < messages.length; i++) {
+            var msg = messages[i];
+            html += '<div class="bg-gray-900 rounded p-3">' +
+              '<div class="flex items-center gap-2 mb-2">' +
+                '<span class="text-xs font-medium text-yellow-400">#' + (i + 1) + '</span>' +
+                '<span class="text-xs text-gray-500">Waiting to be sent</span>' +
+              '</div>' +
+              '<div class="text-sm text-gray-200 whitespace-pre-wrap break-words">' + escapeHtml(msg) + '</div>' +
+            '</div>';
+          }
+
+          html += '</div>';
+          $content.html(html);
+        }
+
+        openModal('modal-queued-messages');
+      })
+      .fail(function(xhr) {
+        showErrorToast(xhr, 'Failed to load queued messages');
+      });
+  }
+
+  function updateProjectStatusById(projectId, status) {
+    var project = findProjectById(projectId);
+
+    if (project) {
+      project.status = status;
+      renderProjectList();
+
+      if (state.selectedProjectId === projectId) {
+        updateProjectStatus(project);
+      }
+    }
+  }
+
+  // Load initial data
+  function loadProjects() {
+    api.getProjects()
+      .done(function(projects) {
+        state.projects = projects || [];
+        renderProjectList();
+      })
+      .fail(function(xhr) {
+        showErrorToast(xhr, 'Failed to load projects');
+      });
+  }
+
+  // WebSocket connection
+  function connectWebSocket() {
+    var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    var wsUrl = protocol + '//' + window.location.host;
+
+    state.websocket = new WebSocket(wsUrl);
+
+    state.websocket.onopen = function() {
+      console.log('WebSocket connected');
+    };
+
+    state.websocket.onmessage = function(event) {
+      handleWebSocketMessage(JSON.parse(event.data));
+    };
+
+    state.websocket.onclose = function() {
+      console.log('WebSocket disconnected, reconnecting...');
+      setTimeout(connectWebSocket, 3000);
+    };
+
+    state.websocket.onerror = function(error) {
+      console.error('WebSocket error:', error);
+    };
+  }
+
+  function handleWebSocketMessage(message) {
+    switch (message.type) {
+      case 'agent_message':
+        handleAgentMessage(message.projectId, message.data);
+        break;
+      case 'agent_status':
+        handleAgentStatus(message.projectId, message.data);
+        break;
+      case 'queue_change':
+        handleQueueChange(message.data);
+        break;
+      case 'roadmap_message':
+        handleRoadmapMessage(message.projectId, message.data);
+        break;
+    }
+  }
+
+  function handleQueueChange(resourceStatus) {
+    updateResourceStatus(resourceStatus);
+  }
+
+  function handleAgentMessage(projectId, message) {
+    appendMessage(projectId, message);
+  }
+
+  function handleAgentStatus(projectId, status) {
+    updateProjectStatusById(projectId, status);
+    updateAgentOutputHeader(projectId, status);
+
+    // Update running indicator for selected project
+    if (projectId === state.selectedProjectId) {
+      showAgentRunningIndicator(status === 'running');
+      updateStartStopButtons();
+    }
+
+    // Reset mode selector when agent stops
+    if (status !== 'running' && projectId === state.selectedProjectId) {
+      state.currentAgentMode = null;
+      $('#mode-selector').removeClass('disabled');
+      updateInputArea();
+    }
+  }
+
+  function updateAgentOutputHeader(projectId, status) {
+    if (projectId !== state.selectedProjectId) {
+      return;
+    }
+
+    if (status === 'running') {
+      $('#conversation-header').removeClass('hidden');
+    } else {
+      $('#conversation-header').addClass('hidden');
+    }
+  }
+
+  function handleRoadmapMessage(projectId, message) {
+    if (projectId !== state.selectedProjectId || !state.roadmapGenerating) {
+      return;
+    }
+
+    appendRoadmapOutput(message);
+
+    // Handle question - show response input
+    if (message.type === 'question') {
+      $('#roadmap-question-input').removeClass('hidden');
+      $('#input-roadmap-response').focus();
+    }
+
+    if (message.type === 'system' && message.content.includes('complete')) {
+      state.roadmapGenerating = false;
+      $('#roadmap-progress-spinner').addClass('hidden');
+      $('#roadmap-question-input').addClass('hidden');
+      $('#roadmap-progress-footer').removeClass('hidden');
+    }
+
+    if (message.type === 'system' && message.content.includes('failed')) {
+      state.roadmapGenerating = false;
+      $('#roadmap-progress-spinner').addClass('hidden');
+      $('#roadmap-question-input').addClass('hidden');
+      showToast('Roadmap generation failed', 'error');
+    }
+  }
+
+  function appendRoadmapOutput(message) {
+    var $output = $('#roadmap-progress-output');
+    var typeClass = message.type === 'stderr' ? 'text-red-400' :
+                    message.type === 'system' ? 'text-blue-400' :
+                    message.type === 'question' ? 'text-yellow-400 font-semibold' : 'text-gray-300';
+    $output.append('<div class="' + typeClass + '">' + escapeHtml(message.content) + '</div>');
+    $output.parent().scrollTop($output.parent()[0].scrollHeight);
+  }
+
+  function showRoadmapProgress() {
+    state.roadmapGenerating = true;
+    $('#roadmap-progress-output').empty();
+    $('#roadmap-progress-spinner').removeClass('hidden');
+    $('#roadmap-progress-footer').addClass('hidden');
+    $('#roadmap-question-input').addClass('hidden');
+    $('#input-roadmap-response').val('');
+    openModal('modal-roadmap-progress');
+  }
+
+  function subscribeToProject(projectId) {
+    if (state.websocket && state.websocket.readyState === WebSocket.OPEN) {
+      state.websocket.send(JSON.stringify({
+        type: 'subscribe',
+        projectId: projectId
+      }));
+    }
+  }
+
+  function unsubscribeFromProject(projectId) {
+    if (state.websocket && state.websocket.readyState === WebSocket.OPEN) {
+      state.websocket.send(JSON.stringify({
+        type: 'unsubscribe',
+        projectId: projectId
+      }));
+    }
+  }
+
+  // Tab switching functions
+  function switchTab(tabName) {
+    state.activeTab = tabName;
+
+    // Update tab button states
+    $('.tab-button').removeClass('active').addClass('text-gray-400 border-transparent').removeClass('text-white border-purple-500');
+    $('#tab-' + tabName).addClass('active text-white border-purple-500').removeClass('text-gray-400 border-transparent');
+
+    // Show/hide tab content
+    $('.tab-content').addClass('hidden');
+    $('#tab-content-' + tabName).removeClass('hidden');
+
+    // Show/hide input area based on tab
+    if (tabName === 'project-files') {
+      $('#interactive-input-area').addClass('hidden');
+    } else {
+      $('#interactive-input-area').removeClass('hidden');
+    }
+
+    // If switching to project files, load the file tree
+    if (tabName === 'project-files' && state.selectedProjectId) {
+      var project = findProjectById(state.selectedProjectId);
+
+      if (project && project.path) {
+        loadFileTree(project.path);
+      }
+    }
+  }
+
+  function setupTabHandlers() {
+    $('#tab-agent-output').on('click', function() {
+      switchTab('agent-output');
+    });
+
+    $('#tab-project-files').on('click', function() {
+      switchTab('project-files');
+    });
+  }
+
+  // File browser functions
+  function loadFileTree(rootPath) {
+    var $tree = $('#file-browser-tree');
+    $tree.html('<div class="text-gray-500 text-center py-4">Loading...</div>');
+
+    api.browseWithFiles(rootPath)
+      .done(function(entries) {
+        state.fileBrowser.rootEntries = entries;
+        renderFileTree(rootPath, entries);
+      })
+      .fail(function() {
+        $tree.html('<div class="text-red-400 text-center py-4">Failed to load files</div>');
+      });
+  }
+
+  function renderFileTree(basePath, entries) {
+    var $tree = $('#file-browser-tree');
+    $tree.empty();
+
+    if (entries.length === 0) {
+      $tree.html('<div class="text-gray-500 text-center py-4">No files in this directory</div>');
+      return;
+    }
+
+    entries.forEach(function(entry) {
+      $tree.append(renderFileTreeItem(entry, 0));
+    });
+  }
+
+  function renderFileTreeItem(entry, depth) {
+    var indent = depth * 16;
+    var isExpanded = state.fileBrowser.expandedDirs[entry.path];
+    var isSelected = state.fileBrowser.selectedFile === entry.path;
+    var deleteBtn = '<button class="btn-delete-file" data-path="' + escapeHtml(entry.path) + '" data-is-dir="' + (entry.isDirectory ? 'true' : 'false') + '" data-name="' + escapeHtml(entry.name) + '" title="Delete">' +
+      '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>' +
+      '</svg>' +
+    '</button>';
+
+    if (entry.isDirectory) {
+      var chevronClass = isExpanded ? 'tree-chevron expanded' : 'tree-chevron';
+      var html = '<div class="file-tree-item directory' + (isSelected ? ' selected' : '') + '" data-path="' + escapeHtml(entry.path) + '" data-is-dir="true" style="padding-left: ' + indent + 'px;">' +
+        '<svg class="' + chevronClass + '" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>' +
+        '</svg>' +
+        '<svg class="tree-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>' +
+        '</svg>' +
+        '<span class="tree-name">' + escapeHtml(entry.name) + '</span>' +
+        deleteBtn +
+      '</div>';
+
+      if (isExpanded && entry.children) {
+        html += '<div class="tree-children">';
+        entry.children.forEach(function(child) {
+          html += renderFileTreeItem(child, depth + 1);
+        });
+        html += '</div>';
+      }
+
+      return html;
+    } else {
+      var editableClass = entry.isEditable ? ' editable' : '';
+      return '<div class="file-tree-item file' + editableClass + (isSelected ? ' selected' : '') + '" data-path="' + escapeHtml(entry.path) + '" data-is-dir="false" data-editable="' + (entry.isEditable ? 'true' : 'false') + '" style="padding-left: ' + (indent + 20) + 'px;">' +
+        '<svg class="tree-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>' +
+        '</svg>' +
+        '<span class="tree-name">' + escapeHtml(entry.name) + '</span>' +
+        deleteBtn +
+      '</div>';
+    }
+  }
+
+  function toggleDirectory(dirPath) {
+    if (state.fileBrowser.expandedDirs[dirPath]) {
+      // Collapse
+      delete state.fileBrowser.expandedDirs[dirPath];
+      var $item = $('.file-tree-item[data-path="' + CSS.escape(dirPath) + '"]');
+      $item.find('.tree-chevron').first().removeClass('expanded');
+      $item.next('.tree-children').remove();
+    } else {
+      // Expand - load children
+      state.fileBrowser.expandedDirs[dirPath] = true;
+      var $item = $('.file-tree-item[data-path="' + CSS.escape(dirPath) + '"]');
+      $item.find('.tree-chevron').first().addClass('expanded');
+
+      // Load children
+      api.browseWithFiles(dirPath)
+        .done(function(children) {
+          var childrenHtml = '<div class="tree-children">';
+          children.forEach(function(child) {
+            var depth = (parseInt($item.css('padding-left')) / 16) + 1;
+            childrenHtml += renderFileTreeItem(child, depth);
+          });
+          childrenHtml += '</div>';
+          $item.after(childrenHtml);
+        });
+    }
+  }
+
+  function openFile(filePath, fileName) {
+    // Check if file is already open
+    var existingFile = state.openFiles.find(function(f) { return f.path === filePath; });
+
+    if (existingFile) {
+      setActiveFile(filePath);
+      return;
+    }
+
+    // Load file content
+    api.readFile(filePath)
+      .done(function(data) {
+        state.openFiles.push({
+          path: filePath,
+          name: fileName,
+          content: data.content,
+          originalContent: data.content,
+          modified: false
+        });
+        renderOpenFileTabs();
+        setActiveFile(filePath);
+      })
+      .fail(function() {
+        showToast('Failed to open file', 'error');
+      });
+  }
+
+  function setActiveFile(filePath) {
+    state.activeFilePath = filePath;
+    state.fileBrowser.selectedFile = filePath;
+
+    // Update tree selection
+    $('.file-tree-item').removeClass('selected');
+    $('.file-tree-item[data-path="' + CSS.escape(filePath) + '"]').addClass('selected');
+
+    // Update tab selection
+    renderOpenFileTabs();
+
+    // Show file content
+    var file = state.openFiles.find(function(f) { return f.path === filePath; });
+
+    if (file) {
+      $('#file-editor-empty').addClass('hidden');
+      $('#file-editor-wrapper').removeClass('hidden');
+      $('#file-editor-path').text(filePath);
+      $('#file-editor-textarea').val(file.content);
+      updateFileModifiedState(file);
+      updateEditorSyntaxHighlighting(filePath, file.content);
+    }
+  }
+
+  function updateEditorSyntaxHighlighting(filePath, content) {
+    var language = getLanguageFromPath(filePath);
+    var $container = $('#code-editor-container');
+    var $highlight = $('#code-editor-highlight');
+
+    if (language && typeof hljs !== 'undefined') {
+      $container.addClass('highlighting');
+      var highlighted = highlightCode(content, language);
+      // Add trailing newline to ensure proper alignment with textarea
+      $highlight.html(highlighted + '\n');
+      syncEditorScroll();
+    } else {
+      $container.removeClass('highlighting');
+      $highlight.empty();
+    }
+  }
+
+  function syncEditorScroll() {
+    var $textarea = $('#file-editor-textarea');
+    var $backdrop = $('#code-editor-backdrop');
+    $backdrop.scrollTop($textarea.scrollTop());
+    $backdrop.scrollLeft($textarea.scrollLeft());
+  }
+
+  function updateFileModifiedState(file) {
+    if (file.modified) {
+      $('#file-editor-modified').removeClass('hidden');
+      $('#btn-save-file').removeClass('hidden');
+    } else {
+      $('#file-editor-modified').addClass('hidden');
+      $('#btn-save-file').addClass('hidden');
+    }
+    renderOpenFileTabs();
+  }
+
+  function renderOpenFileTabs() {
+    var $tabs = $('#open-file-tabs');
+    $tabs.empty();
+
+    state.openFiles.forEach(function(file) {
+      var activeClass = file.path === state.activeFilePath ? ' active' : '';
+      var modifiedIndicator = file.modified ? '<span class="tab-modified"></span>' : '';
+
+      var html = '<div class="file-tab' + activeClass + '" data-path="' + escapeHtml(file.path) + '">' +
+        modifiedIndicator +
+        '<span class="tab-name">' + escapeHtml(file.name) + '</span>' +
+        '<button class="tab-close" data-path="' + escapeHtml(file.path) + '" title="Close">' +
+          '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+            '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>' +
+          '</svg>' +
+        '</button>' +
+      '</div>';
+
+      $tabs.append(html);
+    });
+  }
+
+  function closeFile(filePath) {
+    var fileIndex = state.openFiles.findIndex(function(f) { return f.path === filePath; });
+
+    if (fileIndex === -1) return;
+
+    var file = state.openFiles[fileIndex];
+
+    // Warn if modified
+    if (file.modified) {
+      if (!confirm('This file has unsaved changes. Close anyway?')) {
+        return;
+      }
+    }
+
+    // Remove from open files
+    state.openFiles.splice(fileIndex, 1);
+
+    // If this was the active file, switch to another or show empty state
+    if (state.activeFilePath === filePath) {
+      if (state.openFiles.length > 0) {
+        var newIndex = Math.min(fileIndex, state.openFiles.length - 1);
+        setActiveFile(state.openFiles[newIndex].path);
+      } else {
+        state.activeFilePath = null;
+        state.fileBrowser.selectedFile = null;
+        $('#file-editor-empty').removeClass('hidden');
+        $('#file-editor-wrapper').addClass('hidden');
+        $('.file-tree-item').removeClass('selected');
+      }
+    }
+
+    renderOpenFileTabs();
+  }
+
+  function showDeleteFileConfirmation(filePath, isDirectory, fileName) {
+    state.pendingDeleteFile = {
+      path: filePath,
+      isDirectory: isDirectory,
+      name: fileName
+    };
+
+    $('#delete-file-type').text(isDirectory ? 'folder' : 'file');
+    $('#delete-file-name').text(fileName);
+    $('#delete-folder-warning').toggleClass('hidden', !isDirectory);
+
+    openModal('modal-confirm-delete-file');
+  }
+
+  function confirmDeleteFile() {
+    if (!state.pendingDeleteFile) return;
+
+    var pending = state.pendingDeleteFile;
+
+    api.deleteFileOrFolder(pending.path, pending.isDirectory)
+      .done(function() {
+        closeModal('modal-confirm-delete-file');
+
+        // If this file was open, close it
+        if (!pending.isDirectory) {
+          closeFileWithoutConfirm(pending.path);
+        } else {
+          // If it's a directory, close any files that were inside it
+          state.openFiles.forEach(function(f) {
+            if (f.path.startsWith(pending.path)) {
+              closeFileWithoutConfirm(f.path);
+            }
+          });
+        }
+
+        // Remove from tree and refresh parent
+        var $item = $('.file-tree-item[data-path="' + CSS.escape(pending.path) + '"]');
+        var $parent = $item.parent();
+
+        if (pending.isDirectory) {
+          $item.next('.tree-children').remove();
+        }
+
+        $item.remove();
+
+        // Clean up expanded dirs state
+        delete state.fileBrowser.expandedDirs[pending.path];
+
+        showToast((pending.isDirectory ? 'Folder' : 'File') + ' deleted', 'success');
+        state.pendingDeleteFile = null;
+      })
+      .fail(function() {
+        showToast('Failed to delete ' + (pending.isDirectory ? 'folder' : 'file'), 'error');
+      });
+  }
+
+  function closeFileWithoutConfirm(filePath) {
+    var fileIndex = state.openFiles.findIndex(function(f) { return f.path === filePath; });
+
+    if (fileIndex === -1) return;
+
+    state.openFiles.splice(fileIndex, 1);
+
+    if (state.activeFilePath === filePath) {
+      if (state.openFiles.length > 0) {
+        var newIndex = Math.min(fileIndex, state.openFiles.length - 1);
+        setActiveFile(state.openFiles[newIndex].path);
+      } else {
+        state.activeFilePath = null;
+        state.fileBrowser.selectedFile = null;
+        $('#file-editor-empty').removeClass('hidden');
+        $('#file-editor-wrapper').addClass('hidden');
+        $('.file-tree-item').removeClass('selected');
+      }
+    }
+
+    renderOpenFileTabs();
+  }
+
+  function saveCurrentFile() {
+    if (!state.activeFilePath) return;
+
+    var file = state.openFiles.find(function(f) { return f.path === state.activeFilePath; });
+
+    if (!file) return;
+
+    var content = $('#file-editor-textarea').val();
+
+    api.writeFile(file.path, content)
+      .done(function() {
+        file.content = content;
+        file.originalContent = content;
+        file.modified = false;
+        updateFileModifiedState(file);
+        showToast('File saved', 'success');
+      })
+      .fail(function() {
+        showToast('Failed to save file', 'error');
+      });
+  }
+
+  function setupFileBrowserHandlers() {
+    // Click on file tree item (but not on delete button)
+    $(document).on('click', '.file-tree-item', function(e) {
+      if ($(e.target).closest('.btn-delete-file').length) {
+        return; // Handled by delete button handler
+      }
+
+      var $item = $(this);
+      var path = $item.data('path');
+      var isDir = $item.data('is-dir');
+      var isEditable = $item.data('editable') === true || $item.data('editable') === 'true';
+
+      if (isDir) {
+        toggleDirectory(path);
+      } else if (isEditable) {
+        var name = $item.find('.tree-name').text();
+        openFile(path, name);
+      } else {
+        showToast('This file type cannot be edited', 'info');
+      }
+    });
+
+    // Click on delete file/folder button
+    $(document).on('click', '.btn-delete-file', function(e) {
+      e.stopPropagation();
+      var path = $(this).data('path');
+      var isDir = $(this).data('is-dir') === true || $(this).data('is-dir') === 'true';
+      var name = $(this).data('name');
+      showDeleteFileConfirmation(path, isDir, name);
+    });
+
+    // Right-click context menu on file tree items
+    $(document).on('contextmenu', '.file-tree-item', function(e) {
+      e.preventDefault();
+      var $item = $(this);
+      var path = $item.data('path');
+      var isDir = $item.data('is-dir') === true || $item.data('is-dir') === 'true';
+      var name = $item.find('.tree-name').text();
+
+      // Store context for delete action
+      state.contextMenuTarget = { path: path, isDir: isDir, name: name };
+
+      // Position and show context menu
+      var $menu = $('#file-context-menu');
+      $menu.css({
+        top: e.pageY + 'px',
+        left: e.pageX + 'px'
+      }).removeClass('hidden');
+
+      // Close menu when clicking elsewhere
+      $(document).one('click', function() {
+        $menu.addClass('hidden');
+      });
+    });
+
+    // Context menu delete action
+    $('#context-menu-delete').on('click', function(e) {
+      e.stopPropagation();
+      $('#file-context-menu').addClass('hidden');
+
+      if (state.contextMenuTarget) {
+        showDeleteFileConfirmation(
+          state.contextMenuTarget.path,
+          state.contextMenuTarget.isDir,
+          state.contextMenuTarget.name
+        );
+      }
+    });
+
+    // Confirm delete file/folder
+    $('#btn-confirm-delete-file').on('click', function() {
+      confirmDeleteFile();
+    });
+
+    // Click on file tab
+    $(document).on('click', '.file-tab', function(e) {
+      if ($(e.target).closest('.tab-close').length) return;
+      var path = $(this).data('path');
+      setActiveFile(path);
+    });
+
+    // Click on tab close button
+    $(document).on('click', '.tab-close', function(e) {
+      e.stopPropagation();
+      var path = $(this).data('path');
+      closeFile(path);
+    });
+
+    // File editor content change
+    $('#file-editor-textarea').on('input', function() {
+      if (!state.activeFilePath) return;
+
+      var file = state.openFiles.find(function(f) { return f.path === state.activeFilePath; });
+
+      if (!file) return;
+
+      var currentContent = $(this).val();
+      file.content = currentContent;
+      file.modified = currentContent !== file.originalContent;
+      updateFileModifiedState(file);
+      updateEditorSyntaxHighlighting(state.activeFilePath, currentContent);
+    });
+
+    // Sync scroll between textarea and highlighted backdrop
+    $('#file-editor-textarea').on('scroll', function() {
+      syncEditorScroll();
+    });
+
+    // Save file button
+    $('#btn-save-file').on('click', function() {
+      saveCurrentFile();
+    });
+
+    // Ctrl+S to save
+    $('#file-editor-textarea').on('keydown', function(e) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        saveCurrentFile();
+      }
+    });
+
+    // Refresh files button
+    $('#btn-refresh-files').on('click', function() {
+      var project = findProjectById(state.selectedProjectId);
+
+      if (project && project.path) {
+        state.fileBrowser.expandedDirs = {};
+        loadFileTree(project.path);
+      }
+    });
+  }
+
+  // Load settings on init to get sendWithCtrlEnter preference
+  function loadInitialSettings() {
+    api.getSettings()
+      .done(function(settings) {
+        state.sendWithCtrlEnter = settings.sendWithCtrlEnter !== false;
+        updateInputHint();
+      });
+  }
+
+  // Initialize application
+  function init() {
+    setupEventHandlers();
+    setupTabHandlers();
+    setupFileBrowserHandlers();
+    loadProjects();
+    loadResourceStatus();
+    loadInitialSettings();
+    loadFontSize();
+    connectWebSocket();
+  }
+
+  function loadResourceStatus() {
+    api.getAgentResourceStatus()
+      .done(function(data) {
+        updateResourceStatus(data);
+      });
+  }
+
+  // Start the app when document is ready
+  $(document).ready(init);
+
+})(jQuery);
