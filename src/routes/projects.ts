@@ -120,6 +120,13 @@ export interface ConversationStats {
   startedAt: string | null;
 }
 
+export interface MemoryUsage {
+  heapUsed: number;
+  heapTotal: number;
+  rss: number;
+  external: number;
+}
+
 export interface DebugInfo {
   lastCommand: string | null;
   processInfo: {
@@ -143,6 +150,7 @@ export interface DebugInfo {
     projectId: string;
     startedAt: string;
   }>;
+  memoryUsage: MemoryUsage;
 }
 
 export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
@@ -751,12 +759,19 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
       throw new NotFoundError('Project');
     }
 
+    const mem = process.memoryUsage();
     const debugInfo: DebugInfo = {
       lastCommand: agentManager.getLastCommand(id),
       processInfo: agentManager.getProcessInfo(id),
       loopState: agentManager.getLoopState(id),
       recentLogs: getProjectLogs(id, limit),
       trackedProcesses: agentManager.getTrackedProcesses(),
+      memoryUsage: {
+        heapUsed: mem.heapUsed,
+        heapTotal: mem.heapTotal,
+        rss: mem.rss,
+        external: mem.external,
+      },
     };
 
     res.json(debugInfo);

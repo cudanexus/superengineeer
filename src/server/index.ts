@@ -56,7 +56,7 @@ function serveIndexWithCacheBusting(publicPath: string, res: Response): void {
 
     html = html.replace(
       /(<(?:script|link)[^>]*(?:src|href)=["'])([^"']+\.(?:js|css))([^"']*["'])/gi,
-      (match, prefix, url, suffix) => {
+      (match, prefix: string, url: string, suffix: string) => {
         if (url.startsWith('/vendor/')) {
           return match;
         }

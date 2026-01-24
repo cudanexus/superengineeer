@@ -923,8 +923,8 @@ export class DefaultClaudeAgent implements ClaudeAgent {
     const parts = [filePath];
 
     if (input.offset !== undefined || input.limit !== undefined) {
-      const offset = input.offset !== undefined ? `offset: ${input.offset}` : '';
-      const limit = input.limit !== undefined ? `limit: ${input.limit}` : '';
+      const offset = input.offset !== undefined ? `offset: ${String(input.offset)}` : '';
+      const limit = input.limit !== undefined ? `limit: ${String(input.limit)}` : '';
       const range = [offset, limit].filter(Boolean).join(', ');
       parts.push(`(${range})`);
     }
@@ -970,17 +970,17 @@ export class DefaultClaudeAgent implements ClaudeAgent {
     }
 
     if (input.glob) {
-      parts.push(`(${input.glob})`);
+      parts.push(`(${String(input.glob)})`);
     } else if (input.type) {
-      parts.push(`(*.${input.type})`);
+      parts.push(`(*.${String(input.type)})`);
     }
 
     if (input.output_mode && input.output_mode !== 'files_with_matches') {
-      parts.push(`[${input.output_mode}]`);
+      parts.push(`[${String(input.output_mode)}]`);
     }
 
     if (input.head_limit) {
-      parts.push(`limit: ${input.head_limit}`);
+      parts.push(`limit: ${String(input.head_limit)}`);
     }
 
     return `Grep: ${parts.join(' ')}`;
@@ -988,7 +988,7 @@ export class DefaultClaudeAgent implements ClaudeAgent {
 
   private formatTaskTool(input: Record<string, unknown>): string {
     const description = String(input.description ?? 'spawning agent');
-    const agentType = input.subagent_type ? ` (${input.subagent_type})` : '';
+    const agentType = input.subagent_type ? ` (${String(input.subagent_type)})` : '';
     return `Task: ${description}${agentType}`;
   }
 

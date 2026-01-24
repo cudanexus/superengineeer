@@ -1,4 +1,4 @@
-import { networkInterfaces, NetworkInterfaceInfo } from 'os';
+import { networkInterfaces } from 'os';
 
 export interface NetworkAddress {
   interface: string;

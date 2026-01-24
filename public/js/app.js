@@ -696,6 +696,9 @@
     return (bytes / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0) + ' ' + units[i];
   }
 
+  // Alias for formatFileSize
+  var formatBytes = formatFileSize;
+
   function renderNoProjectMessage() {
     return '<div class="text-center py-4">' +
       '<svg class="w-8 h-8 mx-auto mb-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
@@ -2703,7 +2706,112 @@
 
     html += '</div>';
 
+    // Memory Usage
+    html += '<div class="bg-gray-800 rounded-lg p-4 mt-4">';
+    html += '<h4 class="text-gray-300 font-semibold mb-3 flex items-center gap-2">';
+    html += '<svg class="w-4 h-4 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">';
+    html += '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>';
+    html += '</svg>Memory Usage</h4>';
+
+    html += '<div class="space-y-3">';
+
+    // Server Memory
+    html += '<div class="bg-gray-900 rounded p-3">';
+    html += '<div class="text-gray-400 text-xs font-semibold mb-2">Server (Node.js)</div>';
+
+    if (data.memoryUsage) {
+      html += '<div class="grid grid-cols-2 gap-3">';
+      html += '<div>';
+      html += '<div class="text-gray-500 text-xs">Heap Used</div>';
+      html += '<div class="text-yellow-400 font-mono">' + formatBytes(data.memoryUsage.heapUsed) + '</div>';
+      html += '</div>';
+      html += '<div>';
+      html += '<div class="text-gray-500 text-xs">Heap Total</div>';
+      html += '<div class="text-gray-300 font-mono">' + formatBytes(data.memoryUsage.heapTotal) + '</div>';
+      html += '</div>';
+      html += '<div>';
+      html += '<div class="text-gray-500 text-xs">RSS</div>';
+      html += '<div class="text-gray-300 font-mono">' + formatBytes(data.memoryUsage.rss) + '</div>';
+      html += '</div>';
+      html += '<div>';
+      html += '<div class="text-gray-500 text-xs">External</div>';
+      html += '<div class="text-gray-300 font-mono">' + formatBytes(data.memoryUsage.external) + '</div>';
+      html += '</div>';
+      html += '</div>';
+
+      // Heap usage bar
+      var heapPercent = Math.round((data.memoryUsage.heapUsed / data.memoryUsage.heapTotal) * 100);
+      var barColor = heapPercent > 90 ? 'bg-red-500' : (heapPercent > 70 ? 'bg-yellow-500' : 'bg-green-500');
+      html += '<div class="mt-3">';
+      html += '<div class="flex justify-between text-xs text-gray-500 mb-1">';
+      html += '<span>Heap Usage</span>';
+      html += '<span>' + heapPercent + '%</span>';
+      html += '</div>';
+      html += '<div class="w-full bg-gray-700 rounded-full h-2">';
+      html += '<div class="' + barColor + ' h-2 rounded-full transition-all" style="width: ' + heapPercent + '%"></div>';
+      html += '</div>';
+      html += '</div>';
+    } else {
+      html += '<div class="text-gray-500">Memory info unavailable</div>';
+    }
+
+    html += '</div>';
+
+    // Browser Memory (if available)
+    html += '<div class="bg-gray-900 rounded p-3">';
+    html += '<div class="text-gray-400 text-xs font-semibold mb-2">Browser</div>';
+    html += '<div id="debug-browser-memory"></div>';
+    html += '</div>';
+
+    html += '</div>';
+    html += '</div>';
+
     $('#debug-process-content').html(html);
+
+    // Update browser memory after DOM is ready
+    updateBrowserMemory();
+  }
+
+  function updateBrowserMemory() {
+    var container = $('#debug-browser-memory');
+
+    if (!container.length) return;
+
+    // Check for performance.memory (Chrome/Edge only)
+    if (window.performance && window.performance.memory) {
+      var mem = window.performance.memory;
+      var usedPercent = Math.round((mem.usedJSHeapSize / mem.jsHeapSizeLimit) * 100);
+      var barColor = usedPercent > 90 ? 'bg-red-500' : (usedPercent > 70 ? 'bg-yellow-500' : 'bg-green-500');
+
+      var html = '<div class="grid grid-cols-2 gap-3">';
+      html += '<div>';
+      html += '<div class="text-gray-500 text-xs">JS Heap Used</div>';
+      html += '<div class="text-yellow-400 font-mono">' + formatBytes(mem.usedJSHeapSize) + '</div>';
+      html += '</div>';
+      html += '<div>';
+      html += '<div class="text-gray-500 text-xs">JS Heap Total</div>';
+      html += '<div class="text-gray-300 font-mono">' + formatBytes(mem.totalJSHeapSize) + '</div>';
+      html += '</div>';
+      html += '<div class="col-span-2">';
+      html += '<div class="text-gray-500 text-xs">Heap Limit</div>';
+      html += '<div class="text-gray-300 font-mono">' + formatBytes(mem.jsHeapSizeLimit) + '</div>';
+      html += '</div>';
+      html += '</div>';
+
+      html += '<div class="mt-3">';
+      html += '<div class="flex justify-between text-xs text-gray-500 mb-1">';
+      html += '<span>Heap Usage</span>';
+      html += '<span>' + usedPercent + '%</span>';
+      html += '</div>';
+      html += '<div class="w-full bg-gray-700 rounded-full h-2">';
+      html += '<div class="' + barColor + ' h-2 rounded-full transition-all" style="width: ' + usedPercent + '%"></div>';
+      html += '</div>';
+      html += '</div>';
+
+      container.html(html);
+    } else {
+      container.html('<div class="text-gray-500 text-sm">Memory API not available in this browser</div>');
+    }
   }
 
   function renderDebugCommandsTab(data) {
