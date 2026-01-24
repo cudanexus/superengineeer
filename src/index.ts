@@ -33,8 +33,9 @@ async function main(): Promise<void> {
   logger.info('Server started', { port: config.port, host: config.host });
 }
 
-main().catch((error) => {
+main().catch((error: unknown) => {
   const logger = getLogger('main');
-  logger.error('Failed to start server', { error: error.message });
+  const message = error instanceof Error ? error.message : String(error);
+  logger.error('Failed to start server', { error: message });
   process.exit(1);
 });

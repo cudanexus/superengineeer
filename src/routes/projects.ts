@@ -2,9 +2,60 @@ import { Router, Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
 import { ProjectRepository, ConversationRepository, MilestoneItemRef } from '../repositories';
-import { MilestoneRef, AgentMessage } from '../agents';
+import { MilestoneRef, AgentMessage, ImageData } from '../agents';
 import { ProjectService, RoadmapParser, RoadmapGenerator, InstructionGenerator, RoadmapEditor } from '../services';
 import { AgentManager } from '../agents';
+
+// Request body types
+interface CreateProjectBody {
+  name?: string;
+  path?: string;
+  createNew?: boolean;
+}
+
+interface RoadmapPromptBody {
+  prompt?: string;
+}
+
+interface DeleteTaskBody {
+  phaseId?: string;
+  milestoneId?: string;
+  taskIndex?: number;
+}
+
+interface DeleteMilestoneBody {
+  phaseId?: string;
+  milestoneId?: string;
+}
+
+interface DeletePhaseBody {
+  phaseId?: string;
+}
+
+interface RoadmapRespondBody {
+  response?: string;
+}
+
+interface NextItemBody {
+  phaseId?: string;
+  milestoneId?: string;
+  itemIndex?: number;
+  taskTitle?: string;
+}
+
+interface AgentMessageBody {
+  message?: string;
+  images?: ImageData[];
+}
+
+interface RenameConversationBody {
+  label?: string;
+}
+
+interface ClaudeFileSaveBody {
+  filePath?: string;
+  content?: string;
+}
 
 function computeConversationStats(
   messages: AgentMessage[],
@@ -103,14 +154,15 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
   }));
 
   router.post('/', asyncHandler(async (req: Request, res: Response) => {
-    const { name, path: projectPath, createNew } = req.body;
+    const body = req.body as CreateProjectBody;
+    const { name, path: projectPath, createNew } = body;
 
     if (!projectPath) {
       throw new ValidationError('Path is required');
     }
 
     const result = await projectService.createProject({
-      name,
+      name: name ?? '',
       path: projectPath,
       createNew: createNew === true,
     });
@@ -165,7 +217,8 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
 
   router.post('/:id/roadmap/generate', asyncHandler(async (req: Request, res: Response) => {
     const id = req.params['id'] as string;
-    const { prompt } = req.body;
+    const body = req.body as RoadmapPromptBody;
+    const { prompt } = body;
 
     if (!prompt) {
       throw new ValidationError('Prompt is required');
@@ -194,7 +247,8 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
   // Modify roadmap via Claude prompt
   router.put('/:id/roadmap', asyncHandler(async (req: Request, res: Response) => {
     const id = req.params['id'] as string;
-    const { prompt } = req.body;
+    const body = req.body as RoadmapPromptBody;
+    const { prompt } = body;
 
     if (!prompt) {
       throw new ValidationError('Prompt is required');
@@ -239,7 +293,8 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
   // Delete a specific task from the roadmap
   router.delete('/:id/roadmap/task', asyncHandler(async (req: Request, res: Response) => {
     const id = req.params['id'] as string;
-    const { phaseId, milestoneId, taskIndex } = req.body;
+    const body = req.body as DeleteTaskBody;
+    const { phaseId, milestoneId, taskIndex } = body;
 
     if (!phaseId || !milestoneId || taskIndex === undefined) {
       throw new ValidationError('phaseId, milestoneId, and taskIndex are required');
@@ -271,7 +326,8 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
   // Delete an entire milestone from the roadmap
   router.delete('/:id/roadmap/milestone', asyncHandler(async (req: Request, res: Response) => {
     const id = req.params['id'] as string;
-    const { phaseId, milestoneId } = req.body;
+    const body = req.body as DeleteMilestoneBody;
+    const { phaseId, milestoneId } = body;
 
     if (!phaseId || !milestoneId) {
       throw new ValidationError('phaseId and milestoneId are required');
@@ -303,7 +359,8 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
   // Delete an entire phase from the roadmap
   router.delete('/:id/roadmap/phase', asyncHandler(async (req: Request, res: Response) => {
     const id = req.params['id'] as string;
-    const { phaseId } = req.body;
+    const body = req.body as DeletePhaseBody;
+    const { phaseId } = body;
 
     if (!phaseId) {
       throw new ValidationError('phaseId is required');
@@ -335,7 +392,8 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
   // Send response to roadmap generator
   router.post('/:id/roadmap/respond', asyncHandler(async (req: Request, res: Response) => {
     const id = req.params['id'] as string;
-    const { response } = req.body;
+    const body = req.body as RoadmapRespondBody;
+    const { response } = body;
 
     if (!response) {
       throw new ValidationError('Response is required');
@@ -358,7 +416,8 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
   // Set next item to work on
   router.put('/:id/roadmap/next-item', asyncHandler(async (req: Request, res: Response) => {
     const id = req.params['id'] as string;
-    const { phaseId, milestoneId, itemIndex, taskTitle } = req.body;
+    const body = req.body as NextItemBody;
+    const { phaseId, milestoneId, itemIndex, taskTitle } = body;
 
     const project = await projectRepository.findById(id);
 
@@ -381,7 +440,7 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
       phaseId,
       milestoneId,
       itemIndex,
-      taskTitle: taskTitle || '',
+      taskTitle: taskTitle ?? '',
     };
 
     await projectRepository.updateNextItem(id, nextItem);
@@ -510,7 +569,8 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
   // Start interactive agent session
   router.post('/:id/agent/interactive', asyncHandler(async (req: Request, res: Response) => {
     const id = req.params['id'] as string;
-    const { message, images } = req.body;
+    const body = req.body as AgentMessageBody;
+    const { message, images } = body;
     const project = await projectRepository.findById(id);
 
     if (!project) {
@@ -528,7 +588,8 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
   // Send input to running interactive agent
   router.post('/:id/agent/send', asyncHandler(async (req: Request, res: Response) => {
     const id = req.params['id'] as string;
-    const { message, images } = req.body;
+    const body = req.body as AgentMessageBody;
+    const { message, images } = body;
     const project = await projectRepository.findById(id);
 
     if (!project) {
@@ -550,14 +611,13 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
       throw new ValidationError('Agent is not in interactive mode');
     }
 
-    agentManager.sendInput(id, message, images);
+    agentManager.sendInput(id, message ?? '', images);
     res.json({ success: true });
   }));
 
   router.get('/:id/conversation', asyncHandler(async (req: Request, res: Response) => {
     const id = req.params['id'] as string;
     const conversationId = req.query['conversationId'] as string | undefined;
-    const limit = req.query['limit'] ? parseInt(req.query['limit'] as string, 10) : undefined;
     const project = await projectRepository.findById(id);
 
     if (!project) {
@@ -601,7 +661,8 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
   router.put('/:id/conversations/:conversationId', asyncHandler(async (req: Request, res: Response) => {
     const id = req.params['id'] as string;
     const conversationId = req.params['conversationId'] as string;
-    const { label } = req.body;
+    const body = req.body as RenameConversationBody;
+    const { label } = body;
 
     if (typeof label !== 'string') {
       throw new ValidationError('label is required');
@@ -674,7 +735,8 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
   // Save Claude file
   router.put('/:id/claude-files', asyncHandler(async (req: Request, res: Response) => {
     const id = req.params['id'] as string;
-    const { filePath, content } = req.body;
+    const body = req.body as ClaudeFileSaveBody;
+    const { filePath, content } = body;
 
     if (!filePath || typeof content !== 'string') {
       throw new ValidationError('filePath and content are required');

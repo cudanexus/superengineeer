@@ -239,7 +239,9 @@ export function createFilesystemRouter(service: FilesystemService): Router {
   });
 
   router.put('/write', (req: Request, res: Response) => {
-    const { path: filePath, content } = req.body;
+    const body = req.body as { path?: string; content?: string };
+    const filePath = body.path;
+    const content = body.content;
 
     if (!filePath) {
       res.status(400).json({ error: 'Path is required' });
@@ -255,7 +257,9 @@ export function createFilesystemRouter(service: FilesystemService): Router {
   });
 
   router.delete('/delete', (req: Request, res: Response) => {
-    const { path: targetPath, isDirectory } = req.body;
+    const body = req.body as { path?: string; isDirectory?: boolean };
+    const targetPath = body.path;
+    const isDirectory = body.isDirectory;
 
     if (!targetPath) {
       res.status(400).json({ error: 'Path is required' });

@@ -78,6 +78,25 @@ interface ActiveProcess {
   projectPath: string;
 }
 
+interface ContentBlock {
+  type: 'text' | 'tool_use' | 'tool_result';
+  text?: string;
+  name?: string;
+}
+
+interface StreamEvent {
+  type: string;
+  subtype?: string;
+  session_id?: string;
+  message?: {
+    content?: ContentBlock[];
+  };
+  delta?: {
+    text?: string;
+  };
+  content_block?: ContentBlock;
+}
+
 export class ClaudeRoadmapGenerator implements RoadmapGenerator {
   private readonly processSpawner: ProcessSpawner;
   private readonly fileOps: FileOperations;
@@ -283,7 +302,16 @@ Write the ROADMAP.md file to doc/ROADMAP.md now.`;
 
   private processStreamLine(projectId: string, line: string, logger: Logger): void {
     try {
-      const event = JSON.parse(line);
+      const parsed: unknown = JSON.parse(line);
+
+      if (typeof parsed !== 'object' || parsed === null) {
+        if (line.trim()) {
+          this.emitMessage(projectId, 'stdout', line);
+        }
+        return;
+      }
+
+      const event = parsed as StreamEvent;
 
       // Handle different event types from stream-json format
       switch (event.type) {
@@ -291,9 +319,9 @@ Write the ROADMAP.md file to doc/ROADMAP.md now.`;
           // Assistant message - this is the main output
           if (event.message?.content) {
             for (const block of event.message.content) {
-              if (block.type === 'text') {
+              if (block.type === 'text' && block.text) {
                 this.emitMessage(projectId, 'stdout', block.text);
-              } else if (block.type === 'tool_use') {
+              } else if (block.type === 'tool_use' && block.name) {
                 this.emitMessage(projectId, 'system', `Using tool: ${block.name}`);
               }
             }
@@ -309,7 +337,7 @@ Write the ROADMAP.md file to doc/ROADMAP.md now.`;
 
         case 'content_block_start':
           // New content block starting
-          if (event.content_block?.type === 'tool_use') {
+          if (event.content_block?.type === 'tool_use' && event.content_block.name) {
             this.emitMessage(projectId, 'system', `Using tool: ${event.content_block.name}`);
           }
           break;
@@ -322,7 +350,7 @@ Write the ROADMAP.md file to doc/ROADMAP.md now.`;
         case 'system':
           // System message
           if (event.subtype === 'init') {
-            this.emitMessage(projectId, 'system', `Session: ${event.session_id || 'new'}`);
+            this.emitMessage(projectId, 'system', `Session: ${event.session_id ?? 'new'}`);
           }
           break;
 
@@ -338,8 +366,8 @@ Write the ROADMAP.md file to doc/ROADMAP.md now.`;
       // Check for questions in the content
       if (event.type === 'assistant' && event.message?.content) {
         const textContent = event.message.content
-          .filter((b: { type: string }) => b.type === 'text')
-          .map((b: { text: string }) => b.text)
+          .filter((b) => b.type === 'text')
+          .map((b) => b.text ?? '')
           .join('');
 
         if (this.looksLikeQuestion(textContent)) {

@@ -90,7 +90,7 @@ export class FileSettingsRepository implements SettingsRepository {
 
     try {
       const data = this.fileSystem.readFileSync(this.filePath, 'utf-8');
-      const parsed = JSON.parse(data);
+      const parsed = JSON.parse(data) as Partial<GlobalSettings>;
       return this.mergeWithDefaults(parsed);
     } catch {
       return { ...DEFAULT_SETTINGS };
@@ -115,11 +115,11 @@ export class FileSettingsRepository implements SettingsRepository {
     this.fileSystem.writeFileSync(this.filePath, data);
   }
 
-  async get(): Promise<GlobalSettings> {
-    return { ...this.settings };
+  get(): Promise<GlobalSettings> {
+    return Promise.resolve({ ...this.settings });
   }
 
-  async update(updates: Partial<GlobalSettings>): Promise<GlobalSettings> {
+  update(updates: Partial<GlobalSettings>): Promise<GlobalSettings> {
     if (updates.maxConcurrentAgents !== undefined) {
       this.settings.maxConcurrentAgents = Math.max(1, updates.maxConcurrentAgents);
     }
@@ -144,6 +144,6 @@ export class FileSettingsRepository implements SettingsRepository {
     }
 
     this.saveToFile();
-    return { ...this.settings };
+    return Promise.resolve({ ...this.settings });
   }
 }

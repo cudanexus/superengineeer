@@ -113,7 +113,7 @@ export class FileProjectRepository implements ProjectRepository {
 
     try {
       const data = this.fileSystem.readFileSync(this.indexPath, 'utf-8');
-      const entries: ProjectIndexEntryWithPath[] = JSON.parse(data);
+      const entries = JSON.parse(data) as ProjectIndexEntryWithPath[];
       entries.forEach((entry) => this.index.set(entry.id, entry));
     } catch {
       // File corrupted or invalid, start fresh
@@ -261,7 +261,7 @@ export class FileProjectRepository implements ProjectRepository {
     this.fileSystem.writeFileSync(statusPath, data);
   }
 
-  async findAll(): Promise<ProjectStatus[]> {
+  findAll(): Promise<ProjectStatus[]> {
     const projects: ProjectStatus[] = [];
 
     for (const entry of this.index.values()) {
@@ -272,15 +272,15 @@ export class FileProjectRepository implements ProjectRepository {
       }
     }
 
-    return projects;
+    return Promise.resolve(projects);
   }
 
-  async findById(id: string): Promise<ProjectStatus | null> {
+  findById(id: string): Promise<ProjectStatus | null> {
     if (!this.index.has(id)) {
-      return null;
+      return Promise.resolve(null);
     }
 
-    return this.loadStatus(id);
+    return Promise.resolve(this.loadStatus(id));
   }
 
   async findByPath(projectPath: string): Promise<ProjectStatus | null> {
@@ -320,71 +320,71 @@ export class FileProjectRepository implements ProjectRepository {
     return status;
   }
 
-  async updateStatus(id: string, newStatus: ProjectStatus['status']): Promise<ProjectStatus | null> {
+  updateStatus(id: string, newStatus: ProjectStatus['status']): Promise<ProjectStatus | null> {
     const status = this.loadStatus(id);
 
     if (!status) {
-      return null;
+      return Promise.resolve(null);
     }
 
     status.status = newStatus;
     this.saveStatus(status);
-    return { ...status };
+    return Promise.resolve({ ...status });
   }
 
-  async updateNextItem(id: string, nextItem: MilestoneItemRef | null): Promise<ProjectStatus | null> {
+  updateNextItem(id: string, nextItem: MilestoneItemRef | null): Promise<ProjectStatus | null> {
     const status = this.loadStatus(id);
 
     if (!status) {
-      return null;
+      return Promise.resolve(null);
     }
 
     status.nextItem = nextItem;
     this.saveStatus(status);
-    return { ...status };
+    return Promise.resolve({ ...status });
   }
 
-  async updateCurrentItem(id: string, currentItem: MilestoneItemRef | null): Promise<ProjectStatus | null> {
+  updateCurrentItem(id: string, currentItem: MilestoneItemRef | null): Promise<ProjectStatus | null> {
     const status = this.loadStatus(id);
 
     if (!status) {
-      return null;
+      return Promise.resolve(null);
     }
 
     status.currentItem = currentItem;
     this.saveStatus(status);
-    return { ...status };
+    return Promise.resolve({ ...status });
   }
 
-  async setCurrentConversation(id: string, conversationId: string | null): Promise<ProjectStatus | null> {
+  setCurrentConversation(id: string, conversationId: string | null): Promise<ProjectStatus | null> {
     const status = this.loadStatus(id);
 
     if (!status) {
-      return null;
+      return Promise.resolve(null);
     }
 
     status.currentConversationId = conversationId;
     this.saveStatus(status);
-    return { ...status };
+    return Promise.resolve({ ...status });
   }
 
-  async updateContextUsage(id: string, contextUsage: ContextUsageData | null): Promise<ProjectStatus | null> {
+  updateContextUsage(id: string, contextUsage: ContextUsageData | null): Promise<ProjectStatus | null> {
     const status = this.loadStatus(id);
 
     if (!status) {
-      return null;
+      return Promise.resolve(null);
     }
 
     status.lastContextUsage = contextUsage;
     this.saveStatus(status);
-    return { ...status };
+    return Promise.resolve({ ...status });
   }
 
-  async delete(id: string): Promise<boolean> {
+  delete(id: string): Promise<boolean> {
     const entry = this.index.get(id);
 
     if (!entry) {
-      return false;
+      return Promise.resolve(false);
     }
 
     this.index.delete(id);
@@ -398,7 +398,7 @@ export class FileProjectRepository implements ProjectRepository {
       this.fileSystem.rmdirSync(dataDir, { recursive: true });
     }
 
-    return true;
+    return Promise.resolve(true);
   }
 }
 

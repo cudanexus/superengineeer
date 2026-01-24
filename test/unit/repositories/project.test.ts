@@ -4,6 +4,8 @@ import {
   FileSystem,
   MilestoneItemRef,
   generateIdFromPath,
+  ProjectIndexEntryWithPath,
+  ProjectStatus,
 } from '../../../src/repositories/project';
 
 function normalizePath(p: string): string {
@@ -88,6 +90,7 @@ describe('FileProjectRepository', () => {
       const fs = createMockFileSystem();
       fs.dirs.add(projectsDir);
       new FileProjectRepository(dataDir, fs);
+      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(fs.mkdirSync).not.toHaveBeenCalled();
     });
 
@@ -97,6 +100,7 @@ describe('FileProjectRepository', () => {
       fs.files.set(indexPath, JSON.stringify([{ id: 'test', name: 'Test' }]));
       new FileProjectRepository(dataDir, fs);
 
+      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(fs.readFileSync).toHaveBeenCalled();
     });
 
@@ -135,7 +139,7 @@ describe('FileProjectRepository', () => {
 
       const indexContent = mockFs.files.get(indexPath);
       expect(indexContent).toBeDefined();
-      const index = JSON.parse(indexContent!);
+      const index = JSON.parse(indexContent!) as ProjectIndexEntryWithPath[];
       expect(index).toHaveLength(1);
       expect(index[0]).toEqual({ id: '_path_to_project', name: 'Test Project', path: '/path/to/project' });
 
@@ -143,7 +147,7 @@ describe('FileProjectRepository', () => {
       const statusPath = '/path/to/project/.claudito/status.json';
       const statusContent = mockFs.files.get(statusPath);
       expect(statusContent).toBeDefined();
-      const status = JSON.parse(statusContent!);
+      const status = JSON.parse(statusContent!) as ProjectStatus;
       expect(status.name).toBe('Test Project');
     });
 
@@ -447,10 +451,10 @@ describe('FileProjectRepository', () => {
 
       const indexContent = mockFs.files.get(indexPath);
       expect(indexContent).toBeDefined();
-      const index = JSON.parse(indexContent!);
+      const index = JSON.parse(indexContent!) as ProjectIndexEntryWithPath[];
 
       expect(index).toHaveLength(1);
-      expect(index[0].name).toBe('Test 1');
+      expect(index[0]?.name).toBe('Test 1');
     });
   });
 

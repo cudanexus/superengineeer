@@ -1,6 +1,11 @@
 import { Router, Request, Response } from 'express';
-import { SettingsRepository } from '../repositories';
+import { SettingsRepository, ClaudePermissions } from '../repositories';
 import { asyncHandler, ValidationError } from '../utils';
+
+interface UpdateSettingsBody {
+  maxConcurrentAgents?: number;
+  claudePermissions?: Partial<ClaudePermissions>;
+}
 
 export interface SettingsRouterDependencies {
   settingsRepository: SettingsRepository;
@@ -17,7 +22,8 @@ export function createSettingsRouter(deps: SettingsRouterDependencies): Router {
   }));
 
   router.put('/', asyncHandler(async (req: Request, res: Response) => {
-    const { maxConcurrentAgents, claudePermissions } = req.body;
+    const body = req.body as UpdateSettingsBody;
+    const { maxConcurrentAgents, claudePermissions } = body;
 
     if (maxConcurrentAgents !== undefined && (typeof maxConcurrentAgents !== 'number' || maxConcurrentAgents < 1)) {
       throw new ValidationError('maxConcurrentAgents must be a positive number');

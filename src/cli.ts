@@ -124,7 +124,8 @@ async function main(): Promise<void> {
 `);
 }
 
-main().catch((error) => {
-  console.error('Failed to start Claudito:', error.message);
+main().catch((error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error('Failed to start Claudito:', message);
   process.exit(1);
 });

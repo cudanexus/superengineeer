@@ -67,10 +67,10 @@ export function createErrorHandler(): ErrorRequestHandler {
         path: req.path,
         method: req.method,
       });
-    } else {
+    } else if (err instanceof AppError) {
       logger.warn('Operational error', {
         error: err.message,
-        code: (err as AppError).code,
+        code: err.code,
         path: req.path,
         method: req.method,
       });

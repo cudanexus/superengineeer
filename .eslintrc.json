@@ -23,5 +23,5 @@
     "@typescript-eslint/no-explicit-any": "error",
     "no-console": "off"
   },
-  "ignorePatterns": ["dist/", "node_modules/", "coverage/"]
+  "ignorePatterns": ["dist/", "node_modules/", "coverage/", "test/frontend/"]
 }

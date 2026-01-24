@@ -177,7 +177,7 @@ export class DefaultAgentManager implements AgentManager {
 
   setMaxConcurrentAgents(max: number): void {
     this._maxConcurrentAgents = Math.max(1, max);
-    this.processQueue();
+    void this.processQueue();
   }
 
   private get maxConcurrentAgents(): number {
@@ -255,7 +255,7 @@ export class DefaultAgentManager implements AgentManager {
     };
 
     // Save to conversation history (but don't emit - frontend already shows it)
-    this.projectRepository.findById(projectId).then((project) => {
+    void this.projectRepository.findById(projectId).then((project) => {
       if (project?.currentConversationId) {
         this.conversationRepository
           .addMessage(projectId, project.currentConversationId, message)
@@ -516,12 +516,19 @@ export class DefaultAgentManager implements AgentManager {
     const lastMatch = matches[matches.length - 1]!;
 
     try {
-      const parsed = JSON.parse(lastMatch);
+      const parsed: unknown = JSON.parse(lastMatch);
 
-      if (parsed.status === 'COMPLETE' || parsed.status === 'FAILED') {
+      if (
+        typeof parsed === 'object' &&
+        parsed !== null &&
+        'status' in parsed &&
+        'reason' in parsed &&
+        ((parsed as { status: string }).status === 'COMPLETE' || (parsed as { status: string }).status === 'FAILED')
+      ) {
+        const typedParsed = parsed as { status: 'COMPLETE' | 'FAILED'; reason?: string };
         return {
-          status: parsed.status,
-          reason: parsed.reason || 'No reason provided',
+          status: typedParsed.status,
+          reason: typedParsed.reason || 'No reason provided',
         };
       }
     } catch {
@@ -640,11 +647,11 @@ export class DefaultAgentManager implements AgentManager {
   }
 
   on<K extends keyof AgentManagerEvents>(event: K, listener: AgentManagerEvents[K]): void {
-    this.listeners[event].add(listener as AgentManagerEvents[K]);
+    this.listeners[event].add(listener);
   }
 
   off<K extends keyof AgentManagerEvents>(event: K, listener: AgentManagerEvents[K]): void {
-    this.listeners[event].delete(listener as AgentManagerEvents[K]);
+    this.listeners[event].delete(listener);
   }
 
   private setupAgentListeners(agent: ClaudeAgent): void {
@@ -664,7 +671,7 @@ export class DefaultAgentManager implements AgentManager {
         this.saveContextUsageIfNeeded(agent, loopState.currentConversationId);
       } else if (agent.mode === 'interactive') {
         // Interactive mode - use project's current conversation
-        this.projectRepository.findById(agent.projectId).then((project) => {
+        void this.projectRepository.findById(agent.projectId).then((project) => {
           if (project?.currentConversationId) {
             this.conversationRepository
               .addMessage(agent.projectId, project.currentConversationId, message)
@@ -679,11 +686,11 @@ export class DefaultAgentManager implements AgentManager {
 
     const statusListener = (status: AgentStatus): void => {
       this.emit('status', agent.projectId, status);
-      this.handleStatusChange(agent.projectId, status);
+      void this.handleStatusChange(agent.projectId, status);
     };
 
     const exitListener = (code: number | null): void => {
-      this.handleAgentExit(agent, code);
+      void this.handleAgentExit(agent, code);
     };
 
     agent.on('message', messageListener);
@@ -695,6 +702,29 @@ export class DefaultAgentManager implements AgentManager {
     const projectId = agent.projectId;
     const projectLogger = this.logger.withProject(projectId);
     const loopState = this.loopStates.get(projectId);
+
+    // Save final context usage before cleaning up
+    const finalContextUsage = agent.contextUsage;
+
+    if (finalContextUsage) {
+      projectLogger.debug('Saving final context usage on exit', {
+        totalTokens: finalContextUsage.totalTokens,
+        inputTokens: finalContextUsage.inputTokens,
+        outputTokens: finalContextUsage.outputTokens,
+      });
+
+      // Save to project status for persistence
+      await this.projectRepository.updateContextUsage(projectId, finalContextUsage);
+
+      // Save to conversation if available
+      const project = await this.projectRepository.findById(projectId);
+
+      if (project?.currentConversationId) {
+        await this.conversationRepository
+          .updateMetadata(projectId, project.currentConversationId, { contextUsage: finalContextUsage })
+          .catch(() => {});
+      }
+    }
 
     this.agents.delete(projectId);
 

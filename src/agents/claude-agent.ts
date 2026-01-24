@@ -245,10 +245,10 @@ export class DefaultClaudeAgent implements ClaudeAgent {
         let isMultimodal = false;
 
         try {
-          const parsed = JSON.parse(instructions);
+          const parsed: unknown = JSON.parse(instructions);
 
           if (Array.isArray(parsed)) {
-            content = parsed;
+            content = parsed as unknown[];
             isMultimodal = true;
           }
         } catch {
@@ -410,10 +410,10 @@ export class DefaultClaudeAgent implements ClaudeAgent {
     let isMultimodal = false;
 
     try {
-      const parsed = JSON.parse(input);
+      const parsed: unknown = JSON.parse(input);
 
       if (Array.isArray(parsed)) {
-        content = parsed;
+        content = parsed as unknown[];
         isMultimodal = true;
       }
     } catch {
@@ -526,7 +526,16 @@ export class DefaultClaudeAgent implements ClaudeAgent {
 
   private processStreamLine(line: string): void {
     try {
-      const event = JSON.parse(line);
+      const parsed: unknown = JSON.parse(line);
+
+      if (typeof parsed !== 'object' || parsed === null) {
+        if (line.trim()) {
+          this.emitMessage('stdout', line);
+        }
+        return;
+      }
+
+      const event = parsed as StreamEvent;
 
       // Log the raw event from Claude
       this.logger.debug('STDOUT <<< Raw stream event', {
@@ -627,15 +636,29 @@ export class DefaultClaudeAgent implements ClaudeAgent {
       return;
     }
 
-    // The usage data from Claude API events is typically cumulative for the session.
-    // However, some events report incremental values. We take the maximum seen value
-    // to handle both cases correctly.
+    // Claude Code CLI reports token usage per API call/response, not cumulatively.
+    // We need to track the latest values from each event, as they represent the
+    // running total for the current conversation context.
     const inputTokens = usage.input_tokens || 0;
     const outputTokens = usage.output_tokens || 0;
     const cacheCreationInputTokens = usage.cache_creation_input_tokens || 0;
     const cacheReadInputTokens = usage.cache_read_input_tokens || 0;
 
-    // Keep the larger value (assumes cumulative or take latest larger snapshot)
+    // Log token updates for debugging
+    this.logger.debug('Token usage update', {
+      eventType: event.type,
+      incoming: { inputTokens, outputTokens, cacheCreationInputTokens, cacheReadInputTokens },
+      previous: this._contextUsage
+        ? {
+            inputTokens: this._contextUsage.inputTokens,
+            outputTokens: this._contextUsage.outputTokens,
+          }
+        : null,
+    });
+
+    // Use the values directly from the event - they represent the conversation's context usage.
+    // Only take maximum if the new value is greater (handles cumulative reporting).
+    // If new value is less, it likely means a fresh context window was started.
     const prevUsage = this._contextUsage;
     const finalInputTokens = Math.max(inputTokens, prevUsage?.inputTokens || 0);
     const finalOutputTokens = Math.max(outputTokens, prevUsage?.outputTokens || 0);
@@ -749,19 +772,19 @@ export class DefaultClaudeAgent implements ClaudeAgent {
     // Format based on tool type
     switch (name) {
       case 'Read':
-        return `Reading: ${input.file_path || 'file'}`;
+        return `Reading: ${String(input.file_path ?? 'file')}`;
       case 'Write':
-        return `Writing: ${input.file_path || 'file'}`;
+        return `Writing: ${String(input.file_path ?? 'file')}`;
       case 'Edit':
-        return `Editing: ${input.file_path || 'file'}`;
+        return `Editing: ${String(input.file_path ?? 'file')}`;
       case 'Bash':
-        return `Running: ${this.truncate(String(input.command || ''), 80)}`;
+        return `Running: ${this.truncate(String(input.command ?? ''), 80)}`;
       case 'Glob':
-        return `Searching: ${input.pattern || 'files'}`;
+        return `Searching: ${String(input.pattern ?? 'files')}`;
       case 'Grep':
-        return `Grep: ${this.truncate(String(input.pattern || ''), 50)}`;
+        return `Grep: ${this.truncate(String(input.pattern ?? ''), 50)}`;
       case 'Task':
-        return `Task: ${input.description || 'spawning agent'}`;
+        return `Task: ${String(input.description ?? 'spawning agent')}`;
       default:
         return `Using tool: ${name}`;
     }

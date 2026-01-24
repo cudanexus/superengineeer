@@ -1,6 +1,6 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { Server } from 'http';
-import { AgentManager, AgentMessage, AgentStatus, QueuedProject, AgentResourceStatus, ContextUsage } from '../agents';
+import { AgentManager, AgentMessage, QueuedProject, AgentResourceStatus, ContextUsage } from '../agents';
 import { RoadmapGenerator, RoadmapMessage } from '../services';
 import { getLogger, Logger } from '../utils/logger';
 
@@ -8,10 +8,20 @@ export interface AgentMessageWithContext extends AgentMessage {
   contextUsage?: ContextUsage;
 }
 
+// WebSocketMessageData is a union of possible data types
+// Note: AgentStatus ('stopped' | 'running' | 'error') is covered by string
+export type WebSocketMessageData =
+  | AgentMessage
+  | AgentMessageWithContext
+  | QueuedProject[]
+  | AgentResourceStatus
+  | RoadmapMessage
+  | string; // Covers AgentStatus and 'connected' messages
+
 export interface WebSocketMessage {
   type: 'agent_message' | 'agent_status' | 'queue_change' | 'connected' | 'roadmap_message';
   projectId?: string;
-  data?: AgentMessage | AgentMessageWithContext | AgentStatus | QueuedProject[] | AgentResourceStatus | string | RoadmapMessage;
+  data?: WebSocketMessageData;
 }
 
 export interface ProjectWebSocketServer {
@@ -78,13 +88,13 @@ export class DefaultWebSocketServer implements ProjectWebSocketServer {
   private handleConnection(ws: WebSocket): void {
     this.sendMessage(ws, { type: 'connected', data: 'Connected to Claudito WebSocket' });
 
-    ws.on('message', (data) => this.handleMessage(ws, data.toString()));
+    ws.on('message', (data) => this.handleMessage(ws, String(data)));
     ws.on('close', () => this.handleDisconnect(ws));
   }
 
   private handleMessage(ws: WebSocket, rawData: string): void {
     try {
-      const message = JSON.parse(rawData);
+      const message = JSON.parse(rawData) as ClientMessage;
       this.processClientMessage(ws, message);
     } catch {
       // Invalid JSON, ignore
@@ -156,7 +166,7 @@ export class DefaultWebSocketServer implements ProjectWebSocketServer {
       });
     });
 
-    this.agentManager.on('queueChange', (queue) => {
+    this.agentManager.on('queueChange', (_queue) => {
       this.broadcast({
         type: 'queue_change',
         data: this.agentManager.getResourceStatus(),

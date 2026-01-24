@@ -108,9 +108,9 @@ export class FilePidTracker implements PidTracker {
     try {
       if (this.fileSystem.existsSync(this.filePath)) {
         const content = this.fileSystem.readFileSync(this.filePath);
-        this.processes = JSON.parse(content);
+        this.processes = JSON.parse(content) as TrackedProcess[];
       }
-    } catch (error) {
+    } catch {
       this.logger.warn('Failed to load PID file, starting fresh');
       this.processes = [];
     }
@@ -155,7 +155,7 @@ export class FilePidTracker implements PidTracker {
     return [...this.processes];
   }
 
-  async cleanupOrphanProcesses(): Promise<OrphanCleanupResult> {
+  cleanupOrphanProcesses(): Promise<OrphanCleanupResult> {
     const result: OrphanCleanupResult = {
       foundCount: 0,
       killedCount: 0,
@@ -201,7 +201,7 @@ export class FilePidTracker implements PidTracker {
     this.processes = stillRunning;
     this.saveToFile();
 
-    return result;
+    return Promise.resolve(result);
   }
 }
 
