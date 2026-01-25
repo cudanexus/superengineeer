@@ -31,7 +31,8 @@
     agentStarting: false, // Prevents concurrent agent starts
     messageSending: false, // Prevents concurrent message sends
     agentMode: 'interactive', // 'interactive' or 'autonomous'
-    permissionMode: 'default', // 'default', 'plan', or 'acceptEdits'
+    permissionMode: 'acceptEdits', // 'acceptEdits' or 'plan'
+    pendingPermissionMode: null, // Mode to apply when agent finishes current operation
     currentAgentMode: null, // mode of currently running agent
     currentConversationId: null,
     currentConversationStats: null, // { messageCount, toolCallCount, userMessageCount, durationMs, startedAt }
@@ -43,11 +44,14 @@
     historyLimit: 25, // Maximum conversations shown in history
     pendingRenameConversationId: null, // For rename modal
     pendingDeleteFile: null, // { path, isDirectory, name } for file deletion confirmation
+    pendingCreateFile: null, // { parentPath } for file creation modal
+    pendingCreateFolder: null, // { parentPath } for folder creation modal
     currentTodos: [], // Current task list from last TodoWrite
     activeTab: 'agent-output', // 'agent-output' or 'project-files'
     contextMenuTarget: null, // { path, isDir, name } for context menu actions
     pendingImages: [], // Array of { id, dataUrl, mimeType, size } for images to send with message
     currentSessionId: null, // Claude session ID for session resumption
+    currentPlanFile: null, // Path to current plan file from ExitPlanMode
     // WebSocket reconnection state
     wsReconnect: {
       attempts: 0,
@@ -70,7 +74,9 @@
       files: [],
       currentFile: null // { path, name, content, originalContent, size, isGlobal }
     },
-    devMode: false
+    devMode: false,
+    isModeSwitching: false, // UI blocked during permission mode switch
+    debugExpandedLogs: {} // Track expanded log items by ID: { logId: true }
   };
 
   // Local storage keys for browser-specific settings
@@ -102,6 +108,9 @@
 
   // API functions
   const api = {
+    getHealth: function() {
+      return $.get('/api/health');
+    },
     getProjects: function() {
       return $.get('/api/projects');
     },
@@ -217,7 +226,7 @@
         payload.sessionId = sessionId;
       }
 
-      if (permissionMode && permissionMode !== 'default') {
+      if (permissionMode) {
         payload.permissionMode = permissionMode;
       }
 
@@ -270,8 +279,19 @@
         data: JSON.stringify({ path: path, content: content })
       });
     },
+    createFolder: function(path) {
+      return $.ajax({
+        url: '/api/fs/mkdir',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ path: path })
+      });
+    },
     getClaudeFiles: function(projectId) {
       return $.get('/api/projects/' + projectId + '/claude-files');
+    },
+    getOptimizations: function(projectId) {
+      return $.get('/api/projects/' + projectId + '/optimizations');
     },
     saveClaudeFile: function(projectId, filePath, content) {
       return $.ajax({
@@ -287,6 +307,14 @@
         method: 'PUT',
         contentType: 'application/json',
         data: JSON.stringify({ label: label })
+      });
+    },
+    setCurrentConversation: function(projectId, conversationId) {
+      return $.ajax({
+        url: '/api/projects/' + projectId + '/conversation/current',
+        method: 'PUT',
+        contentType: 'application/json',
+        data: JSON.stringify({ conversationId: conversationId })
       });
     },
     deleteFileOrFolder: function(targetPath, isDirectory) {
@@ -1102,10 +1130,15 @@
 
     $conv.empty();
 
-    // Filter messages based on debug mode
+    // Filter messages based on debug mode and type
     var filteredMessages = messages.filter(function(msg) {
       // Skip debug messages unless debug panel is open
       if (isDebugMessage(msg) && !state.debugPanelOpen) {
+        return false;
+      }
+
+      // Skip tool_result messages - they update tool status, not displayed separately
+      if (msg.type === 'tool_result') {
         return false;
       }
 
@@ -1137,6 +1170,10 @@
 
     if (msg.type === 'permission') {
       return renderPermissionMessage(msg);
+    }
+
+    if (msg.type === 'plan_mode') {
+      return renderPlanModeMessage(msg);
     }
 
     if (msg.type === 'user') {
@@ -1280,6 +1317,56 @@
     return html;
   }
 
+  function renderPlanModeMessage(msg) {
+    var info = msg.planModeInfo || {};
+    var action = info.action || 'enter';
+    var isEnter = action === 'enter';
+
+    var iconPath = isEnter
+      ? 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01'
+      : 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z';
+
+    var label = isEnter ? 'Plan Mode' : 'Plan Ready';
+    var bgClass = isEnter ? 'bg-blue-900/40 border-blue-500' : 'bg-green-900/40 border-green-500';
+    var iconClass = isEnter ? 'text-blue-400' : 'text-green-400';
+
+    // Try to extract plan file path from content (look for .md file path)
+    if (!isEnter) {
+      var planFileMatch = msg.content.match(/([A-Za-z]:[\\\/][^\s]+\.md|\/[^\s]+\.md)/i);
+
+      if (planFileMatch) {
+        state.currentPlanFile = planFileMatch[1];
+      }
+    }
+
+    var html = '<div class="conversation-message plan-mode ' + bgClass + ' border-l-2 p-3 rounded">' +
+      '<div class="flex items-center gap-2 mb-2">' +
+        '<svg class="w-5 h-5 ' + iconClass + '" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="' + iconPath + '"/>' +
+        '</svg>' +
+        '<span class="font-medium text-white">' + label + '</span>' +
+      '</div>' +
+      '<div class="text-gray-300 text-sm">' + escapeHtml(msg.content) + '</div>';
+
+    // Show approve/reject/request changes buttons for exit plan mode
+    if (!isEnter) {
+      html += '<div class="plan-mode-actions flex gap-2 mt-3">' +
+        '<button class="plan-approve-btn bg-green-600 hover:bg-green-500 text-white px-3 py-1.5 rounded text-sm font-medium transition-colors">' +
+          'Approve Plan' +
+        '</button>' +
+        '<button class="plan-request-changes-btn bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded text-sm font-medium transition-colors">' +
+          'Request Changes' +
+        '</button>' +
+        '<button class="plan-reject-btn bg-red-600 hover:bg-red-500 text-white px-3 py-1.5 rounded text-sm font-medium transition-colors">' +
+          'Reject Plan' +
+        '</button>' +
+      '</div>';
+    }
+
+    html += '</div>';
+    return html;
+  }
+
   // Store tool data by ID for modal access (avoids JSON in HTML attributes)
   var toolDataStore = {};
 
@@ -1314,7 +1401,7 @@
   }
 
   // Update tool status when result arrives
-  function updateToolStatus(toolId, status) {
+  function updateToolStatus(toolId, status, resultContent) {
     var $tool = $('[data-tool-id="' + toolId + '"]');
 
     if ($tool.length === 0) return;
@@ -1325,6 +1412,27 @@
     // Update stored data
     if (toolDataStore[toolId]) {
       toolDataStore[toolId].status = status;
+
+      if (resultContent) {
+        toolDataStore[toolId].resultContent = resultContent;
+      }
+    }
+
+    // If there's result content (especially for errors), show it
+    if (resultContent && status === 'failed') {
+      var $resultEl = $tool.find('.tool-result-content');
+
+      if ($resultEl.length === 0) {
+        // Create result content element
+        var truncatedContent = resultContent.length > 200
+          ? resultContent.substring(0, 200) + '...'
+          : resultContent;
+        $tool.append(
+          '<div class="tool-result-content mt-2 p-2 bg-red-900/30 border border-red-700/50 rounded text-xs text-red-300">' +
+            '<pre class="whitespace-pre-wrap break-words">' + escapeHtml(truncatedContent) + '</pre>' +
+          '</div>'
+        );
+      }
     }
   }
 
@@ -1635,6 +1743,127 @@
     openModal('modal-tasks');
   }
 
+  function openOptimizationsModal() {
+    if (!state.selectedProjectId) {
+      showToast('Please select a project first', 'error');
+      return;
+    }
+
+    $('#optimizations-modal-content').html('<div class="text-gray-500 text-center py-4">Loading optimizations...</div>');
+    openModal('modal-optimizations');
+
+    api.getOptimizations(state.selectedProjectId)
+      .done(function(data) {
+        $('#optimizations-modal-content').html(renderOptimizationsContent(data));
+      })
+      .fail(function() {
+        $('#optimizations-modal-content').html('<div class="text-red-400 text-center py-4">Failed to load optimizations</div>');
+      });
+  }
+
+  function renderOptimizationsContent(data) {
+    var optimizations = data.optimizations || [];
+    var html = '';
+
+    if (optimizations.length === 0) {
+      html += '<div class="text-center py-6">';
+      html += '<svg class="w-12 h-12 mx-auto text-green-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">';
+      html += '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>';
+      html += '</svg>';
+      html += '<p class="text-gray-300 font-medium">All good!</p>';
+      html += '<p class="text-gray-500 text-sm mt-1">No optimization issues found for this project.</p>';
+      html += '</div>';
+      return html;
+    }
+
+    html += '<div class="space-y-3">';
+
+    optimizations.forEach(function(opt) {
+      var severityClass = opt.severity === 'warning' ? 'border-yellow-500 bg-yellow-900/20' :
+                          opt.severity === 'error' ? 'border-red-500 bg-red-900/20' :
+                          'border-blue-500 bg-blue-900/20';
+      var iconClass = opt.severity === 'warning' ? 'text-yellow-400' :
+                      opt.severity === 'error' ? 'text-red-400' :
+                      'text-blue-400';
+
+      html += '<div class="border-l-2 ' + severityClass + ' p-3 rounded">';
+      html += '<div class="flex items-start gap-2">';
+
+      // Icon based on severity
+      if (opt.severity === 'warning') {
+        html += '<svg class="w-5 h-5 ' + iconClass + ' flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">';
+        html += '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>';
+        html += '</svg>';
+      } else {
+        html += '<svg class="w-5 h-5 ' + iconClass + ' flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">';
+        html += '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>';
+        html += '</svg>';
+      }
+
+      html += '<div class="flex-1">';
+      html += '<p class="text-white font-medium text-sm">' + escapeHtml(opt.title) + '</p>';
+      html += '<p class="text-gray-400 text-xs mt-1">' + escapeHtml(opt.description) + '</p>';
+
+      // Action button
+      html += '<div class="mt-2">';
+
+      if (opt.action === 'create') {
+        html += '<button class="optimization-action bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded text-xs transition-colors" data-action="create" data-path="' + escapeHtml(opt.filePath) + '">';
+        html += escapeHtml(opt.actionLabel);
+        html += '</button>';
+      } else if (opt.action === 'edit') {
+        html += '<button class="optimization-action bg-gray-600 hover:bg-gray-500 text-white px-2 py-1 rounded text-xs transition-colors" data-action="edit" data-path="' + escapeHtml(opt.filePath) + '">';
+        html += escapeHtml(opt.actionLabel);
+        html += '</button>';
+      } else if (opt.action === 'claude-files') {
+        html += '<button class="optimization-action bg-purple-600 hover:bg-purple-500 text-white px-2 py-1 rounded text-xs transition-colors" data-action="claude-files">';
+        html += escapeHtml(opt.actionLabel);
+        html += '</button>';
+      }
+
+      html += '</div>';
+      html += '</div>';
+      html += '</div>';
+      html += '</div>';
+    });
+
+    html += '</div>';
+
+    // Settings info
+    html += '<div class="mt-4 pt-3 border-t border-gray-700">';
+    html += '<p class="text-xs text-gray-500">CLAUDE.md max size threshold: ' + data.settings.claudeMdMaxSizeKB + ' KB</p>';
+    html += '<p class="text-xs text-gray-500 mt-1">Change this in Settings to adjust the warning threshold.</p>';
+    html += '</div>';
+
+    return html;
+  }
+
+  function updateOptimizationsBadge(count) {
+    var $badge = $('#optimizations-badge');
+
+    if (count > 0) {
+      $badge.text('!').removeClass('hidden');
+    } else {
+      $badge.addClass('hidden');
+    }
+  }
+
+  function loadOptimizationsBadge(projectId) {
+    if (!projectId) {
+      updateOptimizationsBadge(0);
+      return;
+    }
+
+    api.getOptimizations(projectId)
+      .done(function(data) {
+        var count = (data.optimizations || []).length;
+        updateOptimizationsBadge(count);
+      })
+      .fail(function() {
+        updateOptimizationsBadge(0);
+      });
+  }
+
   // Preview version - shows limited diff lines for inline display
   function renderToolArgsPreview(toolName, input) {
     if (!input || Object.keys(input).length === 0) {
@@ -1903,16 +2132,185 @@
     return renderDiffSideBySide(alignedDiff, alignedDiff.length, filePath);
   }
 
-  // Preview diff - side by side with limit
+  // Preview diff - side by side with limit, focused on actual changes
   function renderDiffPreview(oldStr, newStr, filePath) {
     var alignedDiff = computeAlignedDiff(oldStr, newStr);
-    var hasMore = alignedDiff.length > DIFF_PREVIEW_LINES;
-    var html = renderDiffSideBySide(alignedDiff, DIFF_PREVIEW_LINES, filePath);
 
-    if (hasMore) {
-      var moreCount = alignedDiff.length - DIFF_PREVIEW_LINES;
-      html += '<div class="diff-more-indicator">... ' + moreCount + ' more lines (click to view full diff)</div>';
+    // Find lines with actual changes and include context around them
+    var linesToShow = selectDiffPreviewLines(alignedDiff, DIFF_PREVIEW_LINES);
+    var totalChanges = alignedDiff.filter(function(row) {
+      return row.type !== 'unchanged';
+    }).length;
+
+    var html = renderDiffPreviewWithGaps(linesToShow, filePath);
+
+    var hiddenCount = alignedDiff.length - linesToShow.reduce(function(acc, group) {
+      return acc + group.lines.length;
+    }, 0);
+
+    if (hiddenCount > 0) {
+      html += '<div class="diff-more-indicator">... ' + hiddenCount + ' more lines (' + totalChanges + ' total changes, click to view full diff)</div>';
     }
+
+    return html;
+  }
+
+  // Select lines to show in diff preview, prioritizing changed lines with context
+  function selectDiffPreviewLines(alignedDiff, maxLines) {
+    var CONTEXT_LINES = 2; // Lines of context around changes
+    var groups = [];
+    var currentGroup = null;
+    var linesUsed = 0;
+
+    for (var i = 0; i < alignedDiff.length && linesUsed < maxLines; i++) {
+      var row = alignedDiff[i];
+      var isChange = row.type !== 'unchanged';
+
+      if (isChange) {
+        // Start a new group or extend the current one
+        if (!currentGroup) {
+          // Add context lines before this change
+          var contextStart = Math.max(0, i - CONTEXT_LINES);
+          currentGroup = {
+            startIndex: contextStart,
+            lines: []
+          };
+
+          for (var j = contextStart; j < i && linesUsed < maxLines; j++) {
+            currentGroup.lines.push({ index: j, row: alignedDiff[j] });
+            linesUsed++;
+          }
+        }
+
+        // Add the changed line
+        if (linesUsed < maxLines) {
+          currentGroup.lines.push({ index: i, row: row });
+          linesUsed++;
+        }
+      } else if (currentGroup) {
+        // We're in a group, add context after changes
+        var lastChangeIndex = -1;
+
+        for (var k = currentGroup.lines.length - 1; k >= 0; k--) {
+          if (currentGroup.lines[k].row.type !== 'unchanged') {
+            lastChangeIndex = currentGroup.lines[k].index;
+            break;
+          }
+        }
+
+        if (i - lastChangeIndex <= CONTEXT_LINES) {
+          // Still within context range
+          if (linesUsed < maxLines) {
+            currentGroup.lines.push({ index: i, row: row });
+            linesUsed++;
+          }
+        } else {
+          // End of context, close the group
+          groups.push(currentGroup);
+          currentGroup = null;
+        }
+      }
+    }
+
+    // Close any remaining group
+    if (currentGroup) {
+      groups.push(currentGroup);
+    }
+
+    // If no changes found, show first few lines
+    if (groups.length === 0 && alignedDiff.length > 0) {
+      var linesToAdd = Math.min(alignedDiff.length, maxLines);
+      var defaultGroup = { startIndex: 0, lines: [] };
+
+      for (var m = 0; m < linesToAdd; m++) {
+        defaultGroup.lines.push({ index: m, row: alignedDiff[m] });
+      }
+
+      groups.push(defaultGroup);
+    }
+
+    return groups;
+  }
+
+  // Render diff preview with gap indicators between non-contiguous sections
+  function renderDiffPreviewWithGaps(groups, filePath) {
+    var language = getLanguageFromPath(filePath);
+    var html = '<div class="tool-diff side-by-side">';
+
+    // Old side (original)
+    html += '<div class="diff-side old">';
+    html += '<div class="diff-side-header">Original</div>';
+    html += '<div class="diff-side-content">';
+
+    var lastIndex = -1;
+
+    for (var g = 0; g < groups.length; g++) {
+      var group = groups[g];
+
+      // Add gap indicator if there's a gap
+      if (lastIndex >= 0 && group.startIndex > lastIndex + 1) {
+        var gapSize = group.startIndex - lastIndex - 1;
+        html += '<div class="diff-line diff-gap"><span class="diff-content text-gray-500 text-xs">... ' + gapSize + ' unchanged lines ...</span></div>';
+      }
+
+      for (var i = 0; i < group.lines.length; i++) {
+        var item = group.lines[i];
+        var row = item.row;
+        var leftClass = 'diff-line';
+
+        if (row.type === 'unchanged') leftClass += ' diff-unchanged';
+        else if (row.type === 'remove') leftClass += ' diff-remove';
+        else if (row.type === 'change') leftClass += ' diff-change';
+        else if (row.type === 'add') leftClass += ' diff-empty';
+
+        var leftContent = row.left ? highlightCode(row.left, language) : '';
+        html += '<div class="' + leftClass + '">';
+        html += '<span class="diff-content">' + leftContent + '</span>';
+        html += '</div>';
+
+        lastIndex = item.index;
+      }
+    }
+
+    html += '</div></div>';
+
+    // New side (modified)
+    html += '<div class="diff-side new">';
+    html += '<div class="diff-side-header">New</div>';
+    html += '<div class="diff-side-content">';
+
+    lastIndex = -1;
+
+    for (var g2 = 0; g2 < groups.length; g2++) {
+      var group2 = groups[g2];
+
+      // Add gap indicator if there's a gap
+      if (lastIndex >= 0 && group2.startIndex > lastIndex + 1) {
+        var gapSize2 = group2.startIndex - lastIndex - 1;
+        html += '<div class="diff-line diff-gap"><span class="diff-content text-gray-500 text-xs">... ' + gapSize2 + ' unchanged lines ...</span></div>';
+      }
+
+      for (var j = 0; j < group2.lines.length; j++) {
+        var item2 = group2.lines[j];
+        var row2 = item2.row;
+        var rightClass = 'diff-line';
+
+        if (row2.type === 'unchanged') rightClass += ' diff-unchanged';
+        else if (row2.type === 'add') rightClass += ' diff-add';
+        else if (row2.type === 'change') rightClass += ' diff-change';
+        else if (row2.type === 'remove') rightClass += ' diff-empty';
+
+        var rightContent = row2.right ? highlightCode(row2.right, language) : '';
+        html += '<div class="' + rightClass + '">';
+        html += '<span class="diff-content">' + rightContent + '</span>';
+        html += '</div>';
+
+        lastIndex = item2.index;
+      }
+    }
+
+    html += '</div></div>';
+    html += '</div>';
 
     return html;
   }
@@ -2161,7 +2559,11 @@
 
       // Handle tool_result messages - update specific tool status
       if (message.type === 'tool_result' && message.toolInfo) {
-        updateToolStatus(message.toolInfo.id, message.toolInfo.status || 'completed');
+        updateToolStatus(
+          message.toolInfo.id,
+          message.toolInfo.status || 'completed',
+          message.toolInfo.resultContent
+        );
         return; // Don't render tool_result as a separate message
       }
 
@@ -2505,6 +2907,7 @@
 
   function closeDebugModal() {
     state.debugPanelOpen = false;
+    state.debugExpandedLogs = {}; // Clear expanded state on close
     stopDebugAutoRefresh();
   }
 
@@ -2565,8 +2968,10 @@
         var bgColor = isInput ? 'bg-blue-900/20' : 'bg-green-900/20';
         var directionLabel = isInput ? 'STDIN >>>' : 'STDOUT <<<';
         var directionColor = isInput ? 'text-blue-400' : 'text-green-400';
+        var logId = 'io-' + log.timestamp + '-' + index;
+        var isExpanded = state.debugExpandedLogs[logId] || false;
 
-        html += '<div class="debug-log-item ' + bgColor + ' rounded border-l-2 ' + borderColor + ' cursor-pointer hover:bg-opacity-40 transition-colors" data-log-index="' + index + '" data-log-type="io">';
+        html += '<div class="debug-log-item ' + bgColor + ' rounded border-l-2 ' + borderColor + ' cursor-pointer hover:bg-opacity-40 transition-colors" data-log-index="' + index + '" data-log-type="io" data-log-id="' + logId + '">';
         html += '<div class="p-2">';
 
         // Header row
@@ -2583,7 +2988,7 @@
         }
 
         html += '<span class="text-gray-400 flex-1 truncate">' + escapeHtml(log.message) + '</span>';
-        html += '<svg class="w-4 h-4 text-gray-500 flex-shrink-0 debug-log-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>';
+        html += '<svg class="w-4 h-4 text-gray-500 flex-shrink-0 debug-log-chevron' + (isExpanded ? ' rotate-180' : '') + '" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>';
         html += '</div>';
 
         // Preview (collapsed by default)
@@ -2593,8 +2998,8 @@
 
         html += '</div>';
 
-        // Expandable detail (hidden by default)
-        html += '<div class="debug-log-detail hidden border-t border-gray-700 p-3 bg-gray-900/50">';
+        // Expandable detail
+        html += '<div class="debug-log-detail' + (isExpanded ? '' : ' hidden') + ' border-t border-gray-700 p-3 bg-gray-900/50">';
         html += '<div class="space-y-2">';
 
         // Full context
@@ -2851,8 +3256,10 @@
         var levelClass = getLevelClass(log.level);
         var levelBgClass = getLevelBgClass(log.level);
         var hasContext = log.context && Object.keys(log.context).length > 0;
+        var logId = 'all-' + log.timestamp + '-' + index;
+        var isExpanded = state.debugExpandedLogs[logId] || false;
 
-        html += '<div class="debug-log-item bg-gray-800 rounded ' + levelBgClass + ' cursor-pointer hover:bg-gray-750 transition-colors" data-log-index="' + index + '" data-log-type="all">';
+        html += '<div class="debug-log-item bg-gray-800 rounded ' + levelBgClass + ' cursor-pointer hover:bg-gray-750 transition-colors" data-log-index="' + index + '" data-log-type="all" data-log-id="' + logId + '">';
         html += '<div class="p-2">';
 
         // Header row (always visible)
@@ -2867,15 +3274,15 @@
         html += '<span class="text-gray-300 flex-1 truncate">' + escapeHtml(log.message) + '</span>';
 
         if (hasContext) {
-          html += '<svg class="w-4 h-4 text-gray-500 flex-shrink-0 debug-log-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>';
+          html += '<svg class="w-4 h-4 text-gray-500 flex-shrink-0 debug-log-chevron' + (isExpanded ? ' rotate-180' : '') + '" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>';
         }
 
         html += '</div>';
         html += '</div>';
 
-        // Expandable detail (hidden by default)
+        // Expandable detail
         if (hasContext) {
-          html += '<div class="debug-log-detail hidden border-t border-gray-700 p-3 bg-gray-900/50">';
+          html += '<div class="debug-log-detail' + (isExpanded ? '' : ' hidden') + ' border-t border-gray-700 p-3 bg-gray-900/50">';
           html += '<div class="space-y-2">';
 
           Object.keys(log.context).forEach(function(key) {
@@ -3239,8 +3646,14 @@
       var $item = $(this);
       var $detail = $item.find('.debug-log-detail');
       var $chevron = $item.find('.debug-log-chevron');
+      var logId = $item.data('log-id');
 
       if ($detail.length === 0) return; // No detail to expand
+
+      // Track expansion state by log ID
+      if (logId) {
+        state.debugExpandedLogs[logId] = !state.debugExpandedLogs[logId];
+      }
 
       $detail.toggleClass('hidden');
       $chevron.toggleClass('rotate-180');
@@ -3419,13 +3832,14 @@
 
         $('#input-max-concurrent').val(settings.maxConcurrentAgents);
         $('#input-skip-permissions').prop('checked', perms.dangerouslySkipPermissions);
-        $('#input-permission-mode').val(perms.defaultMode || 'default');
+        $('#input-permission-mode').val(perms.defaultMode || 'acceptEdits');
         $('#input-allow-rules').val((perms.allowRules || []).join('\n'));
         $('#input-deny-rules').val((perms.denyRules || []).join('\n'));
         $('#input-agent-prompt').val(settings.agentPromptTemplate || '');
         $('#input-append-system-prompt').val(settings.appendSystemPrompt || '');
         $('#input-send-ctrl-enter').prop('checked', settings.sendWithCtrlEnter !== false);
         $('#input-history-limit').val(settings.historyLimit || 25);
+        $('#input-claude-md-max-size').val(settings.claudeMdMaxSizeKB || 50);
         $('#input-desktop-notifications').prop('checked', settings.enableDesktopNotifications || false);
         updatePermissionFieldsState();
         openModal('modal-settings');
@@ -3464,6 +3878,15 @@
         'Bash(npm run:*)',
         'Bash(npm test:*)',
         'Bash(npm install)',
+        'Bash(node:*)',
+        'Bash(go run:*)',
+        'Bash(go build:*)',
+        'Bash(go test:*)',
+        'Bash(go mod:*)',
+        'Bash(cargo run:*)',
+        'Bash(cargo build:*)',
+        'Bash(cargo test:*)',
+        'Bash(cargo check:*)',
         'Bash(git status)',
         'Bash(git diff:*)',
         'Bash(git log:*)',
@@ -3473,8 +3896,6 @@
         'Read(./.env)',
         'Read(./.env.*)',
         'Bash(rm -rf:*)',
-        'Bash(curl:*)',
-        'Bash(wget:*)',
         'Bash(git push:*)',
         'Bash(git push)'
       ]
@@ -3526,13 +3947,14 @@
   function handleSaveSettings($form) {
     var newSendWithCtrlEnter = $('#input-send-ctrl-enter').is(':checked');
     var historyLimit = parseInt($('#input-history-limit').val(), 10) || 25;
+    var claudeMdMaxSizeKB = parseInt($('#input-claude-md-max-size').val(), 10) || 50;
     var enableDesktopNotifications = $('#input-desktop-notifications').is(':checked');
     var appendSystemPrompt = $('#input-append-system-prompt').val() || '';
     var settings = {
       maxConcurrentAgents: parseInt($('#input-max-concurrent').val(), 10),
       claudePermissions: {
         dangerouslySkipPermissions: $('#input-skip-permissions').is(':checked'),
-        defaultMode: $('#input-permission-mode').val() || 'default',
+        defaultMode: $('#input-permission-mode').val() || 'acceptEdits',
         allowRules: parseRulesFromTextarea($('#input-allow-rules').val()),
         denyRules: parseRulesFromTextarea($('#input-deny-rules').val())
       },
@@ -3540,6 +3962,7 @@
       appendSystemPrompt: appendSystemPrompt,
       sendWithCtrlEnter: newSendWithCtrlEnter,
       historyLimit: historyLimit,
+      claudeMdMaxSizeKB: claudeMdMaxSizeKB,
       enableDesktopNotifications: enableDesktopNotifications
     };
 
@@ -3826,16 +4249,17 @@
     });
 
     // Permission mode toggle handlers
-    $('#btn-perm-default').on('click', function() {
-      setPermissionMode('default');
+    $('#btn-perm-accept').on('click', function() {
+      setPermissionMode('acceptEdits');
     });
 
     $('#btn-perm-plan').on('click', function() {
       setPermissionMode('plan');
     });
 
-    $('#btn-perm-accept').on('click', function() {
-      setPermissionMode('acceptEdits');
+    // Cancel button handler
+    $('#btn-cancel-agent').on('click', function() {
+      cancelAgentOperation();
     });
 
     // Message form handler
@@ -3879,6 +4303,50 @@
     // Tasks button
     $('#btn-tasks').on('click', function() {
       openTasksModal();
+    });
+
+    // Optimizations button
+    $('#btn-optimizations').on('click', function() {
+      openOptimizationsModal();
+    });
+
+    // Optimization action buttons (dynamically created, so use delegation)
+    $(document).on('click', '.optimization-action', function() {
+      var action = $(this).data('action');
+      var filePath = $(this).data('path');
+
+      closeModal('modal-optimizations');
+
+      if (action === 'create') {
+        // Create CLAUDE.md file with template content
+        var template = '# Project Context\n\nAdd project-specific instructions for Claude here.\n';
+        api.writeFile(filePath, template)
+          .done(function() {
+            showToast('CLAUDE.md created', 'success');
+
+            // Refresh file browser if project files tab is active
+            if (state.activeTab === 'project-files') {
+              var project = findProjectById(state.selectedProjectId);
+
+              if (project) {
+                loadFileTree(project.path);
+              }
+            }
+
+            // Open the file in editor
+            openFile(filePath, 'CLAUDE.md');
+          })
+          .fail(function() {
+            showToast('Failed to create CLAUDE.md', 'error');
+          });
+      } else if (action === 'edit') {
+        // Open file in editor
+        var fileName = filePath.split(/[\\\/]/).pop();
+        openFile(filePath, fileName);
+      } else if (action === 'claude-files') {
+        // Open Claude Files modal
+        openClaudeFilesModal();
+      }
     });
 
     // Queued messages indicator (dynamically created, so use delegation)
@@ -4028,6 +4496,46 @@
       $btn.closest('.question-options').find('.question-option').prop('disabled', true);
       $btn.addClass('selected');
     });
+
+    // Plan mode approve button handler
+    $(document).on('click', '.plan-approve-btn', function() {
+      var $btn = $(this);
+      $btn.closest('.plan-mode-actions').find('button').prop('disabled', true);
+      $btn.addClass('opacity-50');
+
+      // Switch to Accept Edits mode and restart agent with implementation message
+      approvePlanAndSwitchToAcceptEdits();
+    });
+
+    // Plan mode reject button handler
+    $(document).on('click', '.plan-reject-btn', function() {
+      var $btn = $(this);
+      sendPlanModeResponse('no');
+      $btn.closest('.plan-mode-actions').find('button').prop('disabled', true);
+      $btn.addClass('opacity-50');
+    });
+
+    // Plan mode request changes button handler
+    $(document).on('click', '.plan-request-changes-btn', function() {
+      var $btn = $(this);
+      // Disable all buttons in this plan mode action set
+      $btn.closest('.plan-mode-actions').find('button').prop('disabled', true);
+      $btn.addClass('opacity-50');
+      // Focus the input field so user can type their feedback
+      var $input = $('#agent-input');
+      $input.focus();
+      showToast('Describe what you\'d like to change in the plan', 'info');
+    });
+  }
+
+  function sendPlanModeResponse(response) {
+    if (!state.selectedProjectId) return;
+
+    api.sendAgentMessage(state.selectedProjectId, response)
+      .fail(function(xhr) {
+        console.error('Failed to send plan mode response:', xhr);
+        showToast('Failed to send response', 'error');
+      });
   }
 
   function showNewConversationConfirmation() {
@@ -4234,16 +4742,29 @@
 
     state.currentConversationId = conversationId;
 
-    api.getConversation(state.selectedProjectId, conversationId)
-      .done(function(data) {
-        state.conversations[state.selectedProjectId] = data.messages || [];
-        state.currentConversationStats = data.stats || null;
-        state.currentConversationMetadata = data.metadata || null;
-        renderConversation(state.selectedProjectId);
-        updateConversationStats();
+    // Set this as the current conversation on the backend so new messages go there
+    api.setCurrentConversation(state.selectedProjectId, conversationId)
+      .done(function(result) {
+        // Fetch the conversation messages
+        api.getConversation(state.selectedProjectId, conversationId)
+          .done(function(data) {
+            state.conversations[state.selectedProjectId] = data.messages || [];
+            state.currentConversationStats = data.stats || null;
+            state.currentConversationMetadata = data.metadata || null;
+            renderConversation(state.selectedProjectId);
+            updateConversationStats();
+
+            // Show toast if this conversation has a Claude session that can be resumed
+            if (result.sessionId) {
+              showToast('Conversation loaded. Session will resume when you send a message.', 'info');
+            }
+          })
+          .fail(function(xhr) {
+            showErrorToast(xhr, 'Failed to load conversation');
+          });
       })
       .fail(function(xhr) {
-        showErrorToast(xhr, 'Failed to load conversation');
+        showErrorToast(xhr, 'Failed to switch conversation');
       });
   }
 
@@ -4365,14 +4886,81 @@
   function setPermissionMode(mode) {
     var project = findProjectById(state.selectedProjectId);
     var isRunning = project && project.status === 'running';
+    var isWaiting = project && project.isWaitingForInput;
+
+    // Determine the effective current mode (pending mode takes precedence if set)
+    var effectiveCurrentMode = state.pendingPermissionMode || state.permissionMode;
+
+    // If clicking the mode that's already set or pending, do nothing
+    if (effectiveCurrentMode === mode) {
+      return;
+    }
+
+    // If there's a pending change and user clicks the original mode, cancel the pending change
+    if (state.pendingPermissionMode && mode === state.permissionMode) {
+      state.pendingPermissionMode = null;
+      updatePendingModeIndicator();
+      updatePermissionModeButtons();
+      showToast('Pending mode change cancelled', 'info');
+      return;
+    }
+
+    // Track the previous mode for detecting plan -> acceptEdits transitions
     var previousMode = state.permissionMode;
+
+    // If agent is running and busy (not waiting), queue the change
+    if (isRunning && state.currentSessionId && !isWaiting) {
+      state.pendingPermissionMode = mode;
+      updatePendingModeIndicator();
+      updatePermissionModeButtons();
+      showToast('Mode change to ' + getPermissionModeLabel(mode) + ' will apply when Claude finishes current operation', 'info');
+      return;
+    }
+
+    // Apply the mode change
     state.permissionMode = mode;
+    state.pendingPermissionMode = null;
+    updatePendingModeIndicator();
     updatePermissionModeButtons();
 
-    // If agent is running and mode changed, restart with the same session
-    if (isRunning && previousMode !== mode && state.currentSessionId) {
+    // If agent is running and waiting, restart with new mode
+    if (isRunning && state.currentSessionId && isWaiting) {
       restartAgentWithNewPermissionMode();
+    } else {
+      // Show feedback that mode will be used on next agent start
+      showToast('Permission mode set to ' + getPermissionModeLabel(mode) + ' (will apply on next agent start)', 'info');
     }
+  }
+
+  function updatePendingModeIndicator() {
+    var $indicator = $('#pending-mode-label');
+
+    if (state.pendingPermissionMode) {
+      $indicator.text('(switching to ' + getPermissionModeLabel(state.pendingPermissionMode) + ')').removeClass('hidden');
+    } else {
+      $indicator.addClass('hidden');
+    }
+  }
+
+  function applyPendingPermissionModeIfNeeded() {
+    if (!state.pendingPermissionMode) return;
+
+    var project = findProjectById(state.selectedProjectId);
+
+    if (!project || project.status !== 'running' || !state.currentSessionId) {
+      state.pendingPermissionMode = null;
+      updatePendingModeIndicator();
+      updatePermissionModeButtons();
+      return;
+    }
+
+    // Apply the pending mode change
+    var pendingMode = state.pendingPermissionMode;
+    state.permissionMode = pendingMode;
+    state.pendingPermissionMode = null;
+    updatePendingModeIndicator();
+    updatePermissionModeButtons();
+    restartAgentWithNewPermissionMode();
   }
 
   function restartAgentWithNewPermissionMode() {
@@ -4381,32 +4969,152 @@
     if (!projectId) return;
 
     var sessionId = state.currentSessionId;
-    showToast('Restarting agent with ' + getPermissionModeLabel(state.permissionMode) + ' mode...', 'info');
+    var targetMode = state.permissionMode;
+
+    // Disable UI during mode switch
+    setModeSwitchingState(true);
+
+    showToast('Stopping agent to switch to ' + getPermissionModeLabel(targetMode) + ' mode...', 'info');
 
     // Stop the current agent
     api.stopAgent(projectId)
       .done(function() {
         updateProjectStatusById(projectId, 'stopped');
 
-        // Start the agent again with the same session ID and new permission mode
-        api.startInteractiveAgent(projectId, '', [], sessionId, state.permissionMode)
-          .done(function() {
-            state.currentAgentMode = 'interactive';
-            updateProjectStatusById(projectId, 'running');
-            startAgentStatusPolling(projectId);
-            appendMessage(projectId, {
-              type: 'system',
-              content: 'Agent restarted with ' + getPermissionModeLabel(state.permissionMode) + ' mode',
-              timestamp: new Date().toISOString()
+        // Wait 1 second before restarting to avoid "session already in use" errors
+        setTimeout(function() {
+          // Check if mode was changed back while we were waiting
+          if (state.permissionMode !== targetMode) {
+            showToast('Mode change cancelled - mode was changed again', 'info');
+            setModeSwitchingState(false);
+            return;
+          }
+
+          showToast('Starting agent with ' + getPermissionModeLabel(targetMode) + ' mode...', 'info');
+
+          // Start the agent again with the same session ID and new permission mode
+          api.startInteractiveAgent(projectId, '', [], sessionId, targetMode)
+            .done(function(response) {
+              state.currentAgentMode = 'interactive';
+              updateProjectStatusById(projectId, 'running');
+              startAgentStatusPolling(projectId);
+              setModeSwitchingState(false);
+
+              // Update session ID if returned (may be different if backend retried with fresh session)
+              if (response && response.sessionId) {
+                state.currentSessionId = response.sessionId;
+              }
+
+              appendMessage(projectId, {
+                type: 'system',
+                content: 'Agent restarted with ' + getPermissionModeLabel(targetMode) + ' mode',
+                timestamp: new Date().toISOString()
+              });
+            })
+            .fail(function(xhr) {
+              setModeSwitchingState(false);
+              showErrorToast(xhr, 'Failed to restart agent');
             });
-          })
-          .fail(function(xhr) {
-            showErrorToast(xhr, 'Failed to restart agent');
-          });
+        }, 1000);
       })
       .fail(function(xhr) {
+        setModeSwitchingState(false);
         showErrorToast(xhr, 'Failed to stop agent');
       });
+  }
+
+  function approvePlanAndSwitchToAcceptEdits() {
+    var projectId = state.selectedProjectId;
+
+    if (!projectId) return;
+
+    var sessionId = state.currentSessionId;
+
+    // Update state to Accept Edits mode
+    state.permissionMode = 'acceptEdits';
+    state.pendingPermissionMode = null;
+    updatePendingModeIndicator();
+    updatePermissionModeButtons();
+
+    // Disable UI during mode switch
+    setModeSwitchingState(true);
+
+    showToast('Plan approved. Switching to Accept Edits mode...', 'info');
+
+    // Stop the current agent
+    api.stopAgent(projectId)
+      .done(function() {
+        updateProjectStatusById(projectId, 'stopped');
+
+        // Wait 1 second before restarting to avoid "session already in use" errors
+        setTimeout(function() {
+          showToast('Starting implementation...', 'info');
+
+          var initialMessage = 'You can now start implementing the plan.';
+
+          // Start the agent in Accept Edits mode with the implementation message
+          api.startInteractiveAgent(projectId, initialMessage, [], sessionId, 'acceptEdits')
+            .done(function(response) {
+              state.currentAgentMode = 'interactive';
+              updateProjectStatusById(projectId, 'running');
+              startAgentStatusPolling(projectId);
+              setModeSwitchingState(false);
+
+              // Clear waiting state since we're sending a message
+              var project = findProjectById(projectId);
+
+              if (project) {
+                project.isWaitingForInput = false;
+                renderProjectList();
+              }
+
+              if (response && response.sessionId) {
+                state.currentSessionId = response.sessionId;
+              }
+
+              appendMessage(projectId, {
+                type: 'system',
+                content: 'Plan approved. Agent restarted with Accept Edits mode',
+                timestamp: new Date().toISOString()
+              });
+
+              appendMessage(projectId, {
+                type: 'user',
+                content: initialMessage,
+                timestamp: new Date().toISOString()
+              });
+            })
+            .fail(function(xhr) {
+              setModeSwitchingState(false);
+              showErrorToast(xhr, 'Failed to restart agent');
+            });
+        }, 1000);
+      })
+      .fail(function(xhr) {
+        setModeSwitchingState(false);
+        showErrorToast(xhr, 'Failed to stop agent');
+      });
+  }
+
+  function setModeSwitchingState(isSwitching) {
+    state.isModeSwitching = isSwitching;
+
+    // Disable/enable permission mode buttons
+    $('#btn-perm-accept, #btn-perm-plan').prop('disabled', isSwitching);
+
+    // Disable/enable input and send button
+    $('#input-message').prop('disabled', isSwitching);
+    $('#btn-send-message').prop('disabled', isSwitching);
+    $('#btn-cancel-agent').prop('disabled', isSwitching);
+
+    // Add visual feedback
+    if (isSwitching) {
+      $('#permission-mode-selector').addClass('opacity-50 pointer-events-none');
+      $('#form-send-message').addClass('opacity-50');
+    } else {
+      $('#permission-mode-selector').removeClass('opacity-50 pointer-events-none');
+      $('#form-send-message').removeClass('opacity-50');
+    }
   }
 
   function getPermissionModeLabel(mode) {
@@ -4420,15 +5128,16 @@
   function updatePermissionModeButtons() {
     $('.perm-btn').removeClass('perm-active');
 
-    switch (state.permissionMode) {
+    // Show the pending mode as active if there is one, otherwise show the current mode
+    var displayMode = state.pendingPermissionMode || state.permissionMode;
+
+    switch (displayMode) {
       case 'plan':
         $('#btn-perm-plan').addClass('perm-active');
         break;
       case 'acceptEdits':
-        $('#btn-perm-accept').addClass('perm-active');
-        break;
       default:
-        $('#btn-perm-default').addClass('perm-active');
+        $('#btn-perm-accept').addClass('perm-active');
         break;
     }
   }
@@ -4548,8 +5257,15 @@
 
     var $input = $('#input-message');
     var images = state.pendingImages.slice(); // Copy the array
+    var project = findProjectById(state.selectedProjectId);
 
     state.messageSending = true;
+
+    // Mark as no longer waiting for input since we're sending a message
+    if (project && project.isWaitingForInput) {
+      project.isWaitingForInput = false;
+      renderProjectList();
+    }
 
     // Disable input while sending
     $input.prop('disabled', true);
@@ -4573,6 +5289,7 @@
 
     // Show waiting indicator
     showWaitingIndicator();
+    updateCancelButton();
 
     api.sendAgentMessage(state.selectedProjectId, message, images)
       .done(function() {
@@ -4597,19 +5314,38 @@
     var $input = $('#input-message');
     var projectId = state.selectedProjectId;
     var images = state.pendingImages.slice(); // Copy the array
+    var project = findProjectById(projectId);
+
+    // Use conversation ID as session ID to resume Claude session
+    // (conversation IDs are now UUIDs that match Claude session IDs)
+    var sessionId = state.currentConversationId || null;
 
     state.agentStarting = true;
+
+    // Mark as no longer waiting for input since we're starting with a message
+    if (project && project.isWaitingForInput) {
+      project.isWaitingForInput = false;
+      renderProjectList();
+    }
 
     // Disable input while starting
     $input.prop('disabled', true);
     $('#btn-send-message').prop('disabled', true);
-    showContentLoading('Starting agent...');
+    showContentLoading(sessionId ? 'Resuming session...' : 'Starting agent...');
 
-    api.startInteractiveAgent(projectId, message, images, null, state.permissionMode)
-      .done(function() {
+    api.startInteractiveAgent(projectId, message, images, sessionId, state.permissionMode)
+      .done(function(response) {
         state.currentAgentMode = 'interactive';
         updateProjectStatusById(projectId, 'running');
         startAgentStatusPolling(projectId);
+
+        // Update session and conversation IDs from response
+        if (response && response.sessionId) {
+          state.currentSessionId = response.sessionId;
+        }
+        if (response && response.conversationId) {
+          state.currentConversationId = response.conversationId;
+        }
 
         // Build user message with images
         var userMessage = {
@@ -4632,6 +5368,7 @@
         clearPendingImages();
         showWaitingIndicator();
         updateInputArea();
+        updateCancelButton();
       })
       .fail(function(xhr) {
         showErrorToast(xhr, 'Failed to start agent');
@@ -4944,6 +5681,7 @@
 
     state.selectedProjectId = projectId;
     state.currentAgentMode = null; // Reset on project change
+    state.pendingPermissionMode = null; // Clear pending mode on project change
     var project = findProjectById(projectId);
 
     // Save selected project to localStorage
@@ -4954,6 +5692,7 @@
     updateSelectedProject();
     renderProjectDetail(project);
     loadAgentStatus(projectId);
+    loadOptimizationsBadge(projectId);
 
     // Restore saved tab preference
     var savedTab = loadFromLocalStorage(LOCAL_STORAGE_KEYS.ACTIVE_TAB, 'agent-output');
@@ -4971,9 +5710,17 @@
   function loadAgentStatus(projectId) {
     api.getAgentStatus(projectId)
       .done(function(data) {
+        var project = findProjectById(projectId);
+
         // Capture session ID if present
         if (data.sessionId) {
           state.currentSessionId = data.sessionId;
+        }
+
+        // Update isWaitingForInput on the project
+        if (project && typeof data.isWaitingForInput === 'boolean') {
+          project.isWaitingForInput = data.isWaitingForInput;
+          updateWaitingIndicator(data.isWaitingForInput);
         }
 
         if (data.status === 'running' && data.mode) {
@@ -4990,6 +5737,8 @@
         }
 
         updateInputArea();
+        updateCancelButton();
+        updatePendingModeIndicator();
         $('#mode-selector').toggleClass('disabled', data.status === 'running');
       })
       .fail(function() {
@@ -4998,6 +5747,8 @@
         state.queuedMessageCount = 0;
         updateQueuedMessagesDisplay();
         stopAgentStatusPolling();
+        updateCancelButton();
+        updatePendingModeIndicator();
       });
 
     // Also get current conversation from project
@@ -5223,6 +5974,53 @@
       });
   }
 
+  function cancelAgentOperation() {
+    var projectId = state.selectedProjectId;
+
+    if (!projectId) return;
+
+    var project = findProjectById(projectId);
+
+    if (!project || project.status !== 'running') return;
+
+    // Cancel pending permission mode change if any
+    state.pendingPermissionMode = null;
+    updatePendingModeIndicator();
+
+    $('#btn-cancel-agent').prop('disabled', true);
+
+    api.stopAgent(projectId)
+      .done(function() {
+        updateProjectStatusById(projectId, 'stopped');
+        stopAgentStatusPolling();
+        appendMessage(projectId, {
+          type: 'system',
+          content: 'Operation cancelled by user.'
+        });
+        showToast('Operation cancelled', 'info');
+        updateCancelButton();
+      })
+      .fail(function(xhr) {
+        showErrorToast(xhr, 'Failed to cancel operation');
+      })
+      .always(function() {
+        $('#btn-cancel-agent').prop('disabled', false);
+      });
+  }
+
+  function updateCancelButton() {
+    var project = findProjectById(state.selectedProjectId);
+    var isRunning = project && project.status === 'running';
+    var isWaiting = project && project.isWaitingForInput;
+
+    // Show cancel button when agent is running but NOT waiting for input (i.e., actively processing)
+    if (isRunning && !isWaiting) {
+      $('#btn-cancel-agent').removeClass('hidden');
+    } else {
+      $('#btn-cancel-agent').addClass('hidden');
+    }
+  }
+
   // Agent status polling - check every 1.5 seconds if agent is still running
   function startAgentStatusPolling(projectId) {
     stopAgentStatusPolling();
@@ -5247,6 +6045,27 @@
         // Capture session ID if present
         if (response.sessionId) {
           state.currentSessionId = response.sessionId;
+        }
+
+        // Update isWaitingForInput from polling response
+        if (project && typeof response.isWaitingForInput === 'boolean') {
+          var wasWaiting = project.isWaitingForInput;
+          project.isWaitingForInput = response.isWaitingForInput;
+
+          // If waiting state changed, update UI and apply pending mode changes
+          if (wasWaiting !== response.isWaitingForInput) {
+            // Always re-render project list to update sidebar indicator
+            renderProjectList();
+
+            if (state.selectedProjectId === projectId) {
+              updateWaitingIndicator(response.isWaitingForInput);
+              updateCancelButton();
+
+              if (response.isWaitingForInput) {
+                applyPendingPermissionModeIfNeeded();
+              }
+            }
+          }
         }
 
         // Update queued message count
@@ -5517,6 +6336,9 @@
       case 'agent_waiting':
         handleAgentWaiting(message.projectId, message.data);
         break;
+      case 'session_recovery':
+        handleSessionRecovery(message.projectId, message.data);
+        break;
     }
   }
 
@@ -5529,6 +6351,12 @@
 
       if (state.selectedProjectId === projectId) {
         updateWaitingIndicator(isWaiting);
+        updateCancelButton();
+
+        // If agent became idle and there's a pending mode change, apply it
+        if (isWaiting) {
+          applyPendingPermissionModeIfNeeded();
+        }
       }
 
       // Send desktop notification if enabled and waiting
@@ -5545,7 +6373,7 @@
     if (isWaiting) {
       // Add waiting badge if it doesn't exist
       if ($waitingBadge.length === 0) {
-        $statusBadge.after('<span id="waiting-badge" class="ml-2 px-2 py-0.5 text-xs font-medium bg-yellow-500/20 text-yellow-400 rounded-full flex items-center gap-1"><span class="waiting-indicator-small"></span>Waiting</span>');
+        $statusBadge.after('<span id="waiting-badge" class="waiting-badge ml-2 flex items-center gap-1"><span class="waiting-indicator-small"></span>Waiting for user input</span>');
       }
     } else {
       $waitingBadge.remove();
@@ -5592,6 +6420,7 @@
     if (projectId === state.selectedProjectId) {
       showAgentRunningIndicator(status === 'running');
       updateStartStopButtons();
+      updateCancelButton();
     }
 
     // Reset mode selector and waiting state when agent stops
@@ -5600,6 +6429,10 @@
       $('#mode-selector').removeClass('disabled');
       updateInputArea();
       updateWaitingIndicator(false);
+
+      // Clear pending permission mode change when agent stops
+      state.pendingPermissionMode = null;
+      updatePendingModeIndicator();
     }
 
     // Clear waiting state in project when agent stops
@@ -5611,6 +6444,43 @@
         renderProjectList();
       }
     }
+  }
+
+  function handleSessionRecovery(projectId, data) {
+    if (projectId !== state.selectedProjectId) {
+      return;
+    }
+
+    // Update the current conversation ID to the new one
+    state.currentConversationId = data.newConversationId;
+    state.currentSessionId = data.newConversationId;
+
+    // Clear the output screen
+    $('#agent-output').empty();
+
+    // Show a system message explaining what happened
+    appendMessage(projectId, {
+      type: 'system',
+      content: data.reason,
+      timestamp: new Date().toISOString()
+    });
+
+    // Show a toast notification
+    showToast(data.reason, 'warning');
+
+    // Reset conversation stats for the new conversation
+    state.currentConversationStats = {
+      messageCount: 0,
+      toolCallCount: 0,
+      userMessageCount: 0,
+      durationMs: 0,
+      startedAt: new Date().toISOString()
+    };
+    state.currentConversationMetadata = null;
+    updateConversationStats();
+
+    // Reload conversation history dropdown
+    loadConversationHistory(projectId);
   }
 
   function updateAgentOutputHeader(projectId, status) {
@@ -6035,6 +6905,206 @@
       });
   }
 
+  function validateFileName(name) {
+    if (!name || name.trim() === '') {
+      return { valid: false, error: 'File name cannot be empty' };
+    }
+
+    var trimmed = name.trim();
+
+    // Check for invalid characters (Windows restrictions cover most cases)
+    var invalidChars = /[<>:"/\\|?*\x00-\x1f]/;
+    if (invalidChars.test(trimmed)) {
+      return { valid: false, error: 'File name contains invalid characters' };
+    }
+
+    // Check for reserved names (Windows)
+    var reserved = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\.|$)/i;
+    if (reserved.test(trimmed)) {
+      return { valid: false, error: 'File name is reserved by the system' };
+    }
+
+    // Check for leading/trailing dots or spaces
+    if (trimmed === '.') {
+      return { valid: false, error: 'File name cannot be just a dot' };
+    }
+
+    if (trimmed.endsWith(' ') || trimmed.endsWith('.')) {
+      return { valid: false, error: 'File name cannot end with a space or dot' };
+    }
+
+    return { valid: true, error: null };
+  }
+
+  function showCreateFileModal(parentPath) {
+    state.pendingCreateFile = { parentPath: parentPath };
+
+    $('#create-file-name').val('');
+    $('#create-file-error').addClass('hidden').text('');
+    $('#create-file-parent-path').text(parentPath);
+
+    openModal('modal-create-file');
+
+    // Focus the input after modal opens
+    setTimeout(function() {
+      $('#create-file-name').focus();
+    }, 100);
+  }
+
+  function confirmCreateFile() {
+    if (!state.pendingCreateFile) return;
+
+    var fileName = $('#create-file-name').val();
+    var validation = validateFileName(fileName);
+
+    if (!validation.valid) {
+      $('#create-file-error').removeClass('hidden').text(validation.error);
+      return;
+    }
+
+    var parentPath = state.pendingCreateFile.parentPath;
+    var separator = parentPath.indexOf('\\') !== -1 ? '\\' : '/';
+    var filePath = parentPath + (parentPath.endsWith(separator) ? '' : separator) + fileName.trim();
+
+    api.writeFile(filePath, '')
+      .done(function() {
+        closeModal('modal-create-file');
+        state.pendingCreateFile = null;
+
+        // Refresh the parent directory to show the new file
+        refreshDirectoryContents(parentPath);
+
+        // Open the newly created file
+        openFile(filePath, fileName.trim());
+
+        showToast('File created', 'success');
+      })
+      .fail(function() {
+        $('#create-file-error').removeClass('hidden').text('Failed to create file');
+      });
+  }
+
+  function validateFolderName(name) {
+    if (!name || name.trim() === '') {
+      return { valid: false, error: 'Folder name cannot be empty' };
+    }
+
+    var trimmed = name.trim();
+
+    // Check for invalid characters (Windows restrictions cover most cases)
+    var invalidChars = /[<>:"/\\|?*\x00-\x1f]/;
+
+    if (invalidChars.test(trimmed)) {
+      return { valid: false, error: 'Folder name contains invalid characters' };
+    }
+
+    // Check for reserved names (Windows)
+    var reserved = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\.|$)/i;
+
+    if (reserved.test(trimmed)) {
+      return { valid: false, error: 'Folder name is reserved by the system' };
+    }
+
+    // Check for leading/trailing dots or spaces
+    if (trimmed === '.' || trimmed === '..') {
+      return { valid: false, error: 'Folder name cannot be just dots' };
+    }
+
+    if (trimmed.endsWith(' ')) {
+      return { valid: false, error: 'Folder name cannot end with a space' };
+    }
+
+    return { valid: true, error: null };
+  }
+
+  function showCreateFolderModal(parentPath) {
+    state.pendingCreateFolder = { parentPath: parentPath };
+
+    $('#create-folder-name').val('');
+    $('#create-folder-error').addClass('hidden').text('');
+    $('#create-folder-parent-path').text(parentPath);
+
+    openModal('modal-create-folder');
+
+    // Focus the input after modal opens
+    setTimeout(function() {
+      $('#create-folder-name').focus();
+    }, 100);
+  }
+
+  function confirmCreateFolder() {
+    if (!state.pendingCreateFolder) return;
+
+    var folderName = $('#create-folder-name').val();
+    var validation = validateFolderName(folderName);
+
+    if (!validation.valid) {
+      $('#create-folder-error').removeClass('hidden').text(validation.error);
+      return;
+    }
+
+    var parentPath = state.pendingCreateFolder.parentPath;
+    var separator = parentPath.indexOf('\\') !== -1 ? '\\' : '/';
+    var folderPath = parentPath + (parentPath.endsWith(separator) ? '' : separator) + folderName.trim();
+
+    api.createFolder(folderPath)
+      .done(function() {
+        closeModal('modal-create-folder');
+        state.pendingCreateFolder = null;
+
+        // Refresh the parent directory to show the new folder
+        refreshDirectoryContents(parentPath);
+
+        showToast('Folder created', 'success');
+      })
+      .fail(function(xhr) {
+        var error = 'Failed to create folder';
+
+        if (xhr.responseJSON && xhr.responseJSON.error) {
+          error = xhr.responseJSON.error;
+        }
+
+        $('#create-folder-error').removeClass('hidden').text(error);
+      });
+  }
+
+  function refreshDirectoryContents(dirPath) {
+    var $item = $('.file-tree-item[data-path="' + CSS.escape(dirPath) + '"]');
+
+    if ($item.length === 0) {
+      // It's the root directory, reload entire tree
+      var project = findProjectById(state.selectedProjectId);
+      if (project && project.path) {
+        loadFileTree(project.path);
+      }
+      return;
+    }
+
+    var $children = $item.next('.tree-children');
+
+    // If directory is not expanded, expand it first
+    if (!state.fileBrowser.expandedDirs[dirPath]) {
+      toggleDirectory(dirPath);
+      return;
+    }
+
+    // Refresh the directory contents
+    api.browseWithFiles(dirPath)
+      .done(function(children) {
+        if ($children.length) {
+          $children.remove();
+        }
+
+        var depth = Math.floor(parseInt($item.css('padding-left')) / 16) + 1;
+        var childrenHtml = '<div class="tree-children">';
+        children.forEach(function(child) {
+          childrenHtml += renderFileTreeItem(child, depth);
+        });
+        childrenHtml += '</div>';
+        $item.after(childrenHtml);
+      });
+  }
+
   function closeFileWithoutConfirm(filePath) {
     var fileIndex = state.openFiles.findIndex(function(f) { return f.path === filePath; });
 
@@ -6122,6 +7192,15 @@
       // Store context for delete action
       state.contextMenuTarget = { path: path, isDir: isDir, name: name };
 
+      // Show/hide New File and New Folder options based on whether it's a directory
+      if (isDir) {
+        $('#context-menu-new-file').removeClass('hidden');
+        $('#context-menu-new-folder').removeClass('hidden');
+      } else {
+        $('#context-menu-new-file').addClass('hidden');
+        $('#context-menu-new-folder').addClass('hidden');
+      }
+
       // Position and show context menu
       var $menu = $('#file-context-menu');
       $menu.css({
@@ -6152,6 +7231,71 @@
     // Confirm delete file/folder
     $('#btn-confirm-delete-file').on('click', function() {
       confirmDeleteFile();
+    });
+
+    // New file button in toolbar
+    $('#btn-new-file').on('click', function() {
+      var project = findProjectById(state.selectedProjectId);
+      if (project && project.path) {
+        showCreateFileModal(project.path);
+      }
+    });
+
+    // Context menu - New File option
+    $('#context-menu-new-file').on('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      $('#file-context-menu').addClass('hidden');
+
+      if (state.contextMenuTarget && state.contextMenuTarget.isDir) {
+        showCreateFileModal(state.contextMenuTarget.path);
+      }
+    });
+
+    // Confirm create file button
+    $('#btn-confirm-create-file').on('click', function() {
+      confirmCreateFile();
+    });
+
+    // Enter key in create file input
+    $('#create-file-name').on('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        confirmCreateFile();
+      }
+    });
+
+    // New folder button in toolbar
+    $('#btn-new-folder').on('click', function() {
+      var project = findProjectById(state.selectedProjectId);
+
+      if (project && project.path) {
+        showCreateFolderModal(project.path);
+      }
+    });
+
+    // Context menu - New Folder option
+    $('#context-menu-new-folder').on('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      $('#file-context-menu').addClass('hidden');
+
+      if (state.contextMenuTarget && state.contextMenuTarget.isDir) {
+        showCreateFolderModal(state.contextMenuTarget.path);
+      }
+    });
+
+    // Confirm create folder button
+    $('#btn-confirm-create-folder').on('click', function() {
+      confirmCreateFolder();
+    });
+
+    // Enter key in create folder input
+    $('#create-folder-name').on('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        confirmCreateFolder();
+      }
     });
 
     // Click on file tab
@@ -6275,6 +7419,7 @@
     loadFontSize();
     loadScrollLockPreference();
     loadDevModeStatus();
+    loadAppVersion();
     connectWebSocket();
   }
 
@@ -6293,6 +7438,15 @@
     api.getAgentResourceStatus()
       .done(function(data) {
         updateResourceStatus(data);
+      });
+  }
+
+  function loadAppVersion() {
+    api.getHealth()
+      .done(function(data) {
+        if (data.version) {
+          $('#app-version').text('v' + data.version);
+        }
       });
   }
 

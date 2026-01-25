@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Claudito - Agent Manager</title>
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
   <script src="/vendor/tailwind.js"></script>
   <script src="/vendor/jquery.min.js"></script>
   <script src="/vendor/marked.min.js"></script>
@@ -20,6 +23,7 @@
         <div>
           <div class="flex items-center gap-1.5">
             <h1 class="text-base font-bold text-purple-400">Claudito</h1>
+            <span id="app-version" class="text-xs text-gray-500"></span>
             <button id="ws-connection-status" class="ws-connected p-0 bg-transparent border-0 cursor-default" title="Connected">
               <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><circle cx="10" cy="10" r="5"/></svg>
             </button>
@@ -121,20 +125,17 @@
               </div>
               <!-- Permission Mode Selector -->
               <div id="permission-mode-selector" class="flex items-center bg-gray-700 rounded overflow-hidden text-sm ml-1">
-                <button id="btn-perm-default" class="py-1 px-2 transition-colors perm-btn perm-active" title="Default - Ask for permissions">
-                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
-                  </svg>
-                </button>
-                <button id="btn-perm-plan" class="py-1 px-2 transition-colors perm-btn" title="Plan Mode - Review plan before execution">
-                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
-                  </svg>
-                </button>
-                <button id="btn-perm-accept" class="py-1 px-2 transition-colors perm-btn" title="Accept Edits - Auto-approve file edits">
+                <button id="btn-perm-accept" class="py-1 px-2 transition-colors perm-btn perm-active flex items-center gap-1" title="Accept Edits - Auto-approve file edits">
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
                   </svg>
+                  <span class="hidden sm:inline">Accept Edits</span>
+                </button>
+                <button id="btn-perm-plan" class="py-1 px-2 transition-colors perm-btn flex items-center gap-1" title="Plan Mode - Review plan before execution">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+                  </svg>
+                  <span class="hidden sm:inline">Plan</span>
                 </button>
               </div>
               <!-- Start/Stop only for autonomous mode -->
@@ -229,11 +230,19 @@
                   Tasks
                   <span id="tasks-badge" class="hidden absolute -top-1 -right-1 bg-purple-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-medium">0</span>
                 </button>
+                <button id="btn-optimizations" class="bg-gray-700 hover:bg-gray-600 text-white py-1 px-2 rounded flex items-center gap-1 text-xs transition-colors relative" title="Check project optimizations">
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                  </svg>
+                  Optimizations
+                  <span id="optimizations-badge" class="hidden absolute -top-1 -right-1 bg-yellow-500 text-black text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">!</span>
+                </button>
                 <span id="conversation-stats" class="text-xs text-gray-500 flex items-center gap-3"></span>
               </div>
               <div class="flex items-center gap-2">
                 <div id="agent-output-spinner" class="loading-spinner small hidden"></div>
                 <span id="agent-status-label" class="text-xs text-gray-400 hidden">Agent running...</span>
+                <span id="pending-mode-label" class="text-xs text-yellow-400 hidden">(mode change pending)</span>
                 <!-- Font Size Controls -->
                 <div class="flex items-center gap-1 border-r border-gray-600 pr-2">
                   <button id="btn-font-decrease" class="bg-gray-700 hover:bg-gray-600 text-white w-6 h-6 rounded flex items-center justify-center text-xs transition-colors" title="Decrease font size">
@@ -277,11 +286,23 @@
               <div id="file-browser-sidebar" class="w-64 bg-gray-800 border-r border-gray-700 flex flex-col overflow-hidden">
                 <div class="p-2 border-b border-gray-700 flex items-center justify-between">
                   <span class="text-xs font-semibold text-gray-400">Files</span>
-                  <button id="btn-refresh-files" class="p-1 text-gray-400 hover:text-white rounded transition-colors" title="Refresh">
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                    </svg>
-                  </button>
+                  <div class="flex items-center gap-1">
+                    <button id="btn-new-file" class="p-1 text-gray-400 hover:text-white rounded transition-colors" title="New File">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                      </svg>
+                    </button>
+                    <button id="btn-new-folder" class="p-1 text-gray-400 hover:text-white rounded transition-colors" title="New Folder">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+                      </svg>
+                    </button>
+                    <button id="btn-refresh-files" class="p-1 text-gray-400 hover:text-white rounded transition-colors" title="Refresh">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                      </svg>
+                    </button>
+                  </div>
                 </div>
                 <div id="file-browser-tree" class="flex-1 overflow-y-auto p-1 text-xs">
                   <!-- File tree will be rendered here -->
@@ -352,16 +373,28 @@
               class="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm resize-none focus:outline-none focus:border-purple-500 placeholder-gray-500 textarea-auto-resize"
               placeholder="Type a message to Claude... (Ctrl+Enter to send)"
             ></textarea>
-            <button
-              type="submit"
-              id="btn-send-message"
-              class="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-4 rounded text-sm transition-colors flex items-center gap-1.5"
-            >
-              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-              </svg>
-              Send
-            </button>
+            <div class="flex flex-col gap-1">
+              <button
+                type="button"
+                id="btn-cancel-agent"
+                class="bg-red-600 hover:bg-red-700 text-white px-4 py-1.5 rounded text-sm transition-colors flex items-center justify-center gap-1.5 hidden"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+                Cancel
+              </button>
+              <button
+                type="submit"
+                id="btn-send-message"
+                class="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-4 py-1.5 rounded text-sm transition-colors flex items-center justify-center gap-1.5"
+              >
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                </svg>
+                Send
+              </button>
+            </div>
           </form>
           <div id="input-hint" class="text-xs text-gray-500 mt-1">
             <span id="input-hint-text">Ctrl+Enter to send, Enter for new line</span>
@@ -654,7 +687,6 @@
             <div class="mb-4">
               <label class="block text-xs font-medium text-gray-300 mb-1">Default Permission Mode</label>
               <select id="input-permission-mode" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-purple-500">
-                <option value="default">Default (ask for each action)</option>
                 <option value="acceptEdits">Accept Edits (auto-approve file edits)</option>
                 <option value="plan">Plan Mode (review plan before execution)</option>
               </select>
@@ -719,6 +751,11 @@
             <label class="block text-xs font-medium text-gray-300 mb-1">History Limit</label>
             <input type="number" name="historyLimit" id="input-history-limit" min="5" max="100" class="w-32 bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-purple-500">
             <p class="text-xs text-gray-500 mt-1">Maximum number of conversations shown in history (5-100)</p>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-300 mb-1">CLAUDE.md Max Size (KB)</label>
+            <input type="number" name="claudeMdMaxSizeKB" id="input-claude-md-max-size" min="10" max="500" class="w-32 bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-purple-500">
+            <p class="text-xs text-gray-500 mt-1">Maximum size for CLAUDE.md files before showing optimization warning (10-500 KB)</p>
           </div>
           <div>
             <label class="block text-xs font-medium text-gray-300 mb-2">Desktop Notifications</label>
@@ -827,6 +864,54 @@
     </div>
   </div>
 
+  <!-- Create New File Modal -->
+  <div id="modal-create-file" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-sm">
+        <div class="p-3 border-b border-gray-700">
+          <h3 class="font-semibold">Create New File</h3>
+        </div>
+        <div class="p-3">
+          <label class="text-sm text-gray-400 block mb-1">File name</label>
+          <input type="text" id="create-file-name"
+                 class="w-full bg-gray-700 text-white text-sm rounded px-3 py-2 border border-gray-600 focus:border-blue-500 focus:outline-none"
+                 placeholder="example.txt">
+          <p id="create-file-error" class="text-xs text-red-400 mt-1 hidden"></p>
+          <p class="text-xs text-gray-500 mt-2">In: <span id="create-file-parent-path" class="text-gray-400"></span></p>
+        </div>
+        <div class="p-3 border-t border-gray-700 flex justify-end gap-2">
+          <button type="button" class="modal-close px-3 py-1.5 text-sm text-gray-300 hover:text-white transition-colors">Cancel</button>
+          <button type="button" id="btn-confirm-create-file" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-sm transition-colors">Create</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create New Folder Modal -->
+  <div id="modal-create-folder" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-sm">
+        <div class="p-3 border-b border-gray-700">
+          <h3 class="font-semibold">Create New Folder</h3>
+        </div>
+        <div class="p-3">
+          <label class="text-sm text-gray-400 block mb-1">Folder name</label>
+          <input type="text" id="create-folder-name"
+                 class="w-full bg-gray-700 text-white text-sm rounded px-3 py-2 border border-gray-600 focus:border-blue-500 focus:outline-none"
+                 placeholder="new-folder">
+          <p id="create-folder-error" class="text-xs text-red-400 mt-1 hidden"></p>
+          <p class="text-xs text-gray-500 mt-2">In: <span id="create-folder-parent-path" class="text-gray-400"></span></p>
+        </div>
+        <div class="p-3 border-t border-gray-700 flex justify-end gap-2">
+          <button type="button" class="modal-close px-3 py-1.5 text-sm text-gray-300 hover:text-white transition-colors">Cancel</button>
+          <button type="button" id="btn-confirm-create-folder" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-sm transition-colors">Create</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Confirm Delete File/Folder Modal -->
   <div id="modal-confirm-delete-file" class="modal hidden">
     <div class="modal-backdrop"></div>
@@ -893,6 +978,32 @@
         <div id="tasks-modal-content" class="p-4">
           <!-- Tasks will be rendered here -->
           <div class="text-gray-500 text-center py-4">No active tasks</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Optimizations Modal -->
+  <div id="modal-optimizations" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-lg">
+        <div class="p-3 border-b border-gray-700 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <svg class="w-4 h-4 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+            </svg>
+            <h3 class="font-semibold">Project Optimizations</h3>
+          </div>
+          <button class="modal-close text-gray-400 hover:text-white">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        <div id="optimizations-modal-content" class="p-4">
+          <!-- Optimizations will be rendered here -->
+          <div class="text-gray-500 text-center py-4">Loading optimizations...</div>
         </div>
       </div>
     </div>
@@ -1145,6 +1256,18 @@
 
   <!-- File Context Menu -->
   <div id="file-context-menu" class="hidden fixed bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 py-1 min-w-40">
+    <button id="context-menu-new-file" class="hidden w-full px-3 py-1.5 text-left text-sm text-gray-300 hover:bg-gray-700 flex items-center gap-2">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+      </svg>
+      New File
+    </button>
+    <button id="context-menu-new-folder" class="hidden w-full px-3 py-1.5 text-left text-sm text-gray-300 hover:bg-gray-700 flex items-center gap-2">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+      </svg>
+      New Folder
+    </button>
     <button id="context-menu-delete" class="w-full px-3 py-1.5 text-left text-sm text-red-400 hover:bg-gray-700 flex items-center gap-2">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>

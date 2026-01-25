@@ -17,6 +17,7 @@ import {
 import { DefaultAgentManager, AgentManager } from '../agents';
 import { getDataDirectory } from '../utils';
 import { RoadmapGenerator } from '../services';
+import packageJson from '../../package.json';
 
 let sharedAgentManager: AgentManager | null = null;
 let sharedRoadmapGenerator: RoadmapGenerator | null = null;
@@ -61,6 +62,7 @@ export function createApiRouter(deps: ApiRouterDependencies = {}): Router {
   router.get('/health', (_req, res) => {
     res.json({
       status: 'ok',
+      version: packageJson.version,
       timestamp: new Date().toISOString(),
     });
   });
@@ -123,6 +125,7 @@ export function createApiRouter(deps: ApiRouterDependencies = {}): Router {
     agentManager,
     instructionGenerator,
     conversationRepository,
+    settingsRepository,
   }));
 
   return router;

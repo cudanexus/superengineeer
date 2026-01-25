@@ -2,9 +2,11 @@ import fs from 'fs';
 import path from 'path';
 import { AgentMessage, ContextUsage } from '../agents';
 import { MilestoneItemRef } from './project';
+import { generateUUID } from '../utils';
 
 export interface ConversationMetadata {
   contextUsage?: ContextUsage;
+  sessionId?: string;
 }
 
 export interface Conversation {
@@ -25,6 +27,7 @@ export interface ConversationRepository {
   addMessage(projectId: string, conversationId: string, message: AgentMessage): Promise<void>;
   getMessages(projectId: string, conversationId: string, limit?: number): Promise<AgentMessage[]>;
   clearMessages(projectId: string, conversationId: string): Promise<void>;
+  deleteConversation(projectId: string, conversationId: string): Promise<void>;
   renameConversation(projectId: string, conversationId: string, label: string): Promise<void>;
   updateMetadata(
     projectId: string,
@@ -42,6 +45,7 @@ export interface ConversationFileSystem {
   exists(filePath: string): Promise<boolean>;
   mkdir(dirPath: string): Promise<void>;
   readdir(dirPath: string): Promise<string[]>;
+  unlink(filePath: string): Promise<void>;
 }
 
 const defaultFileSystem: ConversationFileSystem = {
@@ -65,6 +69,7 @@ const defaultFileSystem: ConversationFileSystem = {
       return [];
     }
   },
+  unlink: (filePath) => fs.promises.unlink(filePath),
 };
 
 export interface ProjectPathResolver {
@@ -77,17 +82,8 @@ export interface FileConversationRepositoryConfig {
   maxMessagesPerConversation?: number;
 }
 
-export function generateConversationId(
-  projectId: string,
-  itemRef: MilestoneItemRef | null
-): string {
-  const timestamp = Date.now();
-
-  if (!itemRef) {
-    return `${projectId}_general_${timestamp}`;
-  }
-
-  return `${projectId}_${itemRef.milestoneId}_item${itemRef.itemIndex}_${timestamp}`;
+export function generateConversationId(): string {
+  return generateUUID();
 }
 
 export class FileConversationRepository implements ConversationRepository {
@@ -138,7 +134,7 @@ export class FileConversationRepository implements ConversationRepository {
   }
 
   async create(projectId: string, itemRef: MilestoneItemRef | null): Promise<Conversation> {
-    const id = generateConversationId(projectId, itemRef);
+    const id = generateConversationId();
     const now = new Date().toISOString();
 
     const conversation: Conversation = {
@@ -265,6 +261,24 @@ export class FileConversationRepository implements ConversationRepository {
     conversation.messages = [];
     conversation.updatedAt = new Date().toISOString();
     await this.saveConversation(projectId, conversation);
+  }
+
+  async deleteConversation(projectId: string, conversationId: string): Promise<void> {
+    const filePath = this.getConversationPath(projectId, conversationId);
+
+    if (!filePath) {
+      return;
+    }
+
+    const exists = await this.fileSystem.exists(filePath);
+
+    if (exists) {
+      await this.fileSystem.unlink(filePath);
+    }
+
+    // Remove from cache
+    const cacheKey = this.getCacheKey(projectId, conversationId);
+    this.cache.delete(cacheKey);
   }
 
   async updateMetadata(

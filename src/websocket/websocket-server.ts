@@ -19,10 +19,16 @@ export type WebSocketMessageData =
   | boolean // For waiting status
   | string; // Covers AgentStatus and 'connected' messages
 
+export interface SessionRecoveryData {
+  oldConversationId: string;
+  newConversationId: string;
+  reason: string;
+}
+
 export interface WebSocketMessage {
-  type: 'agent_message' | 'agent_status' | 'agent_waiting' | 'queue_change' | 'connected' | 'roadmap_message';
+  type: 'agent_message' | 'agent_status' | 'agent_waiting' | 'queue_change' | 'connected' | 'roadmap_message' | 'session_recovery';
   projectId?: string;
-  data?: WebSocketMessageData;
+  data?: WebSocketMessageData | SessionRecoveryData;
 }
 
 export interface ProjectWebSocketServer {
@@ -200,6 +206,18 @@ export class DefaultWebSocketServer implements ProjectWebSocketServer {
       this.broadcast({
         type: 'queue_change',
         data: this.agentManager.getResourceStatus(),
+      });
+    });
+
+    this.agentManager.on('sessionRecovery', (projectId, oldConversationId, newConversationId, reason) => {
+      this.broadcastToProject(projectId, {
+        type: 'session_recovery',
+        projectId,
+        data: {
+          oldConversationId,
+          newConversationId,
+          reason,
+        },
       });
     });
   }

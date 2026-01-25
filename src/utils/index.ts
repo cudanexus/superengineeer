@@ -4,3 +4,4 @@ export * from './retry';
 export * from './paths';
 export * from './pid-tracker';
 export * from './network';
+export * from './uuid';

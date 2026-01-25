@@ -4,7 +4,7 @@ import { ProjectPermissionOverrides } from '../repositories/project';
 export interface PermissionArgs {
   allowedTools: string[];
   disallowedTools: string[];
-  permissionMode?: 'default' | 'acceptEdits' | 'plan';
+  permissionMode?: 'acceptEdits' | 'plan';
   skipPermissions: boolean;
 }
 
@@ -49,7 +49,7 @@ export class DefaultPermissionGenerator implements PermissionGenerator {
     return {
       allowedTools,
       disallowedTools,
-      permissionMode: defaultMode !== 'default' ? defaultMode : undefined,
+      permissionMode: defaultMode,
       skipPermissions: false,
     };
   }
@@ -68,11 +68,13 @@ export class DefaultPermissionGenerator implements PermissionGenerator {
     }
 
     if (permArgs.allowedTools.length > 0) {
-      args.push('--allowedTools', ...permArgs.allowedTools);
+      // Claude CLI expects tools as a single space-separated string
+      args.push('--allowedTools', permArgs.allowedTools.join(' '));
     }
 
     if (permArgs.disallowedTools.length > 0) {
-      args.push('--disallowedTools', ...permArgs.disallowedTools);
+      // Claude CLI expects tools as a single space-separated string
+      args.push('--disallowedTools', permArgs.disallowedTools.join(' '));
     }
 
     return args;

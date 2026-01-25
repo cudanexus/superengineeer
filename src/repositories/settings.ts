@@ -17,8 +17,8 @@ export interface ClaudePermissions {
   askRules: string[];
   /** Permission rules that block tool usage entirely */
   denyRules: string[];
-  /** Default permission mode: 'default' | 'acceptEdits' | 'plan' */
-  defaultMode: 'default' | 'acceptEdits' | 'plan';
+  /** Default permission mode: 'acceptEdits' | 'plan' */
+  defaultMode: 'acceptEdits' | 'plan';
 }
 
 export const DEFAULT_AGENT_PROMPT_TEMPLATE = `You are working on the project "\${var:project-name}".
@@ -50,6 +50,7 @@ export interface GlobalSettings {
   historyLimit: number;
   enableDesktopNotifications: boolean;
   appendSystemPrompt: string;
+  claudeMdMaxSizeKB: number;
 }
 
 const DEFAULT_SETTINGS: GlobalSettings = {
@@ -60,13 +61,14 @@ const DEFAULT_SETTINGS: GlobalSettings = {
     allowRules: [],
     askRules: [],
     denyRules: [],
-    defaultMode: 'default',
+    defaultMode: 'acceptEdits',
   },
   agentPromptTemplate: DEFAULT_AGENT_PROMPT_TEMPLATE,
   sendWithCtrlEnter: true,
   historyLimit: 25,
   enableDesktopNotifications: false,
-  appendSystemPrompt: '',
+  appendSystemPrompt: '* ALWAYS use tasks instead of todos',
+  claudeMdMaxSizeKB: 50,
 };
 
 // Update type that allows partial claudePermissions for incremental updates
@@ -78,6 +80,7 @@ export interface SettingsUpdate {
   historyLimit?: number;
   enableDesktopNotifications?: boolean;
   appendSystemPrompt?: string;
+  claudeMdMaxSizeKB?: number;
 }
 
 export interface SettingsRepository {
@@ -149,6 +152,7 @@ export class FileSettingsRepository implements SettingsRepository {
       historyLimit: parsed.historyLimit ?? DEFAULT_SETTINGS.historyLimit,
       enableDesktopNotifications: parsed.enableDesktopNotifications ?? DEFAULT_SETTINGS.enableDesktopNotifications,
       appendSystemPrompt: parsed.appendSystemPrompt ?? DEFAULT_SETTINGS.appendSystemPrompt,
+      claudeMdMaxSizeKB: parsed.claudeMdMaxSizeKB ?? DEFAULT_SETTINGS.claudeMdMaxSizeKB,
     };
   }
 
@@ -191,6 +195,10 @@ export class FileSettingsRepository implements SettingsRepository {
 
     if (updates.appendSystemPrompt !== undefined) {
       this.settings.appendSystemPrompt = updates.appendSystemPrompt;
+    }
+
+    if (updates.claudeMdMaxSizeKB !== undefined) {
+      this.settings.claudeMdMaxSizeKB = Math.max(10, Math.min(500, updates.claudeMdMaxSizeKB));
     }
 
     this.saveToFile();

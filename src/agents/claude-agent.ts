@@ -12,6 +12,8 @@ export interface ToolUseInfo {
   name: string;
   input?: Record<string, unknown>;
   status?: 'running' | 'completed' | 'failed';
+  claudeToolUseId?: string;
+  resultContent?: string;
 }
 
 export interface QuestionOption {
@@ -32,13 +34,19 @@ export interface PermissionRequest {
   details?: Record<string, unknown>;
 }
 
+export interface PlanModeInfo {
+  action: 'enter' | 'exit';
+  planContent?: string;
+}
+
 export interface AgentMessage {
-  type: 'stdout' | 'stderr' | 'system' | 'tool_use' | 'tool_result' | 'user' | 'question' | 'permission';
+  type: 'stdout' | 'stderr' | 'system' | 'tool_use' | 'tool_result' | 'user' | 'question' | 'permission' | 'plan_mode';
   content: string;
   timestamp: string;
   toolInfo?: ToolUseInfo;
   questionInfo?: QuestionInfo;
   permissionInfo?: PermissionRequest;
+  planModeInfo?: PlanModeInfo;
 }
 
 export interface AgentEvents {
@@ -76,6 +84,7 @@ export interface ClaudeAgent {
   readonly queuedMessages: string[];
   readonly isWaitingForInput: boolean;
   readonly sessionId: string | null;
+  readonly sessionError: string | null;
   start(instructions: string): void;
   stop(): Promise<void>;
   sendInput(input: string): void;
@@ -105,6 +114,8 @@ interface ContentBlock {
   id?: string;
   input?: Record<string, unknown>;
   content?: string;
+  tool_use_id?: string;
+  is_error?: boolean;
 }
 
 interface StreamEventUsage {
@@ -120,6 +131,7 @@ interface StreamEvent {
   session_id?: string;
   tool_use_id?: string;
   message?: {
+    role?: string;
     content: ContentBlock[];
     usage?: StreamEventUsage;
   };
@@ -136,7 +148,7 @@ export interface PermissionConfig {
   skipPermissions: boolean;
   allowedTools?: string[];
   disallowedTools?: string[];
-  permissionMode?: 'default' | 'acceptEdits' | 'plan';
+  permissionMode?: 'acceptEdits' | 'plan';
   appendSystemPrompt?: string;
 }
 
@@ -148,8 +160,10 @@ export interface ClaudeAgentConfig {
   skipPermissions?: boolean;
   permissions?: PermissionConfig;
   processSpawner?: ProcessSpawner;
-  /** Session ID to resume a previous session */
+  /** Session ID to resume or create with a specific ID */
   sessionId?: string;
+  /** If true, use --session-id to create new session. If false, use --resume to resume existing session. */
+  isNewSession?: boolean;
 }
 
 export class DefaultClaudeAgent implements ClaudeAgent {
@@ -171,7 +185,9 @@ export class DefaultClaudeAgent implements ClaudeAgent {
   private inputQueue: string[] = [];
   private _contextUsage: ContextUsage | null = null;
   private _sessionId: string | null = null;
-  private readonly _resumeSessionId: string | null = null;
+  private readonly _configuredSessionId: string | null = null;
+  private readonly _isNewSession: boolean = true;
+  private _sessionError: string | null = null;
 
   // Claude Code uses 200k token context by default
   private static readonly DEFAULT_MAX_CONTEXT_TOKENS = 200000;
@@ -186,7 +202,8 @@ export class DefaultClaudeAgent implements ClaudeAgent {
     this.processSpawner = config.processSpawner || defaultSpawner;
     this.emitter = new EventEmitter();
     this.logger = getLogger('ClaudeAgent').withProject(config.projectId);
-    this._resumeSessionId = config.sessionId || null;
+    this._configuredSessionId = config.sessionId || null;
+    this._isNewSession = config.isNewSession ?? true;
   }
 
   get status(): AgentStatus {
@@ -231,6 +248,10 @@ export class DefaultClaudeAgent implements ClaudeAgent {
     return this._sessionId;
   }
 
+  get sessionError(): string | null {
+    return this._sessionError;
+  }
+
   start(instructions: string): void {
     if (this.process) {
       return;
@@ -240,9 +261,10 @@ export class DefaultClaudeAgent implements ClaudeAgent {
     this._collectedOutput = '';
     this.lineBuffer = '';
     this.setStatus('running');
-    this.emitMessage('system', 'Starting Claude agent...');
 
     const args = this.buildArgs();
+    const permMode = this._permissions.permissionMode || 'acceptEdits';
+    this.emitMessage('system', `Starting Claude agent (permission mode: ${permMode})...`);
     this._lastCommand = `claude ${args.map((a) => this.escapeArg(a)).join(' ')} (prompt via stdin)`;
 
     this.logger.info('Starting Claude process', {
@@ -531,9 +553,15 @@ export class DefaultClaudeAgent implements ClaudeAgent {
     // Add permission-related arguments
     this.addPermissionArgs(args);
 
-    // Resume session if session ID is provided
-    if (this._resumeSessionId) {
-      args.push('--session-id', this._resumeSessionId);
+    // Handle session ID: use --session-id for new sessions, --resume for existing
+    if (this._configuredSessionId) {
+      if (this._isNewSession) {
+        // Create a new session with a specific ID
+        args.push('--session-id', this._configuredSessionId);
+      } else {
+        // Resume an existing session
+        args.push('--resume', this._configuredSessionId);
+      }
     }
 
     // stream-json for both input and output (only works with --print)
@@ -550,21 +578,36 @@ export class DefaultClaudeAgent implements ClaudeAgent {
       return;
     }
 
-    if (this._permissions.permissionMode && this._permissions.permissionMode !== 'default') {
+    if (this._permissions.permissionMode) {
       args.push('--permission-mode', this._permissions.permissionMode);
     }
 
     if (this._permissions.allowedTools && this._permissions.allowedTools.length > 0) {
-      args.push('--allowedTools', ...this._permissions.allowedTools);
+      // Claude CLI expects tools as a single space-separated string
+      const toolsArg = this._permissions.allowedTools.join(' ');
+      args.push('--allowedTools', this.quoteShellArg(toolsArg));
     }
 
     if (this._permissions.disallowedTools && this._permissions.disallowedTools.length > 0) {
-      args.push('--disallowedTools', ...this._permissions.disallowedTools);
+      // Claude CLI expects tools as a single space-separated string
+      const toolsArg = this._permissions.disallowedTools.join(' ');
+      args.push('--disallowedTools', this.quoteShellArg(toolsArg));
     }
 
     if (this._permissions.appendSystemPrompt && this._permissions.appendSystemPrompt.trim().length > 0) {
-      args.push('--append-system-prompt', this._permissions.appendSystemPrompt.trim());
+      args.push('--append-system-prompt', this.quoteShellArg(this._permissions.appendSystemPrompt.trim()));
     }
+  }
+
+  private quoteShellArg(arg: string): string {
+    // Check if argument contains shell metacharacters that need quoting
+    // Common metacharacters: space, (, ), *, ?, [, ], {, }, <, >, |, &, ;, $, ", ', \, newline
+    if (/[\s()*?[\]{}<>|&;$"'\\]/.test(arg)) {
+      // Use double quotes and escape any existing double quotes and backslashes
+      return `"${arg.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+    }
+
+    return arg;
   }
 
   private setupProcessHandlers(): void {
@@ -593,6 +636,13 @@ export class DefaultClaudeAgent implements ClaudeAgent {
         stream: 'stderr',
         content: this.truncateForLog(content, 500),
       });
+
+      // Detect session ID already in use error
+      if (content.includes('Session ID') && content.includes('already in use')) {
+        this._sessionError = content.trim();
+        this.logger.warn('Session ID conflict detected', { error: this._sessionError });
+      }
+
       this.emitMessage('stderr', content);
     });
 
@@ -716,10 +766,15 @@ export class DefaultClaudeAgent implements ClaudeAgent {
         }
         break;
 
+      case 'user':
+        this.handleUserEvent(event);
+        break;
+
       default:
-        this.logger.debug('STDOUT <<< Unknown event type', {
+        this.logger.info('STDOUT <<< Unhandled event type', {
           direction: 'output',
           eventType: event.type,
+          event: JSON.stringify(event).substring(0, 500),
         });
         break;
     }
@@ -794,30 +849,77 @@ export class DefaultClaudeAgent implements ClaudeAgent {
     if (!block) return;
 
     if (block.type === 'tool_use' && block.name) {
-      this.emitToolMessage(block.name, block.input);
+      this.emitToolMessage(block.name, block.input, block.id);
+    }
+  }
+
+  private handleUserEvent(event: StreamEvent): void {
+    if (!event.message?.content) return;
+
+    for (const block of event.message.content) {
+      if (block.type === 'tool_result' && block.tool_use_id) {
+        this.logger.debug('STDOUT <<< Tool result', {
+          direction: 'output',
+          eventType: 'user',
+          toolUseId: block.tool_use_id,
+          isError: block.is_error,
+          contentPreview: typeof block.content === 'string'
+            ? block.content.substring(0, 100)
+            : undefined,
+        });
+
+        // Emit tool result with the tool_use_id for matching
+        this.emitToolResultWithId(
+          block.tool_use_id,
+          block.is_error ? 'failed' : 'completed',
+          typeof block.content === 'string' ? block.content : undefined
+        );
+      }
     }
   }
 
   private toolCounter = 0;
   private activeToolId: string | null = null;
   private activeToolName: string | null = null;
+  private activeClaudeToolUseId: string | null = null;
+  private toolIdMap: Map<string, { internalId: string; name: string }> = new Map();
+  private lastPlanModeAction: 'enter' | 'exit' | null = null;
 
-  private emitToolMessage(name: string, input?: Record<string, unknown>): void {
+  private emitToolMessage(name: string, input?: Record<string, unknown>, claudeToolUseId?: string): void {
     // Handle AskUserQuestion specially
     if (name === 'AskUserQuestion' && input) {
       this.emitQuestionMessage(input);
       return;
     }
 
+    // Handle EnterPlanMode specially
+    if (name === 'EnterPlanMode') {
+      this.emitPlanModeMessage('enter');
+      return;
+    }
+
+    // Handle ExitPlanMode specially
+    if (name === 'ExitPlanMode') {
+      this.emitPlanModeMessage('exit');
+      return;
+    }
+
     const toolId = `tool-${Date.now()}-${++this.toolCounter}`;
     this.activeToolId = toolId;
     this.activeToolName = name;
+    this.activeClaudeToolUseId = claudeToolUseId || null;
+
+    // Store mapping from Claude's tool_use_id to our internal ID
+    if (claudeToolUseId) {
+      this.toolIdMap.set(claudeToolUseId, { internalId: toolId, name });
+    }
 
     const toolInfo: ToolUseInfo = {
       id: toolId,
       name,
       input,
       status: 'running',
+      claudeToolUseId,
     };
 
     const content = this.formatToolContent(name, input);
@@ -841,6 +943,7 @@ export class DefaultClaudeAgent implements ClaudeAgent {
       id: this.activeToolId,
       name: this.activeToolName,
       status,
+      claudeToolUseId: this.activeClaudeToolUseId || undefined,
     };
 
     const message: AgentMessage = {
@@ -853,6 +956,47 @@ export class DefaultClaudeAgent implements ClaudeAgent {
     this.emitter.emit('message', message);
     this.activeToolId = null;
     this.activeToolName = null;
+    this.activeClaudeToolUseId = null;
+  }
+
+  private emitToolResultWithId(
+    claudeToolUseId: string,
+    status: 'completed' | 'failed',
+    resultContent?: string
+  ): void {
+    const toolMapping = this.toolIdMap.get(claudeToolUseId);
+
+    if (!toolMapping) {
+      this.logger.debug('Tool result received for unknown tool_use_id', {
+        claudeToolUseId,
+        status,
+      });
+      return;
+    }
+
+    const toolInfo: ToolUseInfo = {
+      id: toolMapping.internalId,
+      name: toolMapping.name,
+      status,
+      claudeToolUseId,
+      resultContent,
+    };
+
+    const displayContent = resultContent
+      ? `Tool ${toolMapping.name} ${status}: ${resultContent.substring(0, 200)}${resultContent.length > 200 ? '...' : ''}`
+      : `Tool ${toolMapping.name} ${status}`;
+
+    const message: AgentMessage = {
+      type: 'tool_result',
+      content: displayContent,
+      timestamp: new Date().toISOString(),
+      toolInfo,
+    };
+
+    this.emitter.emit('message', message);
+
+    // Clean up the mapping after we've processed the result
+    this.toolIdMap.delete(claudeToolUseId);
   }
 
   private emitQuestionMessage(input: Record<string, unknown>): void {
@@ -885,6 +1029,31 @@ export class DefaultClaudeAgent implements ClaudeAgent {
       content: q.question,
       timestamp: new Date().toISOString(),
       questionInfo,
+    };
+
+    this.emitter.emit('message', message);
+  }
+
+  private emitPlanModeMessage(action: 'enter' | 'exit'): void {
+    // Prevent duplicate consecutive plan mode messages
+    if (this.lastPlanModeAction === action) {
+      this.logger.debug('Skipping duplicate plan mode message', { action });
+      return;
+    }
+
+    this.lastPlanModeAction = action;
+
+    const planModeInfo: PlanModeInfo = { action };
+
+    const content = action === 'enter'
+      ? 'Claude entered plan mode - reviewing approach before implementation'
+      : 'Claude is ready to execute the plan';
+
+    const message: AgentMessage = {
+      type: 'plan_mode',
+      content,
+      timestamp: new Date().toISOString(),
+      planModeInfo,
     };
 
     this.emitter.emit('message', message);

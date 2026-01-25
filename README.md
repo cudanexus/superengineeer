@@ -152,7 +152,7 @@ Chat with Claude in real-time. The agent auto-starts when you send your first me
 - See tool usage as it happens (file reads, edits, bash commands)
 - Code diffs with syntax highlighting
 - Send follow-up messages naturally
-- Toggle permission mode (Default/Plan/Accept Edits) at runtime
+- Toggle permission mode (Plan/Accept Edits) at runtime
 
 #### Autonomous Mode
 Runs through ROADMAP.md milestones automatically.
@@ -174,15 +174,19 @@ Runs through ROADMAP.md milestones automatically.
 | Feature | Description |
 |---------|-------------|
 | **Tabbed Interface** | Switch between Agent Output and Project Files |
-| **File Browser** | Browse, view, and edit project files |
+| **File Browser** | Browse, view, edit, create files and folders |
 | **Syntax Highlighting** | 30+ languages supported via highlight.js |
 | **Tool Visualization** | See Claude's tool usage with icons and arguments |
 | **Code Diffs** | Side-by-side diff view for file changes |
 | **Context Monitor** | View token usage and context window utilization |
+| **Task Tracking** | View Claude's current tasks and progress |
+| **Project Optimizations** | Check for CLAUDE.md issues and optimization suggestions |
 | **Font Controls** | Adjust text size with +/- buttons |
 | **Keyboard Shortcuts** | Configurable keybindings (Ctrl+Enter or Enter to send) |
-| **Mobile Support** | Responsive design with collapsible sidebar, full-screen file browsing with back navigation |
-| **Permission Mode Toggle** | Switch between Default, Plan, and Accept Edits modes at runtime |
+| **Image Support** | Paste or drag-and-drop images into messages |
+| **Mobile Support** | Responsive design with collapsible sidebar, full-screen file browsing |
+| **Permission Mode Toggle** | Switch between Plan and Accept Edits modes at runtime |
+| **Desktop Notifications** | Get notified when agent needs input (optional) |
 
 ### Real-time Features
 
@@ -193,9 +197,12 @@ Runs through ROADMAP.md milestones automatically.
 
 ### Additional Features
 
-- **CLAUDE.md Editor**: Edit global and project-specific CLAUDE.md files
-- **Conversation History**: Browse and restore previous conversations
-- **Debug Panel**: View logs, process info, and troubleshoot issues
+- **CLAUDE.md Editor**: Edit global and project-specific CLAUDE.md files with preview
+- **Conversation History**: Browse, restore, and rename previous conversations
+- **Session Resumption**: Resume Claude sessions across restarts
+- **Debug Panel**: View logs, Claude I/O, process info, and troubleshoot issues
+- **Optimizations Check**: Detect missing or oversized CLAUDE.md files
+- **Append System Prompt**: Add custom instructions to Claude's system prompt
 - **Offline Ready**: All assets served locally (no CDN dependencies)
 
 ## Configuration
@@ -215,13 +222,15 @@ Access settings via the gear icon in the UI sidebar.
 
 Control what Claude agents can do without prompting. Access via Settings > Claude Code Permissions.
 
+> **⚠️ Important Limitation**: Claudito currently only supports **Accept Edits** and **Plan** permission modes. The **Default** mode (which prompts for permission on each action) is not yet supported because Claudito cannot currently handle Claude's permission prompts. We're working on adding this functionality in a future release.
+
 #### Permission Modes
 
-| Mode | Description |
-|------|-------------|
-| `default` | Ask for each action |
-| `acceptEdits` | Auto-approve file edits |
-| `plan` | Review plan before execution |
+| Mode | Description | Supported |
+|------|-------------|-----------|
+| `acceptEdits` | Auto-approve file edits | ✅ Yes |
+| `plan` | Review plan before execution | ✅ Yes |
+| `default` | Ask for each action | ❌ Not yet |
 
 #### Permission Rules
 

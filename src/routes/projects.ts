@@ -47,7 +47,7 @@ interface AgentMessageBody {
   message?: string;
   images?: ImageData[];
   sessionId?: string;
-  permissionMode?: 'default' | 'acceptEdits' | 'plan';
+  permissionMode?: 'acceptEdits' | 'plan';
 }
 
 interface RenameConversationBody {
@@ -63,7 +63,7 @@ interface PermissionOverridesBody {
   enabled?: boolean;
   allowRules?: string[];
   denyRules?: string[];
-  defaultMode?: 'default' | 'acceptEdits' | 'plan';
+  defaultMode?: 'acceptEdits' | 'plan';
 }
 
 function computeConversationStats(
@@ -100,6 +100,7 @@ function computeConversationStats(
   };
 }
 import { asyncHandler, NotFoundError, ValidationError, ConflictError, getProjectLogs } from '../utils';
+import { SettingsRepository } from '../repositories/settings';
 
 export interface ProjectRouterDependencies {
   projectRepository: ProjectRepository;
@@ -110,6 +111,7 @@ export interface ProjectRouterDependencies {
   agentManager: AgentManager;
   instructionGenerator: InstructionGenerator;
   conversationRepository: ConversationRepository;
+  settingsRepository: SettingsRepository;
 }
 
 export interface ConversationStats {
@@ -163,6 +165,7 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
     roadmapEditor,
     agentManager,
     conversationRepository,
+    settingsRepository,
   } = deps;
 
   router.get('/', asyncHandler(async (_req: Request, res: Response) => {
@@ -633,7 +636,18 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
       sessionId,
       permissionMode,
     });
-    res.json({ success: true, status: 'running', mode: 'interactive' });
+
+    // Get the project again to retrieve the current conversation ID (may have been created)
+    const updatedProject = await projectRepository.findById(id);
+    const currentSessionId = agentManager.getSessionId(id) || updatedProject?.currentConversationId || null;
+
+    res.json({
+      success: true,
+      status: 'running',
+      mode: 'interactive',
+      sessionId: currentSessionId,
+      conversationId: updatedProject?.currentConversationId || null,
+    });
   }));
 
   // Send input to running interactive agent
@@ -675,17 +689,25 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
       throw new NotFoundError('Project');
     }
 
-    // If a specific conversation ID is provided, get that conversation
-    if (conversationId) {
-      const conversation = await conversationRepository.findById(id, conversationId);
-      const messages = conversation?.messages || [];
-      const stats = computeConversationStats(messages, conversation?.createdAt || null);
-      const metadata = conversation?.metadata || null;
-      res.json({ messages, stats, metadata });
-      return;
+    // Determine which conversation to load:
+    // 1. If specific conversationId query param provided, use that
+    // 2. If project has a currentConversationId, use that (preserves session)
+    // 3. Fall back to most recent conversation
+    const targetConversationId = conversationId || project.currentConversationId;
+
+    if (targetConversationId) {
+      const conversation = await conversationRepository.findById(id, targetConversationId);
+
+      if (conversation) {
+        const messages = conversation.messages || [];
+        const stats = computeConversationStats(messages, conversation.createdAt || null);
+        const metadata = conversation.metadata || null;
+        res.json({ messages, stats, metadata });
+        return;
+      }
     }
 
-    // Otherwise, get messages from the most recent conversation (legacy behavior)
+    // Fall back to most recent conversation if target not found
     const conversations = await conversationRepository.getByProject(id, 1);
     const conversation = conversations[0];
     const messages = conversation?.messages || [];
@@ -747,6 +769,32 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
     // Clear the current conversation ID
     await projectRepository.setCurrentConversation(id, null);
     res.json({ success: true });
+  }));
+
+  // Set current conversation (for resuming from history)
+  router.put('/:id/conversation/current', asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params['id'] as string;
+    const body = req.body as { conversationId?: string };
+    const { conversationId } = body;
+    const project = await projectRepository.findById(id);
+
+    if (!project) {
+      throw new NotFoundError('Project');
+    }
+
+    if (!conversationId) {
+      throw new ValidationError('conversationId is required');
+    }
+
+    // Verify the conversation exists
+    const conversation = await conversationRepository.findById(id, conversationId);
+
+    if (!conversation) {
+      throw new NotFoundError('Conversation');
+    }
+
+    await projectRepository.setCurrentConversation(id, conversationId);
+    res.json({ success: true, sessionId: conversation.metadata?.sessionId || null });
   }));
 
   // Debug endpoint
@@ -854,7 +902,90 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
     res.json(updated?.permissionOverrides || { enabled: false });
   }));
 
+  // GET /api/projects/:id/optimizations - Get optimization suggestions for the project
+  router.get('/:id/optimizations', asyncHandler(async (req: Request, res: Response) => {
+    const projectId = req.params.id as string;
+    const project = await projectRepository.findById(projectId);
+
+    if (!project) {
+      throw new NotFoundError('Project not found');
+    }
+
+    const settings = await settingsRepository.get();
+    const maxSizeBytes = settings.claudeMdMaxSizeKB * 1024;
+    const optimizations: OptimizationIssue[] = [];
+
+    // Check for project CLAUDE.md
+    const projectClaudeMdPath = path.join(project.path, 'CLAUDE.md');
+
+    try {
+      const stats = await fs.promises.stat(projectClaudeMdPath);
+
+      if (stats.size > maxSizeBytes) {
+        optimizations.push({
+          id: 'project-claude-md-large',
+          severity: 'warning',
+          title: 'Project CLAUDE.md is too large',
+          description: `The project CLAUDE.md file is ${Math.round(stats.size / 1024)}KB, exceeding the ${settings.claudeMdMaxSizeKB}KB threshold. Large files consume more tokens per conversation.`,
+          action: 'edit',
+          actionLabel: 'Open in Editor',
+          filePath: projectClaudeMdPath,
+        });
+      }
+    } catch {
+      // File doesn't exist
+      optimizations.push({
+        id: 'project-claude-md-missing',
+        severity: 'info',
+        title: 'No project CLAUDE.md file',
+        description: 'Creating a CLAUDE.md file helps Claude understand your project structure, coding conventions, and important context.',
+        action: 'create',
+        actionLabel: 'Create CLAUDE.md',
+        filePath: projectClaudeMdPath,
+      });
+    }
+
+    // Check for global CLAUDE.md
+    const homeDir = process.env['HOME'] || process.env['USERPROFILE'] || '';
+    const globalClaudeMdPath = path.join(homeDir, '.claude', 'CLAUDE.md');
+
+    try {
+      const stats = await fs.promises.stat(globalClaudeMdPath);
+
+      if (stats.size > maxSizeBytes) {
+        optimizations.push({
+          id: 'global-claude-md-large',
+          severity: 'warning',
+          title: 'Global CLAUDE.md is too large',
+          description: `The global CLAUDE.md file (~/.claude/CLAUDE.md) is ${Math.round(stats.size / 1024)}KB, exceeding the ${settings.claudeMdMaxSizeKB}KB threshold. This file is loaded for all projects.`,
+          action: 'claude-files',
+          actionLabel: 'Open Claude Files',
+          filePath: globalClaudeMdPath,
+        });
+      }
+    } catch {
+      // Global CLAUDE.md doesn't exist - this is fine, not a warning
+    }
+
+    res.json({
+      optimizations,
+      settings: {
+        claudeMdMaxSizeKB: settings.claudeMdMaxSizeKB,
+      },
+    });
+  }));
+
   return router;
+}
+
+interface OptimizationIssue {
+  id: string;
+  severity: 'info' | 'warning' | 'error';
+  title: string;
+  description: string;
+  action: 'create' | 'edit' | 'claude-files';
+  actionLabel: string;
+  filePath: string;
 }
 
 interface ClaudeFile {

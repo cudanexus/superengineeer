@@ -22,7 +22,7 @@ export interface ProjectPermissionOverrides {
   enabled: boolean;
   allowRules?: string[];
   denyRules?: string[];
-  defaultMode?: 'default' | 'acceptEdits' | 'plan';
+  defaultMode?: 'acceptEdits' | 'plan';
 }
 
 export interface ProjectStatus {

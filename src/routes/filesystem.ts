@@ -8,6 +8,7 @@ export interface FilesystemService {
   listDirectoryWithFiles(dirPath: string): Promise<DirectoryEntry[]>;
   readFile(filePath: string): Promise<string>;
   writeFile(filePath: string, content: string): Promise<void>;
+  createDirectory(dirPath: string): Promise<void>;
   deleteFile(filePath: string): Promise<void>;
   deleteDirectory(dirPath: string): Promise<void>;
   isTextFile(filePath: string): boolean;
@@ -69,6 +70,11 @@ abstract class BaseFilesystemService implements FilesystemService {
   async writeFile(filePath: string, content: string): Promise<void> {
     const normalizedPath = path.normalize(filePath);
     await fs.promises.writeFile(normalizedPath, content, 'utf-8');
+  }
+
+  async createDirectory(dirPath: string): Promise<void> {
+    const normalizedPath = path.normalize(dirPath);
+    await fs.promises.mkdir(normalizedPath, { recursive: false });
   }
 
   async deleteFile(filePath: string): Promise<void> {
@@ -247,6 +253,23 @@ function handleDelete(
     .catch(() => res.status(500).json({ error: 'Failed to delete' }));
 }
 
+function handleCreateDirectory(
+  service: FilesystemService,
+  dirPath: string,
+  res: Response
+): void {
+  service
+    .createDirectory(dirPath)
+    .then(() => res.json({ success: true }))
+    .catch((err: Error) => {
+      if (err.message.includes('EEXIST')) {
+        res.status(409).json({ error: 'Folder already exists' });
+      } else {
+        res.status(500).json({ error: 'Failed to create folder' });
+      }
+    });
+}
+
 export function createFilesystemRouter(service: FilesystemService): Router {
   const router = Router();
 
@@ -316,6 +339,18 @@ export function createFilesystemRouter(service: FilesystemService): Router {
     }
 
     handleDelete(service, targetPath, isDirectory === true, res);
+  });
+
+  router.post('/mkdir', (req: Request, res: Response) => {
+    const body = req.body as { path?: string };
+    const dirPath = body.path;
+
+    if (!dirPath) {
+      res.status(400).json({ error: 'Path is required' });
+      return;
+    }
+
+    handleCreateDirectory(service, dirPath, res);
   });
 
   return router;

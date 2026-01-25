@@ -23,7 +23,7 @@ import {
   ParsedRoadmap,
   MilestoneWithContext,
 } from '../services';
-import { getLogger, Logger, getPidTracker, PidTracker } from '../utils';
+import { getLogger, Logger, getPidTracker, PidTracker, isValidUUID } from '../utils';
 
 export interface AgentManagerEvents {
   message: (projectId: string, message: AgentMessage) => void;
@@ -34,6 +34,7 @@ export interface AgentManagerEvents {
   milestoneCompleted: (projectId: string, milestone: MilestoneRef, reason: string) => void;
   milestoneFailed: (projectId: string, milestone: MilestoneRef | null, reason: string) => void;
   loopCompleted: (projectId: string) => void;
+  sessionRecovery: (projectId: string, oldConversationId: string, newConversationId: string, reason: string) => void;
 }
 
 export interface QueuedProject {
@@ -91,7 +92,7 @@ export interface StartInteractiveAgentOptions {
   initialMessage?: string;
   images?: ImageData[];
   sessionId?: string;
-  permissionMode?: 'default' | 'acceptEdits' | 'plan';
+  permissionMode?: 'acceptEdits' | 'plan';
 }
 
 export interface AgentManager {
@@ -127,11 +128,11 @@ export interface AgentManager {
 }
 
 export interface AgentFactory {
-  create(projectId: string, projectPath: string, mode: AgentMode, permissions?: PermissionConfig, sessionId?: string): ClaudeAgent;
+  create(projectId: string, projectPath: string, mode: AgentMode, permissions?: PermissionConfig, sessionId?: string, isNewSession?: boolean): ClaudeAgent;
 }
 
 const defaultAgentFactory: AgentFactory = {
-  create: (projectId, projectPath, mode, permissions, sessionId) => new DefaultClaudeAgent({ projectId, projectPath, mode, permissions, sessionId }),
+  create: (projectId, projectPath, mode, permissions, sessionId, isNewSession) => new DefaultClaudeAgent({ projectId, projectPath, mode, permissions, sessionId, isNewSession }),
 };
 
 export interface AgentManagerDependencies {
@@ -179,6 +180,7 @@ export class DefaultAgentManager implements AgentManager {
     milestoneCompleted: new Set(),
     milestoneFailed: new Set(),
     loopCompleted: new Set(),
+    sessionRecovery: new Set(),
   };
 
   constructor(deps: AgentManagerDependencies) {
@@ -250,9 +252,89 @@ export class DefaultAgentManager implements AgentManager {
       permissionMode,
     });
 
+    // Determine the session ID to use and whether it's a new session
+    let effectiveSessionId = sessionId;
+    let isNewSession = false;
+    let oldConversationId: string | null = null;
+
+    // Create a new conversation if none exists (for storing messages and sessionId)
+    if (!project.currentConversationId) {
+      const conversation = await this.conversationRepository.create(projectId, null);
+      await this.projectRepository.setCurrentConversation(projectId, conversation.id);
+      // Use the new conversation's UUID as the session ID for Claude
+      effectiveSessionId = conversation.id;
+      isNewSession = true; // New conversation = new session
+
+      this.logger.withProject(projectId).debug('Created new conversation for interactive session', {
+        conversationId: conversation.id,
+        sessionId: effectiveSessionId,
+        isNewSession,
+      });
+    } else if (!sessionId) {
+      // If we have an existing conversation but no session ID provided, use the conversation ID to resume
+      const candidateSessionId = project.currentConversationId;
+
+      // Validate that the session ID is a valid UUID (old conversations may have non-UUID IDs)
+      if (!isValidUUID(candidateSessionId)) {
+        this.logger.withProject(projectId).warn('Existing conversation has invalid session ID, creating new conversation', {
+          invalidSessionId: candidateSessionId,
+        });
+
+        // Store old conversation ID for the recovery event
+        oldConversationId = candidateSessionId;
+
+        // Delete the old conversation with invalid session ID
+        await this.conversationRepository.deleteConversation(projectId, candidateSessionId);
+
+        // Create a new conversation with a valid UUID
+        const conversation = await this.conversationRepository.create(projectId, null);
+        await this.projectRepository.setCurrentConversation(projectId, conversation.id);
+        effectiveSessionId = conversation.id;
+        isNewSession = true;
+
+        // Emit session recovery event to notify frontend
+        const reason = 'This conversation is from an older application version and cannot be resumed. Started a new conversation.';
+        this.emit('sessionRecovery', projectId, oldConversationId, conversation.id, reason);
+      } else {
+        effectiveSessionId = candidateSessionId;
+        isNewSession = false; // Existing conversation = resume session
+
+        this.logger.withProject(projectId).debug('Using existing conversation ID as session ID', {
+          conversationId: project.currentConversationId,
+          isNewSession,
+        });
+      }
+    } else {
+      // Session ID was provided - validate it before attempting to resume
+      if (!isValidUUID(sessionId)) {
+        this.logger.withProject(projectId).warn('Provided session ID is not a valid UUID, creating new conversation', {
+          invalidSessionId: sessionId,
+        });
+
+        // Store old session ID for the recovery event
+        oldConversationId = sessionId;
+
+        // Delete the old conversation if it exists
+        await this.conversationRepository.deleteConversation(projectId, sessionId);
+
+        // Create a new conversation with a valid UUID
+        const conversation = await this.conversationRepository.create(projectId, null);
+        await this.projectRepository.setCurrentConversation(projectId, conversation.id);
+        effectiveSessionId = conversation.id;
+        isNewSession = true;
+
+        // Emit session recovery event to notify frontend
+        const reason = 'This conversation is from an older application version and cannot be resumed. Started a new conversation.';
+        this.emit('sessionRecovery', projectId, oldConversationId, conversation.id, reason);
+      } else {
+        // Valid UUID - it's a resume operation
+        isNewSession = false;
+      }
+    }
+
     // Build multimodal instructions if images are provided
     const instructions = this.buildMultimodalContent(initialMessage || '', images);
-    await this.startAgentImmediately(projectId, project.path, instructions, 'interactive', sessionId, permissionMode);
+    await this.startAgentImmediately(projectId, project.path, instructions, 'interactive', effectiveSessionId, permissionMode, isNewSession);
   }
 
   sendInput(projectId: string, input: string, images?: ImageData[]): void {
@@ -578,7 +660,8 @@ export class DefaultAgentManager implements AgentManager {
     instructions: string,
     mode: AgentMode = 'autonomous',
     sessionId?: string,
-    permissionModeOverride?: 'default' | 'acceptEdits' | 'plan'
+    permissionModeOverride?: 'acceptEdits' | 'plan',
+    isNewSession: boolean = true
   ): Promise<void> {
     const settings = await this.settingsRepository.get();
     const project = await this.projectRepository.findById(projectId);
@@ -594,7 +677,7 @@ export class DefaultAgentManager implements AgentManager {
       appendSystemPrompt: settings.appendSystemPrompt,
     };
 
-    const agent = this.agentFactory.create(projectId, projectPath, mode, permissions, sessionId);
+    const agent = this.agentFactory.create(projectId, projectPath, mode, permissions, sessionId, isNewSession);
     this.setupAgentListeners(agent);
     this.agents.set(projectId, agent);
 
@@ -605,6 +688,59 @@ export class DefaultAgentManager implements AgentManager {
     if (agent.processInfo?.pid) {
       this.pidTracker.addProcess(agent.processInfo.pid, projectId);
     }
+
+    // Wait briefly for potential session errors
+    await this.delay(150);
+
+    // Check if session ID was rejected (session not found or already in use)
+    if (agent.sessionError && sessionId) {
+      const oldConversationId = sessionId;
+      this.logger.warn('Session error detected, creating fresh conversation', {
+        projectId,
+        oldConversationId,
+        error: agent.sessionError,
+      });
+
+      // Stop the failed agent
+      if (agent.processInfo?.pid) {
+        this.pidTracker.removeProcess(agent.processInfo.pid);
+      }
+      await agent.stop();
+      this.agents.delete(projectId);
+
+      // Delete the old conversation that had the invalid session
+      await this.conversationRepository.deleteConversation(projectId, oldConversationId);
+
+      // Create a new conversation with a fresh UUID
+      const newConversation = await this.conversationRepository.create(projectId, null);
+      await this.projectRepository.setCurrentConversation(projectId, newConversation.id);
+
+      this.logger.info('Created fresh conversation after session error', {
+        projectId,
+        oldConversationId,
+        newConversationId: newConversation.id,
+      });
+
+      // Emit session recovery event to notify frontend
+      const reason = agent.sessionError.includes('already in use')
+        ? 'Session was already in use. Started a new conversation.'
+        : 'Could not resume the previous conversation. It may have been deleted by Claude or this is from an old version. Started a new conversation.';
+      this.emit('sessionRecovery', projectId, oldConversationId, newConversation.id, reason);
+
+      // Restart with the new conversation's UUID as the session ID (new session)
+      const freshAgent = this.agentFactory.create(projectId, projectPath, mode, permissions, newConversation.id, true);
+      this.setupAgentListeners(freshAgent);
+      this.agents.set(projectId, freshAgent);
+      freshAgent.start(instructions);
+
+      if (freshAgent.processInfo?.pid) {
+        this.pidTracker.addProcess(freshAgent.processInfo.pid, projectId);
+      }
+    }
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   private async addToQueue(projectId: string, instructions: string): Promise<void> {
@@ -873,6 +1009,21 @@ export class DefaultAgentManager implements AgentManager {
   private async handleStatusChange(projectId: string, status: AgentStatus): Promise<void> {
     const projectStatus = status === 'running' ? 'running' : status === 'error' ? 'error' : 'stopped';
     await this.projectRepository.updateStatus(projectId, projectStatus);
+
+    // Save session ID to conversation when agent starts running
+    if (status === 'running') {
+      const agent = this.agents.get(projectId);
+
+      if (agent?.sessionId) {
+        const project = await this.projectRepository.findById(projectId);
+
+        if (project?.currentConversationId) {
+          await this.conversationRepository
+            .updateMetadata(projectId, project.currentConversationId, { sessionId: agent.sessionId })
+            .catch(() => {});
+        }
+      }
+    }
   }
 
   private async processQueue(): Promise<void> {

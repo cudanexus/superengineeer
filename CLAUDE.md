@@ -106,8 +106,10 @@ conversations/
 - `subscribe` / `unsubscribe` - Subscribe to project updates
 - `agent_message` - Real-time agent output
 - `agent_status` - Agent status changes
+- `agent_waiting` - Agent waiting for input status
 - `queue_change` - Queue status updates
 - `roadmap_message` - Real-time roadmap generation output
+- `session_recovery` - Session couldn't be resumed, new conversation created
 
 ## Autonomous Loop
 
@@ -145,16 +147,26 @@ Agent manager runs autonomous loop that:
 ## Permission Modes (Runtime Toggle)
 
 Permission mode can be changed at runtime via UI buttons. Changing mode while agent is running restarts it with the same session:
-- **Default**: Ask for each action (shield icon)
+- **Accept Edits** (default): Auto-approve file edits (pencil icon)
 - **Plan**: Review plan before execution (clipboard icon)
-- **Accept Edits**: Auto-approve file edits (pencil icon)
+
+When Claude uses `EnterPlanMode` or `ExitPlanMode` tools, the UI displays special plan mode indicators. For `ExitPlanMode`:
+- **Approve Plan**: Sends "yes" to Claude
+- **Request Changes**: Focuses input field for user to describe desired changes
+- **Reject Plan**: Sends "no" to Claude
 
 ## Session Management
 
-Claude sessions are managed by Claude CLI itself (not persisted locally):
-- Session ID captured from Claude's init event
-- `--session-id` flag used to resume sessions when restarting
-- Changing permission mode restarts agent with same session ID
+Conversations use UUID v4 IDs that also serve as Claude session IDs:
+- New conversations: `--session-id {uuid}` creates a new Claude session with that specific ID
+- Resuming conversations: `--resume {uuid}` resumes an existing Claude session
+- Changing permission mode queues the change until Claude is idle, then restarts with 1s delay
+- **Session Recovery**: If Claude doesn't recognize the session (deleted or old app version), the system:
+  1. Deletes the old conversation
+  2. Creates a new conversation with fresh UUID
+  3. Clears the UI output
+  4. Notifies the user that the conversation couldn't be recovered
+  5. Restarts with the new session (using `--session-id`)
 
 ## Server Features
 
@@ -173,7 +185,7 @@ Claude sessions are managed by Claude CLI itself (not persisted locally):
   - Auto-starts agent on first message send
   - Configurable keybindings (Ctrl+Enter or Enter to send)
   - No Start button needed - just type and send
-  - Permission mode toggle (Default/Plan/Accept Edits) - restarts agent with same session
+  - Permission mode toggle (Accept Edits/Plan) - restarts agent with same session
 
 - **File Editor**:
   - Browse project files in tree view
@@ -222,7 +234,7 @@ Claude sessions are managed by Claude CLI itself (not persisted locally):
 
 Global permissions in `claudePermissions`:
 - `dangerouslySkipPermissions` - Skip ALL permission prompts (legacy, not recommended)
-- `defaultMode` - Permission mode: 'default' | 'acceptEdits' | 'plan'
+- `defaultMode` - Permission mode: 'acceptEdits' | 'plan' (default: 'acceptEdits')
 - `allowRules` - Array of tool rules to auto-approve (e.g., "Read", "Bash(npm run:*)")
 - `denyRules` - Array of tool rules to block (e.g., "Read(./.env)", "Bash(rm -rf:*)")
 
