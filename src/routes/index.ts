@@ -14,6 +14,7 @@ import {
   ClaudeRoadmapGenerator,
   DefaultInstructionGenerator,
 } from '../services';
+import { createGitService } from '../services/git-service';
 import { DefaultAgentManager, AgentManager } from '../agents';
 import { getDataDirectory } from '../utils';
 import { RoadmapGenerator } from '../services';
@@ -115,6 +116,9 @@ export function createApiRouter(deps: ApiRouterDependencies = {}): Router {
     },
   }));
 
+  // Git service
+  const gitService = createGitService();
+
   // Project routes
   router.use('/projects', createProjectsRouter({
     projectRepository,
@@ -126,6 +130,7 @@ export function createApiRouter(deps: ApiRouterDependencies = {}): Router {
     instructionGenerator,
     conversationRepository,
     settingsRepository,
+    gitService,
   }));
 
   return router;

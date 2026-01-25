@@ -716,14 +716,43 @@ export class DefaultClaudeAgent implements ClaudeAgent {
     this.updateUsageFromEvent(event);
 
     switch (event.type) {
-      case 'assistant':
+      case 'assistant': {
+        const content = event.message?.content || [];
+        const blocks = content.map((block: { type: string; text?: string; name?: string; id?: string }) => {
+          if (block.type === 'text') {
+            return {
+              type: 'text',
+              length: block.text?.length || 0,
+              preview: block.text?.substring(0, 100) || '',
+            };
+          }
+
+          if (block.type === 'tool_use') {
+            return {
+              type: 'tool_use',
+              name: block.name,
+              id: block.id,
+            };
+          }
+
+          return { type: block.type };
+        });
+
+        const usage = event.message?.usage;
+
         this.logger.info('STDOUT <<< Assistant message', {
           direction: 'output',
           eventType: 'assistant',
-          contentBlocks: event.message?.content?.length || 0,
+          contentBlocks: content.length,
+          blocks,
+          ...(usage && {
+            inputTokens: usage.input_tokens,
+            outputTokens: usage.output_tokens,
+          }),
         });
         this.handleAssistantEvent(event);
         break;
+      }
 
       case 'content_block_delta':
         if (event.delta?.text) {
@@ -733,6 +762,8 @@ export class DefaultClaudeAgent implements ClaudeAgent {
 
       case 'content_block_start':
         if (event.content_block?.type === 'tool_use') {
+          // Ensure we're marked as processing while using tools
+          this.setProcessing(true);
           this.logger.info('STDOUT <<< Tool use started', {
             direction: 'output',
             eventType: 'tool_use',

@@ -442,6 +442,25 @@
         contentType: 'application/json',
         data: JSON.stringify({ paths: paths })
       });
+    },
+    getGitTags: function(projectId) {
+      return $.get('/api/projects/' + projectId + '/git/tags');
+    },
+    gitCreateTag: function(projectId, name, message) {
+      return $.ajax({
+        url: '/api/projects/' + projectId + '/git/tags',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ name: name, message: message })
+      });
+    },
+    gitPushTag: function(projectId, name, remote) {
+      return $.ajax({
+        url: '/api/projects/' + projectId + '/git/tags/' + encodeURIComponent(name) + '/push',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ remote: remote })
+      });
     }
   };
 
@@ -515,6 +534,80 @@
     var div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  // ============================================================
+  // Custom Modal Dialogs (replacing alert/confirm/prompt)
+  // ============================================================
+
+  // Show a confirmation modal and return a promise
+  function showConfirm(title, message, options) {
+    options = options || {};
+    var confirmText = options.confirmText || 'Confirm';
+    var confirmClass = options.danger ? 'bg-red-600 hover:bg-red-700' : 'bg-purple-600 hover:bg-purple-700';
+
+    return new Promise(function(resolve) {
+      $('#confirm-modal-title').text(title);
+      $('#confirm-modal-message').text(message);
+      $('#confirm-modal-ok').text(confirmText).removeClass('bg-red-600 hover:bg-red-700 bg-purple-600 hover:bg-purple-700').addClass(confirmClass);
+
+      var cleanup = function() {
+        $('#confirm-modal-ok').off('click.confirm');
+        $('#confirm-modal-cancel').off('click.confirm');
+        $('#modal-confirm .modal-close').off('click.confirm');
+        $('#modal-confirm .modal-backdrop').off('click.confirm');
+        $('#modal-confirm').addClass('hidden');
+      };
+
+      $('#confirm-modal-ok').on('click.confirm', function() {
+        cleanup();
+        resolve(true);
+      });
+
+      $('#confirm-modal-cancel, #modal-confirm .modal-close, #modal-confirm .modal-backdrop').on('click.confirm', function() {
+        cleanup();
+        resolve(false);
+      });
+
+      $('#modal-confirm').removeClass('hidden');
+    });
+  }
+
+  // Show a prompt modal and return a promise with the input value (or null if cancelled)
+  function showPrompt(title, label, options) {
+    options = options || {};
+    var placeholder = options.placeholder || '';
+    var defaultValue = options.defaultValue || '';
+    var submitText = options.submitText || 'OK';
+
+    return new Promise(function(resolve) {
+      $('#prompt-modal-title').text(title);
+      $('#prompt-modal-label').text(label);
+      $('#prompt-modal-input').val(defaultValue).attr('placeholder', placeholder);
+      $('#prompt-modal-ok').text(submitText);
+
+      var cleanup = function() {
+        $('#form-prompt').off('submit.prompt');
+        $('#modal-prompt .modal-close').off('click.prompt');
+        $('#modal-prompt .modal-backdrop').off('click.prompt');
+        $('#modal-prompt').addClass('hidden');
+      };
+
+      $('#form-prompt').on('submit.prompt', function(e) {
+        e.preventDefault();
+        var value = $('#prompt-modal-input').val().trim();
+        cleanup();
+        resolve(value || null);
+      });
+
+      $('#modal-prompt .modal-close, #modal-prompt .modal-backdrop').on('click.prompt', function() {
+        cleanup();
+        resolve(null);
+      });
+
+      $('#modal-prompt').removeClass('hidden');
+      $('#prompt-modal-input').focus();
+    });
   }
 
   // ============================================================
@@ -4169,16 +4262,19 @@
     });
 
     $('#btn-dev-shutdown').on('click', function() {
-      if (confirm('Are you sure you want to shutdown the server?')) {
-        api.shutdownServer()
-          .done(function() {
-            showToast('Server is shutting down...', 'info');
-            closeModal('modal-dev');
-          })
-          .fail(function(xhr) {
-            showToast(getErrorMessage(xhr), 'error');
-          });
-      }
+      showConfirm('Shutdown Server', 'Are you sure you want to shutdown the server?', { danger: true, confirmText: 'Shutdown' })
+        .then(function(confirmed) {
+          if (confirmed) {
+            api.shutdownServer()
+              .done(function() {
+                showToast('Server is shutting down...', 'info');
+                closeModal('modal-dev');
+              })
+              .fail(function(xhr) {
+                showToast(getErrorMessage(xhr), 'error');
+              });
+          }
+        });
     });
 
     $('#btn-debug-refresh').on('click', function() {
@@ -7576,31 +7672,38 @@
 
     var file = state.openFiles[fileIndex];
 
+    function doClose() {
+      // Remove from open files
+      state.openFiles.splice(fileIndex, 1);
+
+      // If this was the active file, switch to another or show empty state
+      if (state.activeFilePath === filePath) {
+        if (state.openFiles.length > 0) {
+          var newIndex = Math.min(fileIndex, state.openFiles.length - 1);
+          setActiveFile(state.openFiles[newIndex].path);
+        } else {
+          state.activeFilePath = null;
+          state.fileBrowser.selectedFile = null;
+          $('#file-editor-empty').removeClass('hidden');
+          $('#file-editor-wrapper').addClass('hidden');
+          $('.file-tree-item').removeClass('selected');
+        }
+      }
+
+      renderOpenFileTabs();
+    }
+
     // Warn if modified
     if (file.modified) {
-      if (!confirm('This file has unsaved changes. Close anyway?')) {
-        return;
-      }
+      showConfirm('Unsaved Changes', 'This file has unsaved changes. Close anyway?', { danger: true, confirmText: 'Close' })
+        .then(function(confirmed) {
+          if (confirmed) {
+            doClose();
+          }
+        });
+    } else {
+      doClose();
     }
-
-    // Remove from open files
-    state.openFiles.splice(fileIndex, 1);
-
-    // If this was the active file, switch to another or show empty state
-    if (state.activeFilePath === filePath) {
-      if (state.openFiles.length > 0) {
-        var newIndex = Math.min(fileIndex, state.openFiles.length - 1);
-        setActiveFile(state.openFiles[newIndex].path);
-      } else {
-        state.activeFilePath = null;
-        state.fileBrowser.selectedFile = null;
-        $('#file-editor-empty').removeClass('hidden');
-        $('#file-editor-wrapper').addClass('hidden');
-        $('.file-tree-item').removeClass('selected');
-      }
-    }
-
-    renderOpenFileTabs();
   }
 
   function showDeleteFileConfirmation(filePath, isDirectory, fileName) {
@@ -8183,6 +8286,41 @@
       .done(function(branches) {
         renderGitBranches(branches);
       });
+
+    loadGitTags();
+  }
+
+  function loadGitTags() {
+    if (!state.selectedProjectId) return;
+
+    api.getGitTags(state.selectedProjectId)
+      .done(function(result) {
+        renderGitTags(result.tags || []);
+      })
+      .fail(function() {
+        // Silently fail - tags are not critical
+        renderGitTags([]);
+      });
+  }
+
+  function renderGitTags(tags) {
+    var $container = $('#git-tags-list');
+
+    if (!tags || tags.length === 0) {
+      $container.html('<div class="text-gray-500 text-center py-2">No tags</div>');
+      return;
+    }
+
+    var html = '';
+
+    tags.forEach(function(tag) {
+      html += '<div class="flex items-center justify-between py-1 px-1 hover:bg-gray-700 rounded">' +
+        '<span class="text-gray-300 truncate" title="' + escapeHtml(tag) + '">' + escapeHtml(tag) + '</span>' +
+        '<button class="git-push-tag-btn text-xs text-blue-400 hover:text-blue-300 px-1" data-tag="' + escapeHtml(tag) + '" title="Push tag">&#8593;</button>' +
+        '</div>';
+    });
+
+    $container.html(html);
   }
 
   function renderGitStatus(status) {
@@ -8273,6 +8411,9 @@
 
     if (entry.isDirectory) {
       var chevronClass = isExpanded ? 'tree-chevron expanded' : 'tree-chevron';
+      var dirActionBtn = type === 'staged'
+        ? '<button class="git-action-btn git-unstage-dir-btn" data-path="' + escapeHtml(entry.path) + '" title="Unstage folder">−</button>'
+        : '<button class="git-action-btn git-stage-dir-btn" data-path="' + escapeHtml(entry.path) + '" title="Stage folder">+</button>';
       var html = '<div class="git-tree-item directory' + (isSelected ? ' selected' : '') + '" ' +
                  'data-path="' + escapeHtml(entry.path) + '" data-type="' + type + '" ' +
                  'style="padding-left: ' + indent + 'px;">' +
@@ -8282,7 +8423,8 @@
         '<svg class="tree-icon text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
           '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>' +
         '</svg>' +
-        '<span class="tree-name">' + escapeHtml(entry.name) + '</span>' +
+        '<span class="tree-name flex-1">' + escapeHtml(entry.name) + '</span>' +
+        dirActionBtn +
       '</div>';
 
       if (isExpanded && entry.children) {
@@ -8409,18 +8551,19 @@
 
     // New branch button
     $('#btn-git-new-branch').on('click', function() {
-      var name = prompt('Enter new branch name:');
-
-      if (name && state.selectedProjectId) {
-        api.gitCreateBranch(state.selectedProjectId, name, true)
-          .done(function() {
-            showToast('Created and switched to branch: ' + name, 'success');
-            loadGitStatus();
-          })
-          .fail(function(xhr) {
-            showToast('Failed to create branch: ' + getErrorMessage(xhr), 'error');
-          });
-      }
+      showPrompt('New Branch', 'Branch name:', { placeholder: 'feature/my-branch', submitText: 'Create' })
+        .then(function(name) {
+          if (name && state.selectedProjectId) {
+            api.gitCreateBranch(state.selectedProjectId, name, true)
+              .done(function() {
+                showToast('Created and switched to branch: ' + name, 'success');
+                loadGitStatus();
+              })
+              .fail(function(xhr) {
+                showToast('Failed to create branch: ' + getErrorMessage(xhr), 'error');
+              });
+          }
+        });
     });
 
     // Stage all button
@@ -8477,6 +8620,40 @@
           })
           .fail(function(xhr) {
             showToast('Failed to unstage file: ' + getErrorMessage(xhr), 'error');
+          });
+      }
+    });
+
+    // Stage directory (event delegation)
+    $(document).on('click', '.git-stage-dir-btn', function(e) {
+      e.stopPropagation();
+      var dirPath = $(this).data('path');
+
+      if (dirPath && state.selectedProjectId) {
+        // Git add works with directories directly
+        api.gitStage(state.selectedProjectId, [dirPath])
+          .done(function() {
+            loadGitStatus();
+          })
+          .fail(function(xhr) {
+            showToast('Failed to stage folder: ' + getErrorMessage(xhr), 'error');
+          });
+      }
+    });
+
+    // Unstage directory (event delegation)
+    $(document).on('click', '.git-unstage-dir-btn', function(e) {
+      e.stopPropagation();
+      var dirPath = $(this).data('path');
+
+      if (dirPath && state.selectedProjectId) {
+        // Git reset works with directories directly
+        api.gitUnstage(state.selectedProjectId, [dirPath])
+          .done(function() {
+            loadGitStatus();
+          })
+          .fail(function(xhr) {
+            showToast('Failed to unstage folder: ' + getErrorMessage(xhr), 'error');
           });
       }
     });
@@ -8574,16 +8751,20 @@
       $('#git-context-menu').addClass('hidden');
 
       if (state.gitContextTarget && state.selectedProjectId) {
-        if (confirm('Discard changes to ' + state.gitContextTarget.path + '?\n\nThis cannot be undone.')) {
-          api.gitDiscard(state.selectedProjectId, [state.gitContextTarget.path])
-            .done(function() {
-              showToast('Changes discarded', 'success');
-              loadGitStatus();
-            })
-            .fail(function(xhr) {
-              showToast('Failed to discard: ' + getErrorMessage(xhr), 'error');
-            });
-        }
+        var targetPath = state.gitContextTarget.path;
+        showConfirm('Discard Changes', 'Discard changes to ' + targetPath + '?\n\nThis cannot be undone.', { danger: true, confirmText: 'Discard' })
+          .then(function(confirmed) {
+            if (confirmed) {
+              api.gitDiscard(state.selectedProjectId, [targetPath])
+                .done(function() {
+                  showToast('Changes discarded', 'success');
+                  loadGitStatus();
+                })
+                .fail(function(xhr) {
+                  showToast('Failed to discard: ' + getErrorMessage(xhr), 'error');
+                });
+            }
+          });
       }
     });
 
@@ -8679,6 +8860,54 @@
     // Mobile back button
     $('#git-mobile-back-btn').on('click', function() {
       hideMobileGitDiff();
+    });
+
+    // New tag button
+    $('#btn-git-new-tag').on('click', function() {
+      $('#input-tag-name').val('');
+      $('#input-tag-message').val('');
+      $('#modal-create-tag').removeClass('hidden');
+    });
+
+    // Create tag form submit
+    $('#form-create-tag').on('submit', function(e) {
+      e.preventDefault();
+      var name = $('#input-tag-name').val().trim();
+      var message = $('#input-tag-message').val().trim();
+
+      if (!name || !state.selectedProjectId) return;
+
+      api.gitCreateTag(state.selectedProjectId, name, message || undefined)
+        .done(function() {
+          showToast('Tag created: ' + name, 'success');
+          $('#modal-create-tag').addClass('hidden');
+          loadGitTags();
+        })
+        .fail(function(xhr) {
+          showToast('Failed to create tag: ' + getErrorMessage(xhr), 'error');
+        });
+    });
+
+    // Push tag (event delegation)
+    $(document).on('click', '.git-push-tag-btn', function(e) {
+      e.stopPropagation();
+      var tagName = $(this).data('tag');
+
+      if (tagName && state.selectedProjectId) {
+        var $btn = $(this);
+        $btn.prop('disabled', true).text('...');
+
+        api.gitPushTag(state.selectedProjectId, tagName)
+          .done(function() {
+            showToast('Tag pushed: ' + tagName, 'success');
+          })
+          .fail(function(xhr) {
+            showToast('Failed to push tag: ' + getErrorMessage(xhr), 'error');
+          })
+          .always(function() {
+            $btn.prop('disabled', false).html('&#8593;');
+          });
+      }
     });
   }
 

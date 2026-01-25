@@ -2,6 +2,9 @@ import { Router, Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const mime = require('mime-types') as { lookup: (path: string) => string | false };
+
 export interface FilesystemService {
   listDrives(): Promise<DriveInfo[]>;
   listDirectory(dirPath: string): Promise<DirectoryEntry[]>;
@@ -34,7 +37,6 @@ abstract class BaseFilesystemService implements FilesystemService {
 
     return entries
       .filter((entry) => entry.isDirectory())
-      .filter((entry) => !entry.name.startsWith('.'))
       .map((entry) => ({
         name: entry.name,
         path: path.join(normalizedPath, entry.name),
@@ -48,7 +50,6 @@ abstract class BaseFilesystemService implements FilesystemService {
     const entries = await fs.promises.readdir(normalizedPath, { withFileTypes: true });
 
     const result = entries
-      .filter((entry) => !entry.name.startsWith('.'))
       .map((entry) => ({
         name: entry.name,
         path: path.join(normalizedPath, entry.name),
@@ -88,8 +89,44 @@ abstract class BaseFilesystemService implements FilesystemService {
   }
 
   isTextFile(filePath: string): boolean {
+    // First check MIME type
+    const mimeType = mime.lookup(filePath);
+
+    if (mimeType) {
+      // Check if MIME type indicates text
+      if (mimeType.startsWith('text/')) {
+        return true;
+      }
+
+      // Common text-based MIME types that don't start with text/
+      const textMimeTypes = [
+        'application/json',
+        'application/xml',
+        'application/javascript',
+        'application/typescript',
+        'application/x-sh',
+        'application/x-httpd-php',
+        'application/graphql',
+        'application/sql',
+        'application/toml',
+        'application/x-yaml',
+      ];
+
+      if (textMimeTypes.includes(mimeType)) {
+        return true;
+      }
+    }
+
+    // Fallback to extension check for files mime-types doesn't recognize
     const ext = path.extname(filePath).toLowerCase();
-    return TEXT_FILE_EXTENSIONS.has(ext);
+
+    if (TEXT_FILE_EXTENSIONS.has(ext)) {
+      return true;
+    }
+
+    // Check filename for dotfiles and extensionless files
+    const fileName = path.basename(filePath);
+    return TEXT_FILE_NAMES.has(fileName);
   }
 }
 
@@ -183,13 +220,19 @@ const TEXT_FILE_EXTENSIONS = new Set([
   '.ex', '.exs', '.erl', '.hrl',
   '.hs', '.lhs', '.elm',
   '.vue', '.svelte', '.astro',
-  '.env', '.env.local', '.env.development', '.env.production',
-  '.gitignore', '.gitattributes', '.editorconfig', '.prettierrc', '.eslintrc',
-  '.dockerfile', '.dockerignore',
-  '.makefile', '.cmake',
   '.ini', '.cfg', '.conf', '.config',
   '.log', '.csv', '.tsv',
   '.rst', '.tex', '.bib',
+]);
+
+// Files without extensions or dotfiles that should be editable
+const TEXT_FILE_NAMES = new Set([
+  '.gitignore', '.gitattributes', '.editorconfig', '.prettierrc', '.eslintrc',
+  '.dockerignore', '.env', '.npmrc', '.nvmrc', '.yarnrc', '.babelrc',
+  '.prettierignore', '.eslintignore', '.stylelintrc', '.browserslistrc',
+  'Makefile', 'Dockerfile', 'Vagrantfile', 'Gemfile', 'Rakefile', 'Procfile',
+  'CMakeLists.txt', 'LICENSE', 'AUTHORS', 'CHANGELOG', 'README', 'INSTALL',
+  'CONTRIBUTING', 'CODEOWNERS', '.htaccess', '.mailmap',
 ]);
 
 function handleDrives(service: FilesystemService, res: Response): void {

@@ -4,6 +4,7 @@ import path from 'path';
 import { ProjectRepository, ConversationRepository, MilestoneItemRef, ProjectPermissionOverrides } from '../repositories';
 import { MilestoneRef, AgentMessage, ImageData } from '../agents';
 import { ProjectService, RoadmapParser, RoadmapGenerator, InstructionGenerator, RoadmapEditor } from '../services';
+import { GitService } from '../services/git-service';
 import { AgentManager } from '../agents';
 
 // Request body types
@@ -66,6 +67,43 @@ interface PermissionOverridesBody {
   defaultMode?: 'acceptEdits' | 'plan';
 }
 
+interface GitStageBody {
+  paths?: string[];
+}
+
+interface GitCommitBody {
+  message?: string;
+}
+
+interface GitBranchBody {
+  name?: string;
+  checkout?: boolean;
+}
+
+interface GitCheckoutBody {
+  branch?: string;
+}
+
+interface GitPushBody {
+  remote?: string;
+  branch?: string;
+  setUpstream?: boolean;
+}
+
+interface GitPullBody {
+  remote?: string;
+  branch?: string;
+}
+
+interface GitTagBody {
+  name: string;
+  message?: string;
+}
+
+interface GitPushTagBody {
+  remote?: string;
+}
+
 function computeConversationStats(
   messages: AgentMessage[],
   createdAt: string | null
@@ -112,6 +150,7 @@ export interface ProjectRouterDependencies {
   instructionGenerator: InstructionGenerator;
   conversationRepository: ConversationRepository;
   settingsRepository: SettingsRepository;
+  gitService: GitService;
 }
 
 export interface ConversationStats {
@@ -166,6 +205,7 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
     agentManager,
     conversationRepository,
     settingsRepository,
+    gitService,
   } = deps;
 
   router.get('/', asyncHandler(async (_req: Request, res: Response) => {
@@ -934,80 +974,29 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
 
     const settings = await settingsRepository.get();
     const maxSizeBytes = settings.claudeMdMaxSizeKB * 1024;
-    const optimizations: OptimizationIssue[] = [];
+    const checks: OptimizationCheck[] = [];
 
-    // Check for project CLAUDE.md
+    // Check 1: Project CLAUDE.md
     const projectClaudeMdPath = path.join(project.path, 'CLAUDE.md');
+    const projectClaudeMdCheck = await checkProjectClaudeMd(projectClaudeMdPath, maxSizeBytes, settings.claudeMdMaxSizeKB);
+    checks.push(projectClaudeMdCheck);
 
-    try {
-      const stats = await fs.promises.stat(projectClaudeMdPath);
-
-      if (stats.size > maxSizeBytes) {
-        optimizations.push({
-          id: 'project-claude-md-large',
-          severity: 'warning',
-          title: 'Project CLAUDE.md is too large',
-          description: `The project CLAUDE.md file is ${Math.round(stats.size / 1024)}KB, exceeding the ${settings.claudeMdMaxSizeKB}KB threshold. Large files consume more tokens per conversation.`,
-          action: 'edit',
-          actionLabel: 'Open in Editor',
-          filePath: projectClaudeMdPath,
-        });
-      }
-    } catch {
-      // File doesn't exist
-      optimizations.push({
-        id: 'project-claude-md-missing',
-        severity: 'info',
-        title: 'No project CLAUDE.md file',
-        description: 'Creating a CLAUDE.md file helps Claude understand your project structure, coding conventions, and important context.',
-        action: 'create',
-        actionLabel: 'Create CLAUDE.md',
-        filePath: projectClaudeMdPath,
-      });
-    }
-
-    // Check for global CLAUDE.md
+    // Check 2: Global CLAUDE.md
     const homeDir = process.env['HOME'] || process.env['USERPROFILE'] || '';
     const globalClaudeMdPath = path.join(homeDir, '.claude', 'CLAUDE.md');
+    const globalClaudeMdCheck = await checkGlobalClaudeMd(globalClaudeMdPath, maxSizeBytes, settings.claudeMdMaxSizeKB);
+    checks.push(globalClaudeMdCheck);
 
-    try {
-      const stats = await fs.promises.stat(globalClaudeMdPath);
-
-      if (stats.size > maxSizeBytes) {
-        optimizations.push({
-          id: 'global-claude-md-large',
-          severity: 'warning',
-          title: 'Global CLAUDE.md is too large',
-          description: `The global CLAUDE.md file (~/.claude/CLAUDE.md) is ${Math.round(stats.size / 1024)}KB, exceeding the ${settings.claudeMdMaxSizeKB}KB threshold. This file is loaded for all projects.`,
-          action: 'claude-files',
-          actionLabel: 'Open Claude Files',
-          filePath: globalClaudeMdPath,
-        });
-      }
-    } catch {
-      // Global CLAUDE.md doesn't exist - this is fine, not a warning
-    }
-
-    // Check for ROADMAP.md
+    // Check 3: ROADMAP.md
     const roadmapPath = path.join(project.path, 'doc', 'ROADMAP.md');
+    const roadmapCheck = await checkRoadmap(roadmapPath);
+    checks.push(roadmapCheck);
 
-    try {
-      await fs.promises.stat(roadmapPath);
-      // File exists - no action needed
-    } catch {
-      // ROADMAP.md doesn't exist
-      optimizations.push({
-        id: 'roadmap-missing',
-        severity: 'info',
-        title: 'No ROADMAP.md file',
-        description: 'Creating a doc/ROADMAP.md file allows you to persist your project roadmap and select complete phases, milestones, or individual tasks from this app.',
-        action: 'create',
-        actionLabel: 'Create ROADMAP.md',
-        filePath: roadmapPath,
-      });
-    }
+    // Build legacy optimizations array for badge count (only items needing action)
+    const optimizations = checks.filter(c => c.status !== 'passed');
 
     res.json({
+      checks,
       optimizations,
       settings: {
         claudeMdMaxSizeKB: settings.claudeMdMaxSizeKB,
@@ -1015,17 +1004,413 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
     });
   }));
 
+  // Git routes
+
+  // GET /api/projects/:id/git/status - Get git status
+  router.get('/:id/git/status', asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params['id'] as string;
+    const project = await projectRepository.findById(id);
+
+    if (!project) {
+      throw new NotFoundError('Project');
+    }
+
+    const status = await gitService.getStatus(project.path);
+    res.json(status);
+  }));
+
+  // GET /api/projects/:id/git/branches - List branches
+  router.get('/:id/git/branches', asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params['id'] as string;
+    const project = await projectRepository.findById(id);
+
+    if (!project) {
+      throw new NotFoundError('Project');
+    }
+
+    const branches = await gitService.getBranches(project.path);
+    res.json(branches);
+  }));
+
+  // GET /api/projects/:id/git/diff - Get diff
+  router.get('/:id/git/diff', asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params['id'] as string;
+    const staged = req.query['staged'] === 'true';
+    const project = await projectRepository.findById(id);
+
+    if (!project) {
+      throw new NotFoundError('Project');
+    }
+
+    const diff = await gitService.getDiff(project.path, staged);
+    res.json({ diff });
+  }));
+
+  // POST /api/projects/:id/git/stage - Stage files
+  router.post('/:id/git/stage', asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params['id'] as string;
+    const body = req.body as GitStageBody;
+    const { paths } = body;
+    const project = await projectRepository.findById(id);
+
+    if (!project) {
+      throw new NotFoundError('Project');
+    }
+
+    if (!paths || !Array.isArray(paths)) {
+      throw new ValidationError('paths array is required');
+    }
+
+    await gitService.stageFiles(project.path, paths);
+    res.json({ success: true });
+  }));
+
+  // POST /api/projects/:id/git/stage-all - Stage all files
+  router.post('/:id/git/stage-all', asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params['id'] as string;
+    const project = await projectRepository.findById(id);
+
+    if (!project) {
+      throw new NotFoundError('Project');
+    }
+
+    await gitService.stageAll(project.path);
+    res.json({ success: true });
+  }));
+
+  // POST /api/projects/:id/git/unstage - Unstage files
+  router.post('/:id/git/unstage', asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params['id'] as string;
+    const body = req.body as GitStageBody;
+    const { paths } = body;
+    const project = await projectRepository.findById(id);
+
+    if (!project) {
+      throw new NotFoundError('Project');
+    }
+
+    if (!paths || !Array.isArray(paths)) {
+      throw new ValidationError('paths array is required');
+    }
+
+    await gitService.unstageFiles(project.path, paths);
+    res.json({ success: true });
+  }));
+
+  // POST /api/projects/:id/git/unstage-all - Unstage all files
+  router.post('/:id/git/unstage-all', asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params['id'] as string;
+    const project = await projectRepository.findById(id);
+
+    if (!project) {
+      throw new NotFoundError('Project');
+    }
+
+    await gitService.unstageAll(project.path);
+    res.json({ success: true });
+  }));
+
+  // POST /api/projects/:id/git/commit - Commit staged changes
+  router.post('/:id/git/commit', asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params['id'] as string;
+    const body = req.body as GitCommitBody;
+    const { message } = body;
+    const project = await projectRepository.findById(id);
+
+    if (!project) {
+      throw new NotFoundError('Project');
+    }
+
+    if (!message) {
+      throw new ValidationError('message is required');
+    }
+
+    const result = await gitService.commit(project.path, message);
+    res.json(result);
+  }));
+
+  // POST /api/projects/:id/git/branch - Create branch
+  router.post('/:id/git/branch', asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params['id'] as string;
+    const body = req.body as GitBranchBody;
+    const { name, checkout } = body;
+    const project = await projectRepository.findById(id);
+
+    if (!project) {
+      throw new NotFoundError('Project');
+    }
+
+    if (!name) {
+      throw new ValidationError('name is required');
+    }
+
+    await gitService.createBranch(project.path, name, checkout);
+    res.json({ success: true });
+  }));
+
+  // POST /api/projects/:id/git/checkout - Checkout branch
+  router.post('/:id/git/checkout', asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params['id'] as string;
+    const body = req.body as GitCheckoutBody;
+    const { branch } = body;
+    const project = await projectRepository.findById(id);
+
+    if (!project) {
+      throw new NotFoundError('Project');
+    }
+
+    if (!branch) {
+      throw new ValidationError('branch is required');
+    }
+
+    await gitService.checkout(project.path, branch);
+    res.json({ success: true });
+  }));
+
+  // POST /api/projects/:id/git/push - Push to remote
+  router.post('/:id/git/push', asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params['id'] as string;
+    const body = req.body as GitPushBody;
+    const { remote, branch, setUpstream } = body;
+    const project = await projectRepository.findById(id);
+
+    if (!project) {
+      throw new NotFoundError('Project');
+    }
+
+    const output = await gitService.push(project.path, remote, branch, setUpstream);
+    res.json({ success: true, output });
+  }));
+
+  // POST /api/projects/:id/git/pull - Pull from remote
+  router.post('/:id/git/pull', asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params['id'] as string;
+    const body = req.body as GitPullBody;
+    const { remote, branch } = body;
+    const project = await projectRepository.findById(id);
+
+    if (!project) {
+      throw new NotFoundError('Project');
+    }
+
+    const output = await gitService.pull(project.path, remote, branch);
+    res.json({ success: true, output });
+  }));
+
+  // GET /api/projects/:id/git/file-diff - Get diff for specific file
+  router.get('/:id/git/file-diff', asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params['id'] as string;
+    const filePath = req.query['path'] as string;
+    const staged = req.query['staged'] === 'true';
+    const project = await projectRepository.findById(id);
+
+    if (!project) {
+      throw new NotFoundError('Project');
+    }
+
+    if (!filePath) {
+      throw new ValidationError('path query parameter is required');
+    }
+
+    const result = await gitService.getFileDiff(project.path, filePath, staged);
+    res.json(result);
+  }));
+
+  // POST /api/projects/:id/git/discard - Discard changes to files
+  router.post('/:id/git/discard', asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params['id'] as string;
+    const body = req.body as GitStageBody;
+    const { paths } = body;
+    const project = await projectRepository.findById(id);
+
+    if (!project) {
+      throw new NotFoundError('Project');
+    }
+
+    if (!paths || !Array.isArray(paths)) {
+      throw new ValidationError('paths array is required');
+    }
+
+    await gitService.discardChanges(project.path, paths);
+    res.json({ success: true });
+  }));
+
+  // GET /api/projects/:id/git/tags - List tags
+  router.get('/:id/git/tags', asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params['id'] as string;
+    const project = await projectRepository.findById(id);
+
+    if (!project) {
+      throw new NotFoundError('Project');
+    }
+
+    const tags = await gitService.listTags(project.path);
+    res.json({ tags });
+  }));
+
+  // POST /api/projects/:id/git/tags - Create tag
+  router.post('/:id/git/tags', asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params['id'] as string;
+    const body = req.body as GitTagBody;
+    const { name, message } = body;
+    const project = await projectRepository.findById(id);
+
+    if (!project) {
+      throw new NotFoundError('Project');
+    }
+
+    if (!name || typeof name !== 'string') {
+      throw new ValidationError('tag name is required');
+    }
+
+    await gitService.createTag(project.path, name, message);
+    res.json({ success: true });
+  }));
+
+  // POST /api/projects/:id/git/tags/:name/push - Push tag to remote
+  router.post('/:id/git/tags/:name/push', asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params['id'] as string;
+    const tagName = req.params['name'] as string;
+    const body = req.body as GitPushTagBody;
+    const { remote } = body;
+    const project = await projectRepository.findById(id);
+
+    if (!project) {
+      throw new NotFoundError('Project');
+    }
+
+    const output = await gitService.pushTag(project.path, tagName, remote);
+    res.json({ success: true, output });
+  }));
+
   return router;
 }
 
-interface OptimizationIssue {
+async function checkProjectClaudeMd(
+  filePath: string,
+  maxSizeBytes: number,
+  maxSizeKB: number
+): Promise<OptimizationCheck> {
+  const baseCheck: OptimizationCheck = {
+    id: 'project-claude-md',
+    title: 'Project CLAUDE.md',
+    description: 'Project-specific instructions that help Claude understand your codebase structure and conventions.',
+    status: 'passed',
+    statusMessage: '',
+    filePath,
+  };
+
+  try {
+    const stats = await fs.promises.stat(filePath);
+    const sizeKB = Math.round(stats.size / 1024);
+
+    if (stats.size > maxSizeBytes) {
+      return {
+        ...baseCheck,
+        status: 'warning',
+        statusMessage: `${sizeKB}KB (exceeds ${maxSizeKB}KB limit)`,
+        action: 'edit',
+        actionLabel: 'Open in Editor',
+      };
+    }
+
+    return {
+      ...baseCheck,
+      status: 'passed',
+      statusMessage: `${sizeKB}KB (under ${maxSizeKB}KB limit)`,
+    };
+  } catch {
+    return {
+      ...baseCheck,
+      status: 'info',
+      statusMessage: 'File not found',
+      action: 'create',
+      actionLabel: 'Create CLAUDE.md',
+    };
+  }
+}
+
+async function checkGlobalClaudeMd(
+  filePath: string,
+  maxSizeBytes: number,
+  maxSizeKB: number
+): Promise<OptimizationCheck> {
+  const baseCheck: OptimizationCheck = {
+    id: 'global-claude-md',
+    title: 'Global CLAUDE.md',
+    description: 'User-wide instructions loaded for all projects (~/.claude/CLAUDE.md).',
+    status: 'passed',
+    statusMessage: '',
+    filePath,
+  };
+
+  try {
+    const stats = await fs.promises.stat(filePath);
+    const sizeKB = Math.round(stats.size / 1024);
+
+    if (stats.size > maxSizeBytes) {
+      return {
+        ...baseCheck,
+        status: 'warning',
+        statusMessage: `${sizeKB}KB (exceeds ${maxSizeKB}KB limit)`,
+        action: 'claude-files',
+        actionLabel: 'Open Claude Files',
+      };
+    }
+
+    return {
+      ...baseCheck,
+      status: 'passed',
+      statusMessage: `${sizeKB}KB (under ${maxSizeKB}KB limit)`,
+    };
+  } catch {
+    return {
+      ...baseCheck,
+      status: 'passed',
+      statusMessage: 'Not configured (optional)',
+    };
+  }
+}
+
+async function checkRoadmap(filePath: string): Promise<OptimizationCheck> {
+  const baseCheck: OptimizationCheck = {
+    id: 'roadmap',
+    title: 'ROADMAP.md',
+    description: 'Project roadmap file that enables milestone/task selection in the UI.',
+    status: 'passed',
+    statusMessage: '',
+    filePath,
+  };
+
+  try {
+    const stats = await fs.promises.stat(filePath);
+    const sizeKB = Math.round(stats.size / 1024);
+
+    return {
+      ...baseCheck,
+      status: 'passed',
+      statusMessage: `Found (${sizeKB}KB)`,
+    };
+  } catch {
+    return {
+      ...baseCheck,
+      status: 'info',
+      statusMessage: 'File not found',
+      action: 'create',
+      actionLabel: 'Create ROADMAP.md',
+    };
+  }
+}
+
+interface OptimizationCheck {
   id: string;
-  severity: 'info' | 'warning' | 'error';
   title: string;
   description: string;
-  action: 'create' | 'edit' | 'claude-files';
-  actionLabel: string;
+  status: 'passed' | 'warning' | 'info';
+  statusMessage: string;
   filePath: string;
+  action?: 'create' | 'edit' | 'claude-files';
+  actionLabel?: string;
 }
 
 interface ClaudeFile {

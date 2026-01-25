@@ -43,9 +43,11 @@ Open your browser at **http://localhost:3000** to access the web UI.
 | **Node.js** | 20.0.0 or higher |
 | **Claude Code CLI** | Latest version |
 
-### Installing Claude Code CLI
+### Installing and Authenticating Claude Code CLI
 
-Before using Claudito, ensure you have the Claude Code CLI installed and configured:
+Before using Claudito, you must have the Claude Code CLI installed and **logged in**. Claudito works with either:
+- **Claude Pro/Max subscription** (recommended for personal use)
+- **Anthropic API key** (for API-based usage)
 
 ```bash
 # Install Claude Code CLI (if not already installed)
@@ -54,9 +56,11 @@ npm install -g @anthropic-ai/claude-code
 # Verify installation
 claude --version
 
-# Configure your API key (first time only)
+# Log in to Claude Code (required before using Claudito)
 claude auth
 ```
+
+> **Important:** Claudito requires an active Claude Code session. Make sure you can run `claude` directly in your terminal before starting Claudito.
 
 For more details, see the [Claude Code documentation](https://docs.anthropic.com/en/docs/claude-code).
 

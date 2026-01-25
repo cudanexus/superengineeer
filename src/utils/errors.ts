@@ -33,6 +33,12 @@ export class ConflictError extends AppError {
   }
 }
 
+export class GitError extends AppError {
+  constructor(message: string) {
+    super(message, 500, 'GIT_ERROR');
+  }
+}
+
 export interface ErrorResponse {
   error: string;
   code?: string;

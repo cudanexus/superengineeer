@@ -61,7 +61,7 @@ const DEFAULT_SETTINGS: GlobalSettings = {
     allowRules: [],
     askRules: [],
     denyRules: [],
-    defaultMode: 'acceptEdits',
+    defaultMode: 'plan',
   },
   agentPromptTemplate: DEFAULT_AGENT_PROMPT_TEMPLATE,
   sendWithCtrlEnter: true,
