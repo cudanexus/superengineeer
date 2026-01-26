@@ -553,14 +553,8 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
       throw new NotFoundError('Project');
     }
 
-    const status = agentManager.getAgentStatus(id);
-    const isQueued = agentManager.isQueued(id);
-    const mode = agentManager.getAgentMode(id);
-    const queuedMessageCount = agentManager.getQueuedMessageCount(id);
-    const isWaitingForInput = agentManager.isWaitingForInput(id);
-    const waitingVersion = agentManager.getWaitingVersion(id);
-    const sessionId = agentManager.getSessionId(id);
-    res.json({ status, queued: isQueued, mode, queuedMessageCount, isWaitingForInput, waitingVersion, sessionId });
+    const fullStatus = agentManager.getFullStatus(id);
+    res.json(fullStatus);
   }));
 
   // Get context usage for running agent or last saved usage

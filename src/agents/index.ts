@@ -13,4 +13,5 @@ export {
   TrackedProcessInfo,
   OrphanCleanupResult,
   ImageData,
+  FullAgentStatus,
 } from './agent-manager';

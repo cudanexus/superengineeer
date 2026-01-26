@@ -106,7 +106,8 @@
       selectedFile: null // Currently selected file for diff
     },
     gitContextTarget: null, // { path, type, status } for git context menu
-    activePromptType: null // 'question' | 'permission' | 'plan_mode' | null - blocks input while prompt is active
+    activePromptType: null, // 'question' | 'permission' | 'plan_mode' | null - blocks input while prompt is active
+    isGitOperating: false // Blocks git UI during operations
   };
 
   // Local storage keys for browser-specific settings
@@ -2940,7 +2941,14 @@
       } else if (line.type === 'remove') {
         // Check if next line is add (potential change pair)
         if (i + 1 < diff.length && diff[i + 1].type === 'add') {
-          aligned.push({ left: line.content, right: diff[i + 1].content, type: 'change' });
+          var wordDiff = computeWordDiff(line.content, diff[i + 1].content);
+          aligned.push({
+            left: line.content,
+            right: diff[i + 1].content,
+            type: 'change',
+            leftChunks: wordDiff.leftChunks,
+            rightChunks: wordDiff.rightChunks
+          });
           i++; // Skip the add line
         } else {
           aligned.push({ left: line.content, right: '', type: 'remove' });
@@ -2948,11 +2956,35 @@
       } else if (line.type === 'add') {
         aligned.push({ left: '', right: line.content, type: 'add' });
       } else if (line.type === 'change') {
-        aligned.push({ left: line.oldContent || '', right: line.content, type: 'change' });
+        var wordDiff2 = computeWordDiff(line.oldContent || '', line.content);
+        aligned.push({
+          left: line.oldContent || '',
+          right: line.content,
+          type: 'change',
+          leftChunks: wordDiff2.leftChunks,
+          rightChunks: wordDiff2.rightChunks
+        });
       }
     }
 
     return aligned;
+  }
+
+  // Render word chunks with inline highlighting
+  function renderWordChunks(chunks, highlightType) {
+    if (!chunks || chunks.length === 0) return '';
+
+    return chunks.map(function(chunk) {
+      var text = escapeHtml(chunk.text);
+
+      if (chunk.type === 'removed' && highlightType === 'old') {
+        return '<span class="diff-char-removed">' + text + '</span>';
+      } else if (chunk.type === 'added' && highlightType === 'new') {
+        return '<span class="diff-char-added">' + text + '</span>';
+      }
+
+      return text;
+    }).join('');
   }
 
   function renderDiffSideBySide(alignedDiff, maxLines, filePath) {
@@ -2975,7 +3007,14 @@
       else if (row.type === 'change') leftClass += ' diff-change';
       else if (row.type === 'add') leftClass += ' diff-empty';
 
-      var leftContent = row.left ? highlightCode(row.left, language) : '';
+      var leftContent;
+
+      if (row.type === 'change' && row.leftChunks) {
+        leftContent = renderWordChunks(row.leftChunks, 'old');
+      } else {
+        leftContent = row.left ? highlightCode(row.left, language) : '';
+      }
+
       html += '<div class="' + leftClass + '">';
       html += '<span class="diff-content">' + leftContent + '</span>';
       html += '</div>';
@@ -2997,7 +3036,14 @@
       else if (row2.type === 'change') rightClass += ' diff-change';
       else if (row2.type === 'remove') rightClass += ' diff-empty';
 
-      var rightContent = row2.right ? highlightCode(row2.right, language) : '';
+      var rightContent;
+
+      if (row2.type === 'change' && row2.rightChunks) {
+        rightContent = renderWordChunks(row2.rightChunks, 'new');
+      } else {
+        rightContent = row2.right ? highlightCode(row2.right, language) : '';
+      }
+
       html += '<div class="' + rightClass + '">';
       html += '<span class="diff-content">' + rightContent + '</span>';
       html += '</div>';
@@ -3115,6 +3161,74 @@
       if (str1[i] === str2[i]) matches++;
     }
     return matches / Math.max(len1, len2) > 0.4;
+  }
+
+  // Compute word-level diff for inline change highlighting
+  function computeWordDiff(oldStr, newStr) {
+    // Tokenize by words and whitespace, preserving everything
+    var oldTokens = oldStr.match(/\S+|\s+/g) || [];
+    var newTokens = newStr.match(/\S+|\s+/g) || [];
+
+    // Compute LCS of tokens
+    var m = oldTokens.length;
+    var n = newTokens.length;
+    var dp = [];
+
+    for (var i = 0; i <= m; i++) {
+      dp[i] = [];
+
+      for (var j = 0; j <= n; j++) {
+        if (i === 0 || j === 0) {
+          dp[i][j] = 0;
+        } else if (oldTokens[i - 1] === newTokens[j - 1]) {
+          dp[i][j] = dp[i - 1][j - 1] + 1;
+        } else {
+          dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+        }
+      }
+    }
+
+    // Backtrack to find LCS and build chunks
+    var leftChunks = [];
+    var rightChunks = [];
+    var oi = m;
+    var ni = n;
+
+    // Collect operations in reverse order
+    var ops = [];
+
+    while (oi > 0 || ni > 0) {
+      if (oi > 0 && ni > 0 && oldTokens[oi - 1] === newTokens[ni - 1]) {
+        ops.push({ type: 'same', oldIdx: oi - 1, newIdx: ni - 1 });
+        oi--;
+        ni--;
+      } else if (ni > 0 && (oi === 0 || dp[oi][ni - 1] >= dp[oi - 1][ni])) {
+        ops.push({ type: 'add', newIdx: ni - 1 });
+        ni--;
+      } else {
+        ops.push({ type: 'remove', oldIdx: oi - 1 });
+        oi--;
+      }
+    }
+
+    // Reverse to get correct order
+    ops.reverse();
+
+    // Build chunks from operations
+    for (var k = 0; k < ops.length; k++) {
+      var op = ops[k];
+
+      if (op.type === 'same') {
+        leftChunks.push({ text: oldTokens[op.oldIdx], type: 'unchanged' });
+        rightChunks.push({ text: newTokens[op.newIdx], type: 'unchanged' });
+      } else if (op.type === 'remove') {
+        leftChunks.push({ text: oldTokens[op.oldIdx], type: 'removed' });
+      } else if (op.type === 'add') {
+        rightChunks.push({ text: newTokens[op.newIdx], type: 'added' });
+      }
+    }
+
+    return { leftChunks: leftChunks, rightChunks: rightChunks };
   }
 
   function truncateString(str, maxLen) {
@@ -6079,6 +6193,34 @@
     }
   }
 
+  function setGitOperationState(isOperating) {
+    state.isGitOperating = isOperating;
+
+    // Disable all git action buttons
+    $('#btn-git-refresh, #btn-git-commit, #btn-git-push, #btn-git-pull, ' +
+      '#btn-git-stage-all, #btn-git-unstage-all, ' +
+      '#btn-git-new-branch, #btn-git-new-tag, #btn-create-tag')
+      .prop('disabled', isOperating);
+
+    // Disable form elements
+    $('#git-commit-message, #git-branch-select').prop('disabled', isOperating);
+
+    // Disable dynamically created buttons via pointer-events
+    $('.git-stage-btn, .git-unstage-btn, .git-stage-dir-btn, .git-unstage-dir-btn, ' +
+      '.git-push-tag-btn, .git-branch-item')
+      .css('pointer-events', isOperating ? 'none' : '');
+
+    // Disable context menu buttons
+    $('#git-ctx-stage, #git-ctx-unstage, #git-ctx-discard').prop('disabled', isOperating);
+
+    // Visual feedback
+    if (isOperating) {
+      $('#git-sidebar').addClass('git-operating');
+    } else {
+      $('#git-sidebar').removeClass('git-operating');
+    }
+  }
+
   function getPermissionModeLabel(mode) {
     switch (mode) {
       case 'plan': return 'Plan';
@@ -6675,6 +6817,8 @@
   }
 
   function loadAgentStatus(projectId) {
+    // Note: WebSocket now sends status immediately on subscribe,
+    // but we keep this API call as a fallback for initial load
     api.getAgentStatus(projectId)
       .done(function(data) {
         var project = findProjectById(projectId);
@@ -6682,6 +6826,12 @@
         // Capture session ID if present
         if (data.sessionId) {
           state.currentSessionId = data.sessionId;
+        }
+
+        // Sync permission mode from server
+        if (data.permissionMode) {
+          state.permissionMode = data.permissionMode;
+          updatePermissionModeButtons();
         }
 
         // Update isWaitingForInput on the project (only if server version is newer)
@@ -6700,7 +6850,7 @@
           state.queuedMessageCount = data.queuedMessageCount || 0;
           showAgentRunningIndicator(true);
           updateQueuedMessagesDisplay();
-          startAgentStatusPolling(projectId); // Start polling for running agent
+          startAgentStatusPolling(projectId); // Start polling as fallback
         } else {
           showAgentRunningIndicator(false);
           state.queuedMessageCount = 0;
@@ -6993,12 +7143,12 @@
     }
   }
 
-  // Agent status polling - check every 1.5 seconds if agent is still running
+  // Agent status polling - reduced to 10 seconds as fallback (WebSocket is primary)
   function startAgentStatusPolling(projectId) {
     stopAgentStatusPolling();
     state.agentStatusInterval = setInterval(function() {
       checkAgentStatus(projectId);
-    }, 1500);
+    }, 10000);
   }
 
   function stopAgentStatusPolling() {
@@ -7400,7 +7550,11 @@
     appendMessage(projectId, message);
   }
 
-  function handleAgentStatus(projectId, status) {
+  function handleAgentStatus(projectId, data) {
+    // Data can be a full status object or a string (for backward compatibility)
+    var status = typeof data === 'object' ? data.status : data;
+    var fullStatus = typeof data === 'object' ? data : null;
+
     updateProjectStatusById(projectId, status);
     updateAgentOutputHeader(projectId, status);
 
@@ -7409,6 +7563,34 @@
       showAgentRunningIndicator(status === 'running');
       updateStartStopButtons();
       updateCancelButton();
+
+      // Sync permission mode from server if provided
+      if (fullStatus && fullStatus.permissionMode) {
+        state.permissionMode = fullStatus.permissionMode;
+        updatePermissionModeButtons();
+      }
+
+      // Sync agent mode if provided
+      if (fullStatus && fullStatus.mode) {
+        state.currentAgentMode = fullStatus.mode;
+      }
+
+      // Sync session ID if provided
+      if (fullStatus && fullStatus.sessionId) {
+        state.currentSessionId = fullStatus.sessionId;
+      }
+
+      // Sync waiting state if provided
+      if (fullStatus) {
+        updateWaitingIndicator(fullStatus.isWaitingForInput);
+
+        var project = findProjectById(projectId);
+
+        if (project) {
+          project.isWaitingForInput = fullStatus.isWaitingForInput;
+          project.waitingVersion = fullStatus.waitingVersion;
+        }
+      }
     }
 
     // Reset mode selector and waiting state when agent stops
@@ -8723,6 +8905,7 @@
       var branch = $(this).val();
 
       if (branch && state.selectedProjectId) {
+        setGitOperationState(true);
         api.gitCheckout(state.selectedProjectId, branch)
           .done(function() {
             showToast('Switched to branch: ' + branch, 'success');
@@ -8731,6 +8914,9 @@
           .fail(function(xhr) {
             showToast('Failed to checkout branch: ' + getErrorMessage(xhr), 'error');
             loadGitStatus(); // Reload to reset selection
+          })
+          .always(function() {
+            setGitOperationState(false);
           });
       }
     });
@@ -8740,6 +8926,7 @@
       var branch = $(this).data('branch');
 
       if (branch && state.selectedProjectId) {
+        setGitOperationState(true);
         api.gitCheckout(state.selectedProjectId, branch)
           .done(function() {
             showToast('Switched to branch: ' + branch, 'success');
@@ -8747,6 +8934,9 @@
           })
           .fail(function(xhr) {
             showToast('Failed to checkout branch: ' + getErrorMessage(xhr), 'error');
+          })
+          .always(function() {
+            setGitOperationState(false);
           });
       }
     });
@@ -8756,6 +8946,7 @@
       showPrompt('New Branch', 'Branch name:', { placeholder: 'feature/my-branch', submitText: 'Create' })
         .then(function(name) {
           if (name && state.selectedProjectId) {
+            setGitOperationState(true);
             api.gitCreateBranch(state.selectedProjectId, name, true)
               .done(function() {
                 showToast('Created and switched to branch: ' + name, 'success');
@@ -8763,6 +8954,9 @@
               })
               .fail(function(xhr) {
                 showToast('Failed to create branch: ' + getErrorMessage(xhr), 'error');
+              })
+              .always(function() {
+                setGitOperationState(false);
               });
           }
         });
@@ -8772,12 +8966,16 @@
     $('#btn-git-stage-all').on('click', function() {
       if (!state.selectedProjectId) return;
 
+      setGitOperationState(true);
       api.gitStageAll(state.selectedProjectId)
         .done(function() {
           loadGitStatus();
         })
         .fail(function(xhr) {
           showToast('Failed to stage files: ' + getErrorMessage(xhr), 'error');
+        })
+        .always(function() {
+          setGitOperationState(false);
         });
     });
 
@@ -8785,12 +8983,16 @@
     $('#btn-git-unstage-all').on('click', function() {
       if (!state.selectedProjectId) return;
 
+      setGitOperationState(true);
       api.gitUnstageAll(state.selectedProjectId)
         .done(function() {
           loadGitStatus();
         })
         .fail(function(xhr) {
           showToast('Failed to unstage files: ' + getErrorMessage(xhr), 'error');
+        })
+        .always(function() {
+          setGitOperationState(false);
         });
     });
 
@@ -8800,12 +9002,16 @@
       var path = $(this).data('path');
 
       if (path && state.selectedProjectId) {
+        setGitOperationState(true);
         api.gitStage(state.selectedProjectId, [path])
           .done(function() {
             loadGitStatus();
           })
           .fail(function(xhr) {
             showToast('Failed to stage file: ' + getErrorMessage(xhr), 'error');
+          })
+          .always(function() {
+            setGitOperationState(false);
           });
       }
     });
@@ -8816,12 +9022,16 @@
       var path = $(this).data('path');
 
       if (path && state.selectedProjectId) {
+        setGitOperationState(true);
         api.gitUnstage(state.selectedProjectId, [path])
           .done(function() {
             loadGitStatus();
           })
           .fail(function(xhr) {
             showToast('Failed to unstage file: ' + getErrorMessage(xhr), 'error');
+          })
+          .always(function() {
+            setGitOperationState(false);
           });
       }
     });
@@ -8832,6 +9042,7 @@
       var dirPath = $(this).data('path');
 
       if (dirPath && state.selectedProjectId) {
+        setGitOperationState(true);
         // Git add works with directories directly
         api.gitStage(state.selectedProjectId, [dirPath])
           .done(function() {
@@ -8839,6 +9050,9 @@
           })
           .fail(function(xhr) {
             showToast('Failed to stage folder: ' + getErrorMessage(xhr), 'error');
+          })
+          .always(function() {
+            setGitOperationState(false);
           });
       }
     });
@@ -8849,6 +9063,7 @@
       var dirPath = $(this).data('path');
 
       if (dirPath && state.selectedProjectId) {
+        setGitOperationState(true);
         // Git reset works with directories directly
         api.gitUnstage(state.selectedProjectId, [dirPath])
           .done(function() {
@@ -8856,6 +9071,9 @@
           })
           .fail(function(xhr) {
             showToast('Failed to unstage folder: ' + getErrorMessage(xhr), 'error');
+          })
+          .always(function() {
+            setGitOperationState(false);
           });
       }
     });
@@ -8964,10 +9182,14 @@
       $('#git-context-menu').addClass('hidden');
 
       if (state.gitContextTarget && state.selectedProjectId) {
+        setGitOperationState(true);
         api.gitStage(state.selectedProjectId, [state.gitContextTarget.path])
           .done(loadGitStatus)
           .fail(function(xhr) {
             showToast('Failed to stage: ' + getErrorMessage(xhr), 'error');
+          })
+          .always(function() {
+            setGitOperationState(false);
           });
       }
     });
@@ -8977,10 +9199,14 @@
       $('#git-context-menu').addClass('hidden');
 
       if (state.gitContextTarget && state.selectedProjectId) {
+        setGitOperationState(true);
         api.gitUnstage(state.selectedProjectId, [state.gitContextTarget.path])
           .done(loadGitStatus)
           .fail(function(xhr) {
             showToast('Failed to unstage: ' + getErrorMessage(xhr), 'error');
+          })
+          .always(function() {
+            setGitOperationState(false);
           });
       }
     });
@@ -8994,6 +9220,7 @@
         showConfirm('Discard Changes', 'Discard changes to ' + targetPath + '?\n\nThis cannot be undone.', { danger: true, confirmText: 'Discard' })
           .then(function(confirmed) {
             if (confirmed) {
+              setGitOperationState(true);
               api.gitDiscard(state.selectedProjectId, [targetPath])
                 .done(function() {
                   showToast('Changes discarded', 'success');
@@ -9001,6 +9228,9 @@
                 })
                 .fail(function(xhr) {
                   showToast('Failed to discard: ' + getErrorMessage(xhr), 'error');
+                })
+                .always(function() {
+                  setGitOperationState(false);
                 });
             }
           });
@@ -9043,7 +9273,8 @@
 
       if (!state.selectedProjectId) return;
 
-      $(this).prop('disabled', true).text('Committing...');
+      setGitOperationState(true);
+      $(this).text('Committing...');
 
       api.gitCommit(state.selectedProjectId, message)
         .done(function(result) {
@@ -9055,7 +9286,8 @@
           showToast('Failed to commit: ' + getErrorMessage(xhr), 'error');
         })
         .always(function() {
-          $('#btn-git-commit').prop('disabled', false).text('Commit');
+          setGitOperationState(false);
+          $('#btn-git-commit').text('Commit');
         });
     });
 
@@ -9063,7 +9295,8 @@
     $('#btn-git-push').on('click', function() {
       if (!state.selectedProjectId) return;
 
-      $(this).prop('disabled', true).text('Pushing...');
+      setGitOperationState(true);
+      $(this).text('Pushing...');
 
       api.gitPush(state.selectedProjectId)
         .done(function() {
@@ -9073,7 +9306,8 @@
           showToast('Failed to push: ' + getErrorMessage(xhr), 'error');
         })
         .always(function() {
-          $('#btn-git-push').prop('disabled', false).text('Push');
+          setGitOperationState(false);
+          $('#btn-git-push').text('Push');
         });
     });
 
@@ -9081,7 +9315,8 @@
     $('#btn-git-pull').on('click', function() {
       if (!state.selectedProjectId) return;
 
-      $(this).prop('disabled', true).text('Pulling...');
+      setGitOperationState(true);
+      $(this).text('Pulling...');
 
       api.gitPull(state.selectedProjectId)
         .done(function() {
@@ -9092,7 +9327,8 @@
           showToast('Failed to pull: ' + getErrorMessage(xhr), 'error');
         })
         .always(function() {
-          $('#btn-git-pull').prop('disabled', false).text('Pull');
+          setGitOperationState(false);
+          $('#btn-git-pull').text('Pull');
         });
     });
 
@@ -9116,6 +9352,7 @@
 
       if (!name || !state.selectedProjectId) return;
 
+      setGitOperationState(true);
       api.gitCreateTag(state.selectedProjectId, name, message || undefined)
         .done(function() {
           showToast('Tag created: ' + name, 'success');
@@ -9124,6 +9361,9 @@
         })
         .fail(function(xhr) {
           showToast('Failed to create tag: ' + getErrorMessage(xhr), 'error');
+        })
+        .always(function() {
+          setGitOperationState(false);
         });
     });
 
@@ -9134,7 +9374,8 @@
 
       if (tagName && state.selectedProjectId) {
         var $btn = $(this);
-        $btn.prop('disabled', true).text('...');
+        setGitOperationState(true);
+        $btn.text('...');
 
         api.gitPushTag(state.selectedProjectId, tagName)
           .done(function() {
@@ -9144,7 +9385,8 @@
             showToast('Failed to push tag: ' + getErrorMessage(xhr), 'error');
           })
           .always(function() {
-            $btn.prop('disabled', false).html('&#8593;');
+            setGitOperationState(false);
+            $btn.html('&#8593;');
           });
       }
     });
@@ -9181,10 +9423,16 @@
         // Added line
         if (pendingRemoves.length > 0) {
           // Pair with a pending remove as a "change"
+          var oldContent = pendingRemoves.shift();
+          var newContent = line.substring(1);
+          var wordDiff = computeWordDiff(oldContent, newContent);
+
           aligned.push({
-            left: pendingRemoves.shift(),
-            right: line.substring(1),
-            type: 'change'
+            left: oldContent,
+            right: newContent,
+            type: 'change',
+            leftChunks: wordDiff.leftChunks,
+            rightChunks: wordDiff.rightChunks
           });
         } else {
           aligned.push({ left: '', right: line.substring(1), type: 'add' });
@@ -9273,7 +9521,15 @@
         leftClass += ' diff-empty';
       }
 
-      var leftContent = row.left ? highlightCode(row.left, language) : '&nbsp;';
+      var leftContent;
+
+      if (row.type === 'change' && row.leftChunks && row.leftChunks.length > 0) {
+        // Use word-level diff highlighting for changed lines
+        leftContent = renderWordChunks(row.leftChunks, 'old');
+      } else {
+        leftContent = row.left ? highlightCode(row.left, language) : '&nbsp;';
+      }
+
       html += '<div class="' + leftClass + '">';
       html += '<span class="diff-content">' + leftContent + '</span>';
       html += '</div>';
@@ -9300,7 +9556,15 @@
         rightClass += ' diff-empty';
       }
 
-      var rightContent = row2.right ? highlightCode(row2.right, language) : '&nbsp;';
+      var rightContent;
+
+      if (row2.type === 'change' && row2.rightChunks && row2.rightChunks.length > 0) {
+        // Use word-level diff highlighting for changed lines
+        rightContent = renderWordChunks(row2.rightChunks, 'new');
+      } else {
+        rightContent = row2.right ? highlightCode(row2.right, language) : '&nbsp;';
+      }
+
       html += '<div class="' + rightClass + '">';
       html += '<span class="diff-content">' + rightContent + '</span>';
       html += '</div>';
@@ -9358,7 +9622,6 @@
 
         if (state.devMode) {
           $('#btn-toggle-dev').removeClass('hidden');
-          $('#tab-git').removeClass('hidden');
         }
       });
   }

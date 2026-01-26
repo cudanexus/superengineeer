@@ -1,6 +1,6 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { Server } from 'http';
-import { AgentManager, AgentMessage, QueuedProject, AgentResourceStatus, ContextUsage, WaitingStatus } from '../agents';
+import { AgentManager, AgentMessage, QueuedProject, AgentResourceStatus, ContextUsage, WaitingStatus, FullAgentStatus } from '../agents';
 import { RoadmapGenerator, RoadmapMessage } from '../services';
 import { getLogger, Logger } from '../utils/logger';
 
@@ -9,7 +9,6 @@ export interface AgentMessageWithContext extends AgentMessage {
 }
 
 // WebSocketMessageData is a union of possible data types
-// Note: AgentStatus ('stopped' | 'running' | 'error') is covered by string
 export type WebSocketMessageData =
   | AgentMessage
   | AgentMessageWithContext
@@ -17,7 +16,8 @@ export type WebSocketMessageData =
   | AgentResourceStatus
   | RoadmapMessage
   | WaitingStatus
-  | string; // Covers AgentStatus and 'connected' messages
+  | FullAgentStatus
+  | string; // Covers 'connected' messages
 
 export interface SessionRecoveryData {
   oldConversationId: string;
@@ -148,6 +148,14 @@ export class DefaultWebSocketServer implements ProjectWebSocketServer {
     this.logger.withProject(projectId).debug('Client subscribed', {
       subscribers: this.projectSubscriptions.get(projectId)!.size,
     });
+
+    // Send current agent status immediately on subscribe
+    const fullStatus = this.agentManager.getFullStatus(projectId);
+    this.sendMessage(ws, {
+      type: 'agent_status',
+      projectId,
+      data: fullStatus,
+    });
   }
 
   private unsubscribeFromProject(ws: WebSocket, projectId: string): void {
@@ -186,11 +194,13 @@ export class DefaultWebSocketServer implements ProjectWebSocketServer {
       });
     });
 
-    this.agentManager.on('status', (projectId, status) => {
+    this.agentManager.on('status', (projectId, _status) => {
+      // Send full status instead of just the status string
+      const fullStatus = this.agentManager.getFullStatus(projectId);
       this.broadcast({
         type: 'agent_status',
         projectId,
-        data: status,
+        data: fullStatus,
       });
     });
 

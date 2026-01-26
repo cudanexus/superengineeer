@@ -95,6 +95,17 @@ export interface StartInteractiveAgentOptions {
   permissionMode?: 'acceptEdits' | 'plan';
 }
 
+export interface FullAgentStatus {
+  status: AgentStatus;
+  mode: AgentMode | null;
+  queued: boolean;
+  queuedMessageCount: number;
+  isWaitingForInput: boolean;
+  waitingVersion: number;
+  sessionId: string | null;
+  permissionMode: 'acceptEdits' | 'plan' | null;
+}
+
 export interface AgentManager {
   startAgent(projectId: string, instructions: string): Promise<void>;
   startInteractiveAgent(projectId: string, options?: StartInteractiveAgentOptions): Promise<void>;
@@ -120,6 +131,7 @@ export interface AgentManager {
   getQueuedMessages(projectId: string): string[];
   removeQueuedMessage(projectId: string, index: number): boolean;
   getSessionId(projectId: string): string | null;
+  getFullStatus(projectId: string): FullAgentStatus;
   getTrackedProcesses(): TrackedProcessInfo[];
   cleanupOrphanProcesses(): Promise<OrphanCleanupResult>;
   restartAllRunningAgents(): Promise<void>;
@@ -515,6 +527,21 @@ export class DefaultAgentManager implements AgentManager {
   getSessionId(projectId: string): string | null {
     const agent = this.agents.get(projectId);
     return agent?.sessionId || null;
+  }
+
+  getFullStatus(projectId: string): FullAgentStatus {
+    const agent = this.agents.get(projectId);
+
+    return {
+      status: agent?.status || 'stopped',
+      mode: agent?.mode || null,
+      queued: this.isQueued(projectId),
+      queuedMessageCount: agent?.queuedMessageCount || 0,
+      isWaitingForInput: agent?.isWaitingForInput || false,
+      waitingVersion: agent?.waitingVersion || 0,
+      sessionId: agent?.sessionId || null,
+      permissionMode: agent?.permissionMode || null,
+    };
   }
 
   private async runNextMilestone(projectId: string): Promise<void> {

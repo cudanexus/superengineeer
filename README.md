@@ -144,6 +144,7 @@ set PORT=8080 && set HOST=0.0.0.0 && claudito
 | `NODE_ENV` | `development` | Environment mode |
 | `LOG_LEVEL` | `info` | Log level (debug/info/warn/error) |
 | `MAX_CONCURRENT_AGENTS` | `3` | Maximum concurrent agents |
+| `DEV_MODE` | `true` (dev) / `false` (prod) | Enable development features |
 
 ## Features
 
@@ -154,9 +155,10 @@ Chat with Claude in real-time. The agent auto-starts when you send your first me
 
 - Real-time streaming of Claude's responses
 - See tool usage as it happens (file reads, edits, bash commands)
-- Code diffs with syntax highlighting
+- Code diffs with syntax highlighting and inline change highlighting
 - Send follow-up messages naturally
 - Toggle permission mode (Plan/Accept Edits) at runtime
+- Plan mode with approve/reject/request changes options
 
 #### Autonomous Mode
 Runs through ROADMAP.md milestones automatically.
@@ -165,6 +167,7 @@ Runs through ROADMAP.md milestones automatically.
 - Generate roadmaps via Claude
 - Execute tasks sequentially
 - Track completion status
+- Select specific milestones or tasks to run
 
 ### Project Management
 
@@ -177,20 +180,36 @@ Runs through ROADMAP.md milestones automatically.
 
 | Feature | Description |
 |---------|-------------|
-| **Tabbed Interface** | Switch between Agent Output and Project Files |
-| **File Browser** | Browse, view, edit, create files and folders |
+| **Tabbed Interface** | Switch between Agent Output, Project Files, and Git |
+| **File Browser** | Browse, view, edit, create, delete files and folders |
 | **Syntax Highlighting** | 30+ languages supported via highlight.js |
 | **Tool Visualization** | See Claude's tool usage with icons and arguments |
-| **Code Diffs** | Side-by-side diff view for file changes |
+| **Code Diffs** | Side-by-side diff view with word-level inline change highlighting |
 | **Context Monitor** | View token usage and context window utilization |
 | **Task Tracking** | View Claude's current tasks and progress |
 | **Project Optimizations** | Check for CLAUDE.md issues and optimization suggestions |
 | **Font Controls** | Adjust text size with +/- buttons |
 | **Keyboard Shortcuts** | Configurable keybindings (Ctrl+Enter or Enter to send) |
 | **Image Support** | Paste or drag-and-drop images into messages |
-| **Mobile Support** | Responsive design with collapsible sidebar, full-screen file browsing |
+| **Mobile Support** | Responsive design with collapsible sidebar, full-screen file/diff browsing |
 | **Permission Mode Toggle** | Switch between Plan and Accept Edits modes at runtime |
 | **Desktop Notifications** | Get notified when agent needs input (optional) |
+| **Hidden Files Toggle** | Show/hide dotfiles and hidden folders in file browser |
+
+### Git Integration
+
+Full Git support directly in the UI:
+
+| Feature | Description |
+|---------|-------------|
+| **Branch Management** | View, switch, and create branches |
+| **File Staging** | Stage/unstage individual files or entire directories |
+| **Commit** | Write commit messages and commit changes |
+| **Push/Pull** | Sync with remote repositories |
+| **Diff Preview** | Side-by-side diff view with inline word-level highlighting |
+| **Tag Management** | Create and push tags |
+| **Context Menu** | Right-click files/folders for quick actions |
+| **Operation Blocking** | UI blocks during git operations to prevent conflicts |
 
 ### Real-time Features
 
@@ -198,6 +217,14 @@ Runs through ROADMAP.md milestones automatically.
 - **Conversation Stats**: Duration, message count, tool calls, tokens
 - **Resource Monitor**: Running and queued agent counts
 - **Context Usage**: Token usage persisted even when agent is stopped
+- **Session Recovery**: Automatic recovery when Claude sessions are lost
+
+### Diff Visualization
+
+- **Side-by-Side View**: Original and modified content displayed side by side
+- **Inline Change Highlighting**: Word-level diff showing exactly what changed within modified lines
+- **Color Coding**: Red for removed, green for added, orange for modified lines
+- **Syntax Highlighting**: Language-aware highlighting preserved in diffs
 
 ### Additional Features
 
@@ -208,6 +235,8 @@ Runs through ROADMAP.md milestones automatically.
 - **Optimizations Check**: Detect missing or oversized CLAUDE.md files
 - **Append System Prompt**: Add custom instructions to Claude's system prompt
 - **Offline Ready**: All assets served locally (no CDN dependencies)
+- **Graceful Shutdown**: Properly stops agents and saves state on exit
+- **PID Tracking**: Tracks agent processes and cleans up orphans on startup
 
 ## Configuration
 
@@ -342,6 +371,41 @@ GET    /api/projects/:id/agent/context     # Get context usage
 GET    /api/projects/:id/roadmap           # Get roadmap
 POST   /api/projects/:id/roadmap/generate  # Generate roadmap
 PUT    /api/projects/:id/roadmap           # Modify roadmap
+DELETE /api/projects/:id/roadmap/task      # Delete a task
+DELETE /api/projects/:id/roadmap/milestone # Delete a milestone
+DELETE /api/projects/:id/roadmap/phase     # Delete a phase
+```
+
+### Git Operations
+
+```
+GET    /api/projects/:id/git/status        # Get repository status
+GET    /api/projects/:id/git/branches      # List branches
+POST   /api/projects/:id/git/checkout      # Switch branch
+POST   /api/projects/:id/git/branch        # Create branch
+POST   /api/projects/:id/git/stage         # Stage file(s)
+POST   /api/projects/:id/git/stage-all     # Stage all changes
+POST   /api/projects/:id/git/unstage       # Unstage file(s)
+POST   /api/projects/:id/git/unstage-all   # Unstage all changes
+POST   /api/projects/:id/git/discard       # Discard changes
+POST   /api/projects/:id/git/commit        # Commit staged changes
+POST   /api/projects/:id/git/push          # Push to remote
+POST   /api/projects/:id/git/pull          # Pull from remote
+GET    /api/projects/:id/git/diff          # Get file diff
+GET    /api/projects/:id/git/tags          # List tags
+POST   /api/projects/:id/git/tags          # Create tag
+POST   /api/projects/:id/git/tags/push     # Push tag to remote
+```
+
+### File System
+
+```
+GET    /api/fs/drives                      # List available drives
+GET    /api/fs/browse                      # Browse directory (dirs only)
+GET    /api/fs/browse-with-files           # Browse with files
+GET    /api/fs/read                        # Read file content
+PUT    /api/fs/write                       # Write file content
+DELETE /api/fs/delete                      # Delete file or folder
 ```
 
 ### Settings
@@ -364,7 +428,10 @@ ws.send(JSON.stringify({ type: 'subscribe', projectId: 'your-project-id' }));
 // Message types received:
 // - agent_message: Real-time agent output
 // - agent_status: Status changes (running/stopped/error)
+// - agent_waiting: Agent waiting for input (with version for sync)
 // - queue_change: Queue updates
+// - roadmap_message: Roadmap generation output
+// - session_recovery: Session couldn't be resumed, new conversation created
 ```
 
 ## Development

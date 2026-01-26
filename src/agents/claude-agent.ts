@@ -91,6 +91,7 @@ export interface ClaudeAgent {
   readonly waitingVersion: number;
   readonly sessionId: string | null;
   readonly sessionError: string | null;
+  readonly permissionMode: 'acceptEdits' | 'plan' | null;
   start(instructions: string): void;
   stop(): Promise<void>;
   sendInput(input: string): void;
@@ -261,6 +262,10 @@ export class DefaultClaudeAgent implements ClaudeAgent {
 
   get sessionError(): string | null {
     return this._sessionError;
+  }
+
+  get permissionMode(): 'acceptEdits' | 'plan' | null {
+    return this._permissions.permissionMode || null;
   }
 
   start(instructions: string): void {
