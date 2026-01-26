@@ -1557,29 +1557,33 @@
   <!-- Create Tag Modal -->
   <div id="modal-create-tag" class="modal hidden">
     <div class="modal-backdrop"></div>
-    <div class="modal-content max-w-md">
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="text-lg font-semibold text-white">Create Tag</h3>
-        <button class="modal-close text-gray-400 hover:text-white">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-          </svg>
-        </button>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-md">
+        <div class="p-3 border-b border-gray-700 flex items-center justify-between">
+          <h3 class="font-semibold text-white">Create Tag</h3>
+          <button class="modal-close text-gray-400 hover:text-white">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        <form id="form-create-tag">
+          <div class="p-3">
+            <div class="mb-3">
+              <label class="block text-sm font-medium text-gray-300 mb-1">Tag Name</label>
+              <input type="text" id="input-tag-name" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-purple-500" placeholder="v1.0.0" required>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-300 mb-1">Message (optional, creates annotated tag)</label>
+              <textarea id="input-tag-message" rows="2" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-gray-100 resize-none focus:outline-none focus:border-purple-500" placeholder="Release version 1.0.0"></textarea>
+            </div>
+          </div>
+          <div class="p-3 border-t border-gray-700 flex justify-end gap-2">
+            <button type="button" class="modal-close px-3 py-1.5 text-sm text-gray-300 hover:text-white transition-colors">Cancel</button>
+            <button type="submit" id="btn-create-tag" class="px-3 py-1.5 text-sm bg-purple-600 hover:bg-purple-700 text-white rounded transition-colors">Create</button>
+          </div>
+        </form>
       </div>
-      <form id="form-create-tag">
-        <div class="mb-4">
-          <label class="block text-sm font-medium text-gray-300 mb-1">Tag Name</label>
-          <input type="text" id="input-tag-name" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-purple-500" placeholder="v1.0.0" required>
-        </div>
-        <div class="mb-4">
-          <label class="block text-sm font-medium text-gray-300 mb-1">Message (optional, creates annotated tag)</label>
-          <textarea id="input-tag-message" rows="2" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-gray-100 resize-none focus:outline-none focus:border-purple-500" placeholder="Release version 1.0.0"></textarea>
-        </div>
-        <div class="flex justify-end gap-2">
-          <button type="button" class="modal-close px-3 py-1.5 text-sm text-gray-300 hover:text-white transition-colors">Cancel</button>
-          <button type="submit" class="px-3 py-1.5 text-sm bg-purple-600 hover:bg-purple-700 text-white rounded transition-colors">Create</button>
-        </div>
-      </form>
     </div>
   </div>
 
