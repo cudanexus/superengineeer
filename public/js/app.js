@@ -7580,8 +7580,8 @@
         state.currentSessionId = fullStatus.sessionId;
       }
 
-      // Sync waiting state if provided
-      if (fullStatus) {
+      // Sync waiting state if provided (only when agent is running)
+      if (fullStatus && status === 'running') {
         updateWaitingIndicator(fullStatus.isWaitingForInput);
 
         var project = findProjectById(projectId);
@@ -8489,6 +8489,15 @@
       e.stopPropagation();
       var path = $(this).data('path');
       closeFile(path);
+    });
+
+    // Middle-click on file tab to close it
+    $(document).on('mousedown', '.file-tab', function(e) {
+      if (e.button === 1) {
+        e.preventDefault();
+        var path = $(this).data('path');
+        closeFile(path);
+      }
     });
 
     // File editor content change
