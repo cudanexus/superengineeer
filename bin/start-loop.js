@@ -8,10 +8,6 @@
 
 const { spawn } = require('child_process');
 const path = require('path');
-
-// Enable dev mode via environment variable
-process.env.CLAUDITO_DEV_MODE = '1';
-
 const isWindows = process.platform === 'win32';
 const npm = isWindows ? 'npm.cmd' : 'npm';
 
@@ -26,7 +22,7 @@ function run() {
     cwd: path.resolve(__dirname, '..'),
     stdio: 'inherit',
     shell: true,
-    env: { ...process.env, CLAUDITO_DEV_MODE: '1' }
+    env: { ...process.env }
   });
 
   child.on('exit', (code) => {

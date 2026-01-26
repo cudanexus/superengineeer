@@ -21,7 +21,7 @@ export class EnvironmentConfigLoader implements ConfigLoader {
       env,
       logLevel: this.parseLogLevel(),
       maxConcurrentAgents: this.parseMaxConcurrentAgents(),
-      devMode: process.env['DEV_MODE'] === 'true' || process.env['CLAUDITO_DEV_MODE'] === '1' || env === 'development',
+      devMode: process.env['CLAUDITO_DEV_MODE'] === '1',
     };
   }
 
