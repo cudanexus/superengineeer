@@ -2288,7 +2288,7 @@ body {
     display: flex !important;
   }
 
-  /* Mobile Git tab - show list first, then content full width */
+  /* Mobile Git tab - sidebar full height, diff overlay */
   #tab-content-git > .flex {
     flex-direction: column;
     position: relative;
@@ -2298,14 +2298,9 @@ body {
     width: 100%;
     flex: 1;
     border-right: none;
-    border-bottom: 1px solid #374151;
   }
 
-  #git-sidebar.mobile-hidden {
-    display: none;
-  }
-
-  #git-actions-area {
+  #git-diff-area {
     position: absolute;
     top: 0;
     left: 0;
@@ -2315,7 +2310,7 @@ body {
     z-index: 10;
   }
 
-  #git-actions-area.mobile-visible {
+  #git-diff-area.mobile-visible {
     display: flex;
   }
 

@@ -304,6 +304,9 @@ export class DefaultClaudeAgent implements ClaudeAgent {
     // Write instructions to stdin using stream-json format
     if (this.process.stdin) {
       if (instructions && instructions.trim()) {
+        // Mark as processing since we're sending initial instructions
+        this.setProcessing(true);
+
         // Check if instructions is a JSON array (multimodal content)
         let content: string | unknown[] = instructions;
         let isMultimodal = false;
@@ -487,6 +490,10 @@ export class DefaultClaudeAgent implements ClaudeAgent {
     if (!this.process?.stdin || this.process.stdin.destroyed) {
       return;
     }
+
+    // Reset duplicate tracking when user sends input
+    this.lastQuestionContent = null;
+    this.lastPlanModeAction = null;
 
     this.setProcessing(true);
 
@@ -948,6 +955,7 @@ export class DefaultClaudeAgent implements ClaudeAgent {
   private activeClaudeToolUseId: string | null = null;
   private toolIdMap: Map<string, { internalId: string; name: string }> = new Map();
   private lastPlanModeAction: 'enter' | 'exit' | null = null;
+  private lastQuestionContent: string | null = null;
 
   private emitToolMessage(name: string, input?: Record<string, unknown>, claudeToolUseId?: string): void {
     // Handle AskUserQuestion specially
@@ -1077,6 +1085,13 @@ export class DefaultClaudeAgent implements ClaudeAgent {
     const q = questions[0];
 
     if (!q) return;
+
+    // Prevent duplicate question messages
+    if (this.lastQuestionContent === q.question) {
+      this.logger.debug('Skipping duplicate question message', { question: q.question });
+      return;
+    }
+    this.lastQuestionContent = q.question;
 
     const questionInfo: QuestionInfo = {
       question: q.question,

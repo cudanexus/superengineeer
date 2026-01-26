@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
 const mime = require('mime-types') as { lookup: (path: string) => string | false };
 
 export interface FilesystemService {
@@ -230,6 +230,7 @@ const TEXT_FILE_NAMES = new Set([
   '.gitignore', '.gitattributes', '.editorconfig', '.prettierrc', '.eslintrc',
   '.dockerignore', '.env', '.npmrc', '.nvmrc', '.yarnrc', '.babelrc',
   '.prettierignore', '.eslintignore', '.stylelintrc', '.browserslistrc',
+  '.npmignore', '.slugignore', '.vercelignore', '.nowignore', '.helmignore', '.cfignore',
   'Makefile', 'Dockerfile', 'Vagrantfile', 'Gemfile', 'Rakefile', 'Procfile',
   'CMakeLists.txt', 'LICENSE', 'AUTHORS', 'CHANGELOG', 'README', 'INSTALL',
   'CONTRIBUTING', 'CODEOWNERS', '.htaccess', '.mailmap',

@@ -92,13 +92,21 @@
     },
     isModeSwitching: false, // UI blocked during permission mode switch
     debugExpandedLogs: {}, // Track expanded log items by ID: { logId: true }
+    debugLogFilters: { // Log level filters for debug modal
+      error: true,
+      warn: true,
+      info: true,
+      debug: true,
+      frontend: true
+    },
     waitingVersion: 0, // Version number for waiting status updates
     // Git state
     git: {
       expandedDirs: {}, // Track expanded directories in git tree
       selectedFile: null // Currently selected file for diff
     },
-    gitContextTarget: null // { path, type, status } for git context menu
+    gitContextTarget: null, // { path, type, status } for git context menu
+    activePromptType: null // 'question' | 'permission' | 'plan_mode' | null - blocks input while prompt is active
   };
 
   // Local storage keys for browser-specific settings
@@ -462,6 +470,41 @@
         data: JSON.stringify({ remote: remote })
       });
     }
+  };
+
+  // Frontend error logging to backend
+  function logFrontendError(message, source, line, column, errorObj) {
+    var errorData = {
+      message: message,
+      source: source,
+      line: line,
+      column: column,
+      stack: errorObj && errorObj.stack ? errorObj.stack : null,
+      projectId: state.selectedProjectId,
+      userAgent: navigator.userAgent
+    };
+
+    // Send to backend silently (don't show errors if this fails)
+    $.ajax({
+      url: '/api/log/error',
+      method: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify(errorData)
+    });
+  }
+
+  // Set up global error handlers
+  window.onerror = function(message, source, line, column, error) {
+    logFrontendError(message, source, line, column, error);
+    // Return false to allow default error handling
+    return false;
+  };
+
+  window.onunhandledrejection = function(event) {
+    var reason = event.reason;
+    var message = reason instanceof Error ? reason.message : String(reason);
+    var stack = reason instanceof Error ? reason.stack : null;
+    logFrontendError('Unhandled Promise Rejection: ' + message, null, null, null, { stack: stack });
   };
 
   // Error code to user-friendly message mapping
@@ -3173,6 +3216,15 @@
         loadPlanContent($rendered.find('.plan-content-container'));
       }
 
+      // Block input when interactive prompts appear
+      if (message.type === 'question' || message.type === 'permission') {
+        setPromptBlockingState(message.type);
+      }
+
+      if (message.type === 'plan_mode' && message.planModeInfo && message.planModeInfo.action === 'exit') {
+        setPromptBlockingState('plan_mode');
+      }
+
       scrollConversationToBottom();
     }
   }
@@ -3539,6 +3591,12 @@
   function openDebugModal() {
     state.debugPanelOpen = true;
     openModal('modal-debug');
+
+    // Sync filter checkbox states
+    Object.keys(state.debugLogFilters).forEach(function(key) {
+      $('#log-filter-' + key).prop('checked', state.debugLogFilters[key]);
+    });
+
     refreshDebugInfo();
     startDebugAutoRefresh();
   }
@@ -3883,16 +3941,40 @@
   function renderDebugLogsTab(data) {
     var html = '';
 
+    // Apply filters
+    var filteredLogs = (data.recentLogs || []).filter(function(log) {
+      var isFrontend = log.context && log.context.type === 'frontend';
+
+      // Check frontend filter
+      if (isFrontend && !state.debugLogFilters.frontend) {
+        return false;
+      }
+
+      // Check level filters
+      if (!state.debugLogFilters[log.level]) {
+        return false;
+      }
+
+      return true;
+    });
+
+    var totalLogs = data.recentLogs ? data.recentLogs.length : 0;
     html += '<div class="flex items-center justify-between mb-3">';
-    html += '<span class="text-gray-400 text-sm">Showing ' + data.recentLogs.length + ' recent log entries (click to expand)</span>';
+    html += '<span class="text-gray-400 text-sm">Showing ' + filteredLogs.length + ' of ' + totalLogs + ' log entries (click to expand)</span>';
     html += '</div>';
 
-    if (data.recentLogs && data.recentLogs.length > 0) {
+    if (filteredLogs.length > 0) {
       html += '<div class="space-y-1">';
 
-      data.recentLogs.forEach(function(log, index) {
+      filteredLogs.forEach(function(log, index) {
         var levelClass = getLevelClass(log.level);
         var levelBgClass = getLevelBgClass(log.level);
+        var isFrontend = log.context && log.context.type === 'frontend';
+
+        if (isFrontend) {
+          levelBgClass = 'border-l-2 border-purple-500';
+        }
+
         var hasContext = log.context && Object.keys(log.context).length > 0;
         var logId = 'all-' + log.timestamp + '-' + index;
         var isExpanded = state.debugExpandedLogs[logId] || false;
@@ -3948,7 +4030,11 @@
 
       html += '</div>';
     } else {
-      html += '<div class="text-gray-500 text-center py-8">No logs yet</div>';
+      if (totalLogs > 0) {
+        html += '<div class="text-gray-500 text-center py-8">No logs match current filters</div>';
+      } else {
+        html += '<div class="text-gray-500 text-center py-8">No logs yet</div>';
+      }
     }
 
     $('#debug-logs-content').html(html);
@@ -4311,6 +4397,18 @@
 
       $detail.toggleClass('hidden');
       $chevron.toggleClass('rotate-180');
+    });
+
+    // Debug log filter checkboxes
+    $(document).on('change', '.log-filter-checkbox', function() {
+      var filterId = $(this).attr('id');
+      var filterName = filterId.replace('log-filter-', '');
+      state.debugLogFilters[filterName] = $(this).is(':checked');
+
+      // Re-render logs tab if it's currently active
+      if ($('#debug-tab-logs').is(':visible')) {
+        refreshDebugInfo();
+      }
     });
 
     $('#btn-create-roadmap').on('click', function() {
@@ -5282,6 +5380,9 @@
       // Send response to agent
       sendPermissionResponse(response);
 
+      // Clear prompt blocking
+      setPromptBlockingState(null);
+
       // Disable all buttons in this permission request
       $btn.closest('.permission-actions').find('.permission-btn').prop('disabled', true);
       $btn.addClass('selected');
@@ -5294,13 +5395,17 @@
       var optionLabel = $btn.data('option-label');
 
       if (optionIndex === -1) {
-        // "Other" option - focus the input
-        $('#input-message').focus();
+        // "Other" option - clear blocking and focus the input
+        setPromptBlockingState(null);
+        $('#agent-input').focus();
         return;
       }
 
       // Send the selected option as response
       sendQuestionResponse(optionLabel);
+
+      // Clear prompt blocking
+      setPromptBlockingState(null);
 
       // Disable all options in this question
       $btn.closest('.question-options').find('.question-option').prop('disabled', true);
@@ -5313,6 +5418,9 @@
       var $actions = $btn.closest('.plan-mode-actions');
       $actions.find('button').prop('disabled', true).addClass('opacity-50 cursor-not-allowed');
 
+      // Clear prompt blocking
+      setPromptBlockingState(null);
+
       // Switch to Accept Edits mode and restart agent with implementation message
       approvePlanAndSwitchToAcceptEdits();
     });
@@ -5322,6 +5430,10 @@
       var $btn = $(this);
       var $actions = $btn.closest('.plan-mode-actions');
       $actions.find('button').prop('disabled', true).addClass('opacity-50 cursor-not-allowed');
+
+      // Clear prompt blocking
+      setPromptBlockingState(null);
+
       sendPlanModeResponse('no');
     });
 
@@ -5331,6 +5443,10 @@
       var $actions = $btn.closest('.plan-mode-actions');
       // Disable all buttons in this plan mode action set
       $actions.find('button').prop('disabled', true).addClass('opacity-50 cursor-not-allowed');
+
+      // Clear prompt blocking so user can type feedback
+      setPromptBlockingState(null);
+
       // Focus the input field so user can type their feedback
       var $input = $('#agent-input');
       $input.focus();
@@ -5383,6 +5499,9 @@
 
     // Clear session ID to force new session
     state.currentSessionId = null;
+
+    // Clear any prompt blocking
+    setPromptBlockingState(null);
 
     function clearAndRestart() {
       // Clear current conversation on server
@@ -5559,6 +5678,9 @@
     if (state.search.isOpen) {
       closeSearch();
     }
+
+    // Clear any prompt blocking when switching conversations
+    setPromptBlockingState(null);
 
     state.currentConversationId = conversationId;
 
@@ -5937,6 +6059,23 @@
     } else {
       $('#permission-mode-selector').removeClass('opacity-50 pointer-events-none');
       $('#form-send-message').removeClass('opacity-50');
+    }
+  }
+
+  function setPromptBlockingState(promptType) {
+    state.activePromptType = promptType;
+    var isBlocked = promptType !== null;
+
+    // Disable input and send button when prompt is active
+    $('#agent-input').prop('disabled', isBlocked);
+    $('#send-agent-input').prop('disabled', isBlocked);
+
+    if (isBlocked) {
+      $('#agent-input').attr('placeholder', 'Please respond to the prompt above...');
+      $('#form-send-agent').addClass('opacity-50');
+    } else {
+      $('#agent-input').attr('placeholder', 'Type your message...');
+      $('#form-send-agent').removeClass('opacity-50');
     }
   }
 
@@ -6509,6 +6648,7 @@
     state.selectedProjectId = projectId;
     state.currentAgentMode = null; // Reset on project change
     state.pendingPermissionMode = null; // Clear pending mode on project change
+    setPromptBlockingState(null); // Clear any prompt blocking on project change
     var project = findProjectById(projectId);
 
     // Save selected project to localStorage
@@ -8257,14 +8397,11 @@
 
   function showMobileGitDiff() {
     if (!isMobileView()) return;
-
-    $('#git-sidebar').addClass('mobile-hidden');
-    $('#git-actions-area').addClass('mobile-visible');
+    $('#git-diff-area').addClass('mobile-visible');
   }
 
   function hideMobileGitDiff() {
-    $('#git-sidebar').removeClass('mobile-hidden');
-    $('#git-actions-area').removeClass('mobile-visible');
+    $('#git-diff-area').removeClass('mobile-visible');
   }
 
   // ============================================================
@@ -8524,6 +8661,55 @@
         $select.append('<option value="' + escapeHtml(branch) + '">' + escapeHtml(branch) + '</option>');
       });
     }
+
+    // Also render branches list
+    renderGitBranchesList(branches);
+  }
+
+  function renderGitBranchesList(branches) {
+    var $list = $('#git-branches-list');
+
+    if (!branches || (!branches.current && branches.local.length === 0)) {
+      $list.html('<div class="text-gray-500 text-center py-1">No branches</div>');
+      return;
+    }
+
+    var html = '';
+
+    // Render local branches
+    branches.local.forEach(function(branch) {
+      var isCurrent = branch === branches.current;
+      var baseClasses = 'px-2 py-1 rounded cursor-pointer hover:bg-gray-600 flex items-center gap-2 git-branch-item';
+      var extraClasses = isCurrent ? ' bg-gray-600 text-green-400' : ' text-gray-300';
+
+      html += '<div class="' + baseClasses + extraClasses + '" data-branch="' + escapeHtml(branch) + '">';
+
+      if (isCurrent) {
+        html += '<span class="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0"></span>';
+      } else {
+        html += '<span class="w-1.5 flex-shrink-0"></span>';
+      }
+
+      html += '<span class="truncate" title="' + escapeHtml(branch) + '">' + escapeHtml(branch) + '</span>';
+      html += '</div>';
+    });
+
+    // Add remote branches if any (collapsed by default)
+    if (branches.remote.length > 0) {
+      html += '<div class="mt-1 pt-1 border-t border-gray-600">';
+      html += '<div class="text-gray-500 text-[10px] uppercase px-2 py-0.5">Remote</div>';
+
+      branches.remote.forEach(function(branch) {
+        html += '<div class="px-2 py-1 rounded cursor-pointer hover:bg-gray-600 flex items-center gap-2 text-gray-400 git-branch-item" data-branch="' + escapeHtml(branch) + '">';
+        html += '<span class="w-1.5 flex-shrink-0"></span>';
+        html += '<span class="truncate text-[11px]" title="' + escapeHtml(branch) + '">' + escapeHtml(branch) + '</span>';
+        html += '</div>';
+      });
+
+      html += '</div>';
+    }
+
+    $list.html(html);
   }
 
   function setupGitHandlers() {
@@ -8545,6 +8731,22 @@
           .fail(function(xhr) {
             showToast('Failed to checkout branch: ' + getErrorMessage(xhr), 'error');
             loadGitStatus(); // Reload to reset selection
+          });
+      }
+    });
+
+    // Branch list item click
+    $(document).on('click', '.git-branch-item', function() {
+      var branch = $(this).data('branch');
+
+      if (branch && state.selectedProjectId) {
+        api.gitCheckout(state.selectedProjectId, branch)
+          .done(function() {
+            showToast('Switched to branch: ' + branch, 'success');
+            loadGitStatus();
+          })
+          .fail(function(xhr) {
+            showToast('Failed to checkout branch: ' + getErrorMessage(xhr), 'error');
           });
       }
     });
@@ -8696,7 +8898,7 @@
       var type = $item.data('type');
       var status = $item.data('status');
 
-      state.gitContextTarget = { path: path, type: type, status: status };
+      state.gitContextTarget = { path: path, type: type, status: status, isDirectory: false };
 
       // Show/hide appropriate options
       if (type === 'staged') {
@@ -8706,6 +8908,43 @@
         $('#git-ctx-stage, #git-ctx-discard').removeClass('hidden');
         $('#git-ctx-unstage').addClass('hidden');
       }
+
+      // Show file-specific options
+      $('#git-ctx-view-diff, #git-ctx-open-file').removeClass('hidden');
+
+      // Position and show menu
+      $('#git-context-menu').css({
+        top: e.pageY + 'px',
+        left: e.pageX + 'px'
+      }).removeClass('hidden');
+
+      // Close menu when clicking elsewhere
+      $(document).one('click', function() {
+        $('#git-context-menu').addClass('hidden');
+      });
+    });
+
+    // Right-click context menu for git directories
+    $(document).on('contextmenu', '.git-tree-item.directory', function(e) {
+      e.preventDefault();
+
+      var $item = $(this);
+      var path = $item.data('path');
+      var type = $item.data('type');
+
+      state.gitContextTarget = { path: path, type: type, status: null, isDirectory: true };
+
+      // Show/hide appropriate options - no discard for directories
+      if (type === 'staged') {
+        $('#git-ctx-stage, #git-ctx-discard').addClass('hidden');
+        $('#git-ctx-unstage').removeClass('hidden');
+      } else {
+        $('#git-ctx-stage').removeClass('hidden');
+        $('#git-ctx-unstage, #git-ctx-discard').addClass('hidden');
+      }
+
+      // Hide file-specific options for directories
+      $('#git-ctx-view-diff, #git-ctx-open-file').addClass('hidden');
 
       // Position and show menu
       $('#git-context-menu').css({

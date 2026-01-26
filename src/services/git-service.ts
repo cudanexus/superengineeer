@@ -275,7 +275,7 @@ export class SimpleGitService implements GitService {
         const fullPath = path.join(projectPath, filePath);
         const content = fs.readFileSync(fullPath, 'utf-8');
         const lines = content.split('\n');
-        const diffLines = lines.map((line, i) => `+${line}`);
+        const diffLines = lines.map((line) => `+${line}`);
         const diff = `@@ -0,0 +1,${lines.length} @@\n${diffLines.join('\n')}`;
 
         return { diff, filePath };

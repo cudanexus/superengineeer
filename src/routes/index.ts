@@ -16,9 +16,11 @@ import {
 } from '../services';
 import { createGitService } from '../services/git-service';
 import { DefaultAgentManager, AgentManager } from '../agents';
-import { getDataDirectory } from '../utils';
+import { getDataDirectory, getLogger } from '../utils';
 import { RoadmapGenerator } from '../services';
 import packageJson from '../../package.json';
+
+const frontendLogger = getLogger('frontend');
 
 let sharedAgentManager: AgentManager | null = null;
 let sharedRoadmapGenerator: RoadmapGenerator | null = null;
@@ -66,6 +68,35 @@ export function createApiRouter(deps: ApiRouterDependencies = {}): Router {
       version: packageJson.version,
       timestamp: new Date().toISOString(),
     });
+  });
+
+  // Frontend error logging
+  router.post('/log/error', (req, res) => {
+    const body = req.body as {
+      message?: string;
+      stack?: string;
+      source?: string;
+      line?: number;
+      column?: number;
+      projectId?: string;
+      userAgent?: string;
+    };
+
+    const loggerWithProject = body.projectId
+      ? frontendLogger.withProject(body.projectId)
+      : frontendLogger;
+
+    loggerWithProject.error('Frontend error', {
+      message: body.message,
+      stack: body.stack,
+      source: body.source,
+      line: body.line,
+      column: body.column,
+      userAgent: body.userAgent,
+      type: 'frontend',
+    });
+
+    res.json({ success: true });
   });
 
   // Dev mode status

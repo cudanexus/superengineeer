@@ -59,6 +59,23 @@ function formatErrorResponse(err: Error): ErrorResponse {
   };
 }
 
+function sanitizeBody(body: unknown): unknown {
+  if (!body || typeof body !== 'object') return body;
+
+  const sanitized = { ...body as Record<string, unknown> };
+
+  // Redact sensitive fields
+  const sensitiveFields = ['password', 'token', 'apiKey', 'secret', 'authorization'];
+
+  for (const field of sensitiveFields) {
+    if (field in sanitized) {
+      sanitized[field] = '[REDACTED]';
+    }
+  }
+
+  return sanitized;
+}
+
 export function createErrorHandler(): ErrorRequestHandler {
   const logger = getLogger('error-handler');
 
@@ -66,19 +83,29 @@ export function createErrorHandler(): ErrorRequestHandler {
     const statusCode = err instanceof AppError ? err.statusCode : 500;
     const isOperational = err instanceof AppError && err.isOperational;
 
+    // Build detailed error context
+    const errorContext: Record<string, unknown> = {
+      error: err.message,
+      path: req.path,
+      method: req.method,
+      statusCode,
+      query: Object.keys(req.query).length > 0 ? req.query : undefined,
+      body: req.body ? sanitizeBody(req.body) : undefined,
+      params: Object.keys(req.params).length > 0 ? req.params : undefined,
+      ip: req.ip,
+      userAgent: req.get('user-agent'),
+    };
+
     if (!isOperational) {
       logger.error('Unhandled error', {
-        error: err.message,
+        ...errorContext,
         stack: err.stack,
-        path: req.path,
-        method: req.method,
+        errorName: err.name,
       });
     } else if (err instanceof AppError) {
-      logger.warn('Operational error', {
-        error: err.message,
+      logger.error('API error', {
+        ...errorContext,
         code: err.code,
-        path: req.path,
-        method: req.method,
       });
     }
 

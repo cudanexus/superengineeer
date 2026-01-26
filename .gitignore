@@ -37,6 +37,7 @@ data/
 
 # Claude
 /.claude
+/nul
 
 # Claudito
 /.claudito
