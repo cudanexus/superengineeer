@@ -468,6 +468,10 @@
   // Shell
   // ============================================================
 
+  ApiClient.isShellEnabled = function(projectId) {
+    return $.get(baseUrl + '/api/projects/' + projectId + '/shell/enabled');
+  };
+
   ApiClient.startShell = function(projectId) {
     return $.post(baseUrl + '/api/projects/' + projectId + '/shell/start');
   };

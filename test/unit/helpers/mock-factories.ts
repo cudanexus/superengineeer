@@ -24,20 +24,15 @@ import {
   AgentStatus,
   AgentMode,
   AgentMessage,
-  ProcessInfo,
   ContextUsage,
   AgentEvents,
   ProcessSpawner,
-  SpawnOptions,
-  PermissionConfig,
 } from '../../../src/agents/claude-agent';
 import { AgentFactory, AgentFactoryOptions } from '../../../src/agents/agent-manager';
 import {
   InstructionGenerator,
   InstructionGeneratorConfig,
   MilestoneInstructionConfig,
-  ItemWithContext,
-  MilestoneWithContext,
 } from '../../../src/services/instruction-generator';
 import {
   RoadmapParser,
@@ -580,7 +575,7 @@ export function createMockClaudeAgent(projectId = 'test-project'): jest.Mocked<C
       status = 'running';
       emitter.emit('status', status);
     }),
-    stop: jest.fn().mockImplementation(async () => {
+    stop: jest.fn().mockImplementation(() => {
       status = 'stopped';
       emitter.emit('status', status);
       emitter.emit('exit', 0);
@@ -708,7 +703,7 @@ export function createMockPermissionGenerator(): jest.Mocked<PermissionGenerator
 // Git Service Mock
 // ============================================================================
 
-import { GitService, GitStatus, BranchInfo, CommitResult, FileDiffResult } from '../../../src/services/git-service';
+import { GitService, GitStatus, BranchInfo, CommitResult } from '../../../src/services/git-service';
 
 export const sampleGitStatus: GitStatus = {
   isRepo: true,
@@ -757,11 +752,11 @@ export function createMockRoadmapGenerator(): jest.Mocked<RoadmapGenerator> {
   const generatingProjects = new Set<string>();
 
   return {
-    generate: jest.fn().mockImplementation(async (options: { projectId: string }) => {
+    generate: jest.fn().mockImplementation((options: { projectId: string }) => {
       generatingProjects.add(options.projectId);
       const result: GenerateRoadmapResult = { success: true };
       generatingProjects.delete(options.projectId);
-      return result;
+      return Promise.resolve(result);
     }),
     sendResponse: jest.fn(),
     isGenerating: jest.fn().mockImplementation((projectId: string) => generatingProjects.has(projectId)),
@@ -803,7 +798,7 @@ import { Project } from '../../../src/repositories/project';
 
 export function createMockProjectService(): jest.Mocked<ProjectService> {
   return {
-    createProject: jest.fn().mockImplementation(async (options: CreateProjectOptions) => {
+    createProject: jest.fn().mockImplementation((options: CreateProjectOptions) => {
       const now = new Date().toISOString();
       const project: Project = {
         id: 'new-project-id',
@@ -822,7 +817,7 @@ export function createMockProjectService(): jest.Mocked<ProjectService> {
         success: true,
         project,
       };
-      return result;
+      return Promise.resolve(result);
     }),
     hasRoadmap: jest.fn().mockResolvedValue(true),
     getRoadmapContent: jest.fn().mockResolvedValue('# Roadmap\n## Phase 1'),
@@ -839,7 +834,6 @@ import {
   AgentLoopState,
   QueuedProject,
   FullAgentStatus,
-  ImageData,
 } from '../../../src/agents/agent-manager';
 
 export function createMockAgentManager(): jest.Mocked<AgentManager> {
@@ -849,18 +843,22 @@ export function createMockAgentManager(): jest.Mocked<AgentManager> {
   const loopStates = new Map<string, AgentLoopState>();
 
   const mock: jest.Mocked<AgentManager> = {
-    startAgent: jest.fn().mockImplementation(async (projectId: string) => {
+    startAgent: jest.fn().mockImplementation((projectId: string) => {
       runningAgents.set(projectId, { mode: 'autonomous', status: 'running' });
+      return Promise.resolve();
     }),
-    startInteractiveAgent: jest.fn().mockImplementation(async (projectId: string) => {
+    startInteractiveAgent: jest.fn().mockImplementation((projectId: string) => {
       runningAgents.set(projectId, { mode: 'interactive', status: 'running' });
+      return Promise.resolve();
     }),
     sendInput: jest.fn(),
-    stopAgent: jest.fn().mockImplementation(async (projectId: string) => {
+    stopAgent: jest.fn().mockImplementation((projectId: string) => {
       runningAgents.delete(projectId);
+      return Promise.resolve();
     }),
-    stopAllAgents: jest.fn().mockImplementation(async () => {
+    stopAllAgents: jest.fn().mockImplementation(() => {
       runningAgents.clear();
+      return Promise.resolve();
     }),
     getAgentStatus: jest.fn().mockImplementation((projectId: string) => {
       return runningAgents.get(projectId)?.status || 'stopped';
@@ -887,9 +885,10 @@ export function createMockAgentManager(): jest.Mocked<AgentManager> {
       if (index >= 0) queuedProjects.splice(index, 1);
     }),
     setMaxConcurrentAgents: jest.fn(),
-    startAutonomousLoop: jest.fn().mockImplementation(async (projectId: string) => {
+    startAutonomousLoop: jest.fn().mockImplementation((projectId: string) => {
       runningAgents.set(projectId, { mode: 'autonomous', status: 'running' });
       loopStates.set(projectId, { isLooping: true, currentMilestone: null, currentConversationId: null });
+      return Promise.resolve();
     }),
     stopAutonomousLoop: jest.fn().mockImplementation((projectId: string) => {
       loopStates.delete(projectId);

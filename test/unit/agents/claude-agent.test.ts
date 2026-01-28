@@ -1,11 +1,10 @@
-import { EventEmitter } from 'events';
-import { DefaultClaudeAgent, ClaudeAgentConfig, AgentMessage } from '../../../src/agents/claude-agent';
+import { DefaultClaudeAgent, ClaudeAgentConfig } from '../../../src/agents/claude-agent';
 import { createMockChildProcess, createMockProcessSpawner, MockChildProcess } from '../helpers/mock-factories';
 
 // Helper to safely get spawn args
 function getSpawnArgs(spawner: ReturnType<typeof createMockProcessSpawner>): string[] {
   const call = spawner.spawn.mock.calls[0];
-  return call ? call[1] as string[] : [];
+  return call ? call[1] : [];
 }
 
 describe('DefaultClaudeAgent', () => {
@@ -289,7 +288,7 @@ describe('DefaultClaudeAgent', () => {
       expect(agent.status).toBe('stopped');
     });
 
-    it('should emit system message on exit', async () => {
+    it('should emit system message on exit', () => {
       agent.start('test');
       const messageListener = jest.fn();
       agent.on('message', messageListener);

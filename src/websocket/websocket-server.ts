@@ -87,7 +87,7 @@ export class DefaultWebSocketServer implements ProjectWebSocketServer {
   initialize(httpServer: Server): void {
     this.wss = new WebSocketServer({
       server: httpServer,
-      verifyClient: (info, callback) => this.verifyClient(info, callback),
+      verifyClient: (info, callback): void => this.verifyClient(info, callback),
     });
     this.wss.on('connection', (ws) => this.handleConnection(ws));
   }
@@ -102,7 +102,7 @@ export class DefaultWebSocketServer implements ProjectWebSocketServer {
       return;
     }
 
-    const sessionId = parseCookie(info.req.headers.cookie as string | undefined, COOKIE_NAME);
+    const sessionId = parseCookie(info.req.headers.cookie, COOKIE_NAME);
 
     if (!sessionId || !this.authService.validateSession(sessionId)) {
       this.logger.debug('WebSocket connection rejected: invalid session');

@@ -200,7 +200,7 @@ describe('DefaultProjectService', () => {
   });
 
   describe('constructor', () => {
-    it('should use provided dependencies', () => {
+    it('should use provided dependencies', async () => {
       const customFs: FileSystemOperations = {
         exists: jest.fn(),
         mkdir: jest.fn(),
@@ -216,7 +216,7 @@ describe('DefaultProjectService', () => {
       // Verify service uses the custom filesystem
       customFs.exists = jest.fn().mockResolvedValue(true);
 
-      customService.hasRoadmap('/test');
+      await customService.hasRoadmap('/test');
 
       expect(customFs.exists).toHaveBeenCalled();
     });

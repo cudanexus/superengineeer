@@ -2,7 +2,6 @@ import {
   DefaultLogger,
   ConsoleLogOutput,
   LogEntry,
-  LogLevel,
   initializeLogger,
   getLogger,
   getProjectLogs,

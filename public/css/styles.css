@@ -1455,6 +1455,10 @@ body {
   background-color: #1e3a8a;
 }
 
+.toast.warning {
+  background-color: #92400e;
+}
+
 @keyframes slide-in {
   from {
     transform: translateX(100%);

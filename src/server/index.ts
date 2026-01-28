@@ -24,6 +24,7 @@ export interface ServerDependencies {
 export interface ExpressAppOptions {
   maxConcurrentAgents?: number;
   devMode?: boolean;
+  shellEnabled?: boolean;
   onShutdown?: () => void;
   authService?: AuthService;
 }
@@ -74,6 +75,7 @@ export function createExpressApp(options: ExpressAppOptions = {}): Application {
   app.use('/api', createApiRouter({
     maxConcurrentAgents: options.maxConcurrentAgents,
     devMode: options.devMode,
+    shellEnabled: options.shellEnabled,
     onShutdown: options.onShutdown,
   }));
 
@@ -120,6 +122,7 @@ export class ExpressHttpServer implements HttpServer {
     this.app = createExpressApp({
       maxConcurrentAgents: this.config.maxConcurrentAgents,
       devMode: this.config.devMode,
+      shellEnabled: this.config.shellEnabled,
       onShutdown: () => this.triggerShutdown(),
       authService: this.authService,
     });
@@ -251,12 +254,32 @@ export class ExpressHttpServer implements HttpServer {
 
     console.log('');
 
+    // Log shell status
+    this.logShellStatus();
+
     // Display login credentials and QR code
     displayLoginCredentials({
       credentials: this.authService.getCredentials(),
       host: this.config.host,
       port: this.config.port,
     });
+  }
+
+  private logShellStatus(): void {
+    const { shellEnabled, shellForceEnabled, host } = this.config;
+    const isBindingToAllInterfaces = host === '0.0.0.0';
+
+    if (!shellEnabled && isBindingToAllInterfaces) {
+      console.log('\x1b[33m⚠ Shell terminal is DISABLED\x1b[0m');
+      console.log('  Reason: Server is bound to all interfaces (0.0.0.0)');
+      console.log('  To enable: Set CLAUDITO_FORCE_SHELL_ENABLED=1 (security risk)');
+      console.log('         or: Bind to a specific host (e.g., --host 127.0.0.1)');
+      console.log('');
+    } else if (shellEnabled && shellForceEnabled && isBindingToAllInterfaces) {
+      console.log('\x1b[31m⚠ WARNING: Shell terminal is FORCE-ENABLED on all interfaces!\x1b[0m');
+      console.log('  This allows remote shell access. Ensure proper network security.');
+      console.log('');
+    }
   }
 
   getAuthService(): AuthService {

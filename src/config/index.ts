@@ -5,6 +5,8 @@ export interface AppConfig {
   logLevel: 'debug' | 'info' | 'warn' | 'error';
   maxConcurrentAgents: number;
   devMode: boolean;
+  shellEnabled: boolean;
+  shellForceEnabled: boolean;
 }
 
 export interface ConfigLoader {
@@ -14,14 +16,20 @@ export interface ConfigLoader {
 export class EnvironmentConfigLoader implements ConfigLoader {
   load(): AppConfig {
     const env = this.parseEnv();
+    const host = process.env['HOST'] || '0.0.0.0';
+    const shellForceEnabled = process.env['CLAUDITO_FORCE_SHELL_ENABLED'] === '1';
+    const isBindingToAllInterfaces = host === '0.0.0.0';
+    const shellEnabled = shellForceEnabled || !isBindingToAllInterfaces;
 
     return {
       port: this.parsePort(),
-      host: process.env['HOST'] || '0.0.0.0',
+      host,
       env,
       logLevel: this.parseLogLevel(),
       maxConcurrentAgents: this.parseMaxConcurrentAgents(),
       devMode: process.env['CLAUDITO_DEV_MODE'] === '1',
+      shellEnabled,
+      shellForceEnabled,
     };
   }
 

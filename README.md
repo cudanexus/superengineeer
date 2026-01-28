@@ -10,6 +10,32 @@ A web-based manager for [Claude Code](https://docs.anthropic.com/en/docs/claude-
 
 ![Claudito Screenshot](doc/images/preview-01.png)
 
+## What's New in 0.8.0
+
+- **Shell Terminal**: Full PTY-based terminal integrated into the UI with proper terminal emulation via node-pty
+- **Authentication**: Built-in login system
+
+## Security Considerations
+
+> **Important**: Claudito runs Claude Code agents that can execute code and modify files on your system. Take these precautions:
+
+| Scenario | Recommended HOST | Notes |
+|----------|------------------|-------|
+| **Local development** | `127.0.0.1` or `localhost` | Only accessible from your machine (default) |
+| **LAN access** | Your private IP (e.g., `192.168.1.x`) | Accessible from your local network |
+| **All interfaces** | `0.0.0.0` | Accessible from anywhere - use with caution |
+
+**Best Practices:**
+1. **Use authentication**: Claudito requires login by default. Set custom credentials for production:
+   ```bash
+   CLAUDITO_USERNAME=myuser CLAUDITO_PASSWORD=mystrongpassword claudito
+   ```
+2. **Avoid exposing to the internet**: Use a reverse proxy with HTTPS if needed
+3. **Configure firewall rules**: Only allow trusted IP addresses
+4. **Review permission rules**: Configure Claude Code permissions to restrict agent capabilities
+
+See [Security Recommendations](#security-recommendations) for more details.
+
 ## Quick Start
 
 ```bash
@@ -25,6 +51,7 @@ Open your browser at **http://localhost:3000** to access the web UI.
 
 ## Table of Contents
 
+- [Security Considerations](#security-considerations)
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Usage](#usage)
@@ -33,7 +60,8 @@ Open your browser at **http://localhost:3000** to access the web UI.
 - [Data Storage](#data-storage)
 - [API Reference](#api-reference)
 - [Development](#development)
-- [Testing the Package Locally](#testing-the-package-locally)
+- [Security Recommendations](#security-recommendations)
+- [Troubleshooting](#troubleshooting)
 - [License](#license)
 
 ## Requirements
@@ -147,6 +175,7 @@ set PORT=8080 && set HOST=0.0.0.0 && claudito
 | `DEV_MODE` | `true` (dev) / `false` (prod) | Enable development features |
 | `CLAUDITO_USERNAME` | (generated) | Override login username |
 | `CLAUDITO_PASSWORD` | (generated) | Override login password |
+| `CLAUDITO_FORCE_SHELL_ENABLED` | `0` | Force-enable shell on all interfaces (security risk) |
 
 ## Features
 
@@ -250,6 +279,8 @@ A full PTY-based terminal integrated into the UI:
 | **Resize Support** | Terminal resizes with the browser window |
 | **PowerShell/Bash** | Uses PowerShell on Windows, bash on Unix |
 | **Session Persistence** | Shell sessions persist while browsing other tabs |
+
+> **Security Note**: The shell terminal is **automatically disabled** when the server is bound to all interfaces (`0.0.0.0`). This prevents remote shell access. To enable shell on all interfaces, set `CLAUDITO_FORCE_SHELL_ENABLED=1` (not recommended).
 
 ### Additional Features
 

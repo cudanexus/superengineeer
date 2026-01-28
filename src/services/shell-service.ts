@@ -98,7 +98,7 @@ function detectDirectoryFromOutput(
     }
   } else {
     // Bash prompt patterns: user@host:~/path$ or ~/path$
-    const bashMatch = output.match(/:([~\/][^$#]*?)[$#]\s*$/m);
+    const bashMatch = output.match(/:([~/][^$#]*?)[$#]\s*$/m);
     if (bashMatch && bashMatch[1]) {
       let dir: string = bashMatch[1];
 

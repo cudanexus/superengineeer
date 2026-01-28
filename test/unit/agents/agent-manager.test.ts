@@ -1,12 +1,9 @@
-import { EventEmitter } from 'events';
 import {
   DefaultAgentManager,
   AgentManagerDependencies,
-  AgentLoopState,
   ImageData,
-  StartInteractiveAgentOptions,
 } from '../../../src/agents/agent-manager';
-import { ClaudeAgent, AgentMode, ContextUsage } from '../../../src/agents/claude-agent';
+import { ClaudeAgent, ContextUsage } from '../../../src/agents/claude-agent';
 import {
   createMockAgentFactory,
   createMockClaudeAgent,
@@ -16,7 +13,6 @@ import {
   createMockRoadmapParser,
   createMockPermissionGenerator,
   createMockSettingsRepository,
-  sampleParsedRoadmap,
   createTestProject,
 } from '../helpers/mock-factories';
 
@@ -305,7 +301,7 @@ describe('DefaultAgentManager', () => {
       // Trigger a queue change by calling removeFromQueue (even on non-existent)
       // This won't actually emit since project isn't queued
       // Test by triggering status event
-      agentManager.on('status', (projectId, status) => {
+      agentManager.on('status', (_projectId, _status) => {
         // Status events are emitted on agent start/stop
       });
 
@@ -553,7 +549,7 @@ describe('DefaultAgentManager', () => {
   });
 
   describe('getFullStatus', () => {
-    it('should return complete status object', async () => {
+    it('should return complete status object', () => {
       const status = agentManager.getFullStatus('test-project');
 
       expect(status).toHaveProperty('status');
@@ -787,6 +783,314 @@ describe('DefaultAgentManager', () => {
       expect(mockConversationRepo.deleteConversation).not.toHaveBeenCalled();
       // Should NOT create a new conversation - use existing
       expect(mockConversationRepo.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('sendInput edge cases', () => {
+    it('should throw if agent is in autonomous mode', async () => {
+      await agentManager.startInteractiveAgent('test-project');
+
+      // Override the mode property to simulate autonomous mode
+      Object.defineProperty(mockAgent, 'mode', { value: 'autonomous', configurable: true });
+
+      expect(() => agentManager.sendInput('test-project', 'hello')).toThrow('not in interactive mode');
+
+      // Restore for other tests
+      Object.defineProperty(mockAgent, 'mode', { value: 'interactive', configurable: true });
+    });
+
+    it('should build JSON content when images provided', async () => {
+      await agentManager.startInteractiveAgent('test-project');
+
+      const images: ImageData[] = [
+        { type: 'image/png', data: 'base64data1' },
+        { type: 'image/jpeg', data: 'base64data2' },
+      ];
+
+      agentManager.sendInput('test-project', 'analyze these', images);
+
+      // The content should be JSON with image blocks and text block
+      const calls = mockAgent.sendInput.mock.calls;
+      expect(calls.length).toBeGreaterThan(0);
+      const call = calls[0]!;
+      const content = call[0] as string;
+      const parsed = JSON.parse(content);
+      expect(Array.isArray(parsed)).toBe(true);
+      expect(parsed.length).toBe(3); // 2 images + 1 text
+      expect(parsed[0].type).toBe('image');
+      expect(parsed[2].type).toBe('text');
+    });
+  });
+
+  describe('startAgent queue behavior', () => {
+    it('should add to queue when at max capacity', async () => {
+      // Start 3 agents to fill capacity
+      const projects = [
+        createTestProject({ id: 'project-1', path: '/path1' }),
+        createTestProject({ id: 'project-2', path: '/path2' }),
+        createTestProject({ id: 'project-3', path: '/path3' }),
+        createTestProject({ id: 'project-4', path: '/path4' }),
+      ];
+
+      mockProjectRepo.findById.mockImplementation((id) => {
+        const project = projects.find(p => p.id === id);
+        return Promise.resolve(project ?? null);
+      });
+
+      // Start 3 interactive agents
+      await agentManager.startInteractiveAgent('project-1');
+      await agentManager.startInteractiveAgent('project-2');
+      await agentManager.startInteractiveAgent('project-3');
+
+      expect(agentManager.getResourceStatus().runningCount).toBe(3);
+
+      // Now start an autonomous agent - should be queued
+      await agentManager.startAgent('project-4', 'do work');
+
+      expect(agentManager.isQueued('project-4')).toBe(true);
+      expect(agentManager.getResourceStatus().queuedCount).toBe(1);
+    });
+
+    it('should throw if agent is already queued', async () => {
+      const projects = [
+        createTestProject({ id: 'project-1', path: '/path1' }),
+        createTestProject({ id: 'project-2', path: '/path2' }),
+        createTestProject({ id: 'project-3', path: '/path3' }),
+        createTestProject({ id: 'project-4', path: '/path4' }),
+      ];
+
+      mockProjectRepo.findById.mockImplementation((id) => {
+        const project = projects.find(p => p.id === id);
+        return Promise.resolve(project ?? null);
+      });
+
+      // Fill capacity
+      await agentManager.startInteractiveAgent('project-1');
+      await agentManager.startInteractiveAgent('project-2');
+      await agentManager.startInteractiveAgent('project-3');
+
+      // Queue one
+      await agentManager.startAgent('project-4', 'do work');
+
+      // Try to queue again
+      await expect(agentManager.startAgent('project-4', 'more work')).rejects.toThrow('already queued');
+    });
+
+    it('should emit queueChange when project is queued', async () => {
+      const projects = [
+        createTestProject({ id: 'project-1', path: '/path1' }),
+        createTestProject({ id: 'project-2', path: '/path2' }),
+        createTestProject({ id: 'project-3', path: '/path3' }),
+        createTestProject({ id: 'project-4', path: '/path4' }),
+      ];
+
+      mockProjectRepo.findById.mockImplementation((id) => {
+        const project = projects.find(p => p.id === id);
+        return Promise.resolve(project ?? null);
+      });
+
+      const listener = jest.fn();
+      agentManager.on('queueChange', listener);
+
+      // Fill capacity
+      await agentManager.startInteractiveAgent('project-1');
+      await agentManager.startInteractiveAgent('project-2');
+      await agentManager.startInteractiveAgent('project-3');
+
+      // Queue one
+      await agentManager.startAgent('project-4', 'do work');
+
+      expect(listener).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({
+            projectId: 'project-4',
+          }),
+        ])
+      );
+    });
+
+    it('should remove from queue and emit event', async () => {
+      const projects = [
+        createTestProject({ id: 'project-1', path: '/path1' }),
+        createTestProject({ id: 'project-2', path: '/path2' }),
+        createTestProject({ id: 'project-3', path: '/path3' }),
+        createTestProject({ id: 'project-4', path: '/path4' }),
+      ];
+
+      mockProjectRepo.findById.mockImplementation((id) => {
+        const project = projects.find(p => p.id === id);
+        return Promise.resolve(project ?? null);
+      });
+
+      // Fill capacity
+      await agentManager.startInteractiveAgent('project-1');
+      await agentManager.startInteractiveAgent('project-2');
+      await agentManager.startInteractiveAgent('project-3');
+
+      // Queue one
+      await agentManager.startAgent('project-4', 'do work');
+
+      const listener = jest.fn();
+      agentManager.on('queueChange', listener);
+
+      // Remove from queue
+      agentManager.removeFromQueue('project-4');
+
+      expect(agentManager.isQueued('project-4')).toBe(false);
+      expect(listener).toHaveBeenCalledWith([]);
+    });
+  });
+
+  describe('startInteractiveAgent throws when queued', () => {
+    it('should throw if agent is already queued', async () => {
+      const projects = [
+        createTestProject({ id: 'project-1', path: '/path1' }),
+        createTestProject({ id: 'project-2', path: '/path2' }),
+        createTestProject({ id: 'project-3', path: '/path3' }),
+        createTestProject({ id: 'project-4', path: '/path4' }),
+      ];
+
+      mockProjectRepo.findById.mockImplementation((id) => {
+        const project = projects.find(p => p.id === id);
+        return Promise.resolve(project ?? null);
+      });
+
+      // Fill capacity
+      await agentManager.startInteractiveAgent('project-1');
+      await agentManager.startInteractiveAgent('project-2');
+      await agentManager.startInteractiveAgent('project-3');
+
+      // Queue one via startAgent
+      await agentManager.startAgent('project-4', 'do work');
+
+      // Try to start interactive for same project
+      await expect(agentManager.startInteractiveAgent('project-4')).rejects.toThrow('already queued');
+    });
+  });
+
+  describe('forceNewSession option', () => {
+    it('should create new session even with existing conversation', async () => {
+      const validUUID = '550e8400-e29b-41d4-a716-446655440000';
+      mockProjectRepo.findById.mockResolvedValue({
+        ...testProject,
+        currentConversationId: validUUID,
+      });
+
+      await agentManager.startInteractiveAgent('test-project', {
+        sessionId: validUUID,
+        isNewSession: true,
+      });
+
+      expect(mockAgentFactory.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          isNewSession: true,
+        })
+      );
+    });
+  });
+
+  describe('removeQueuedMessage', () => {
+    it('should return false if no agent running', () => {
+      const result = agentManager.removeQueuedMessage('test-project', 0);
+      expect(result).toBe(false);
+    });
+
+    it('should delegate to agent.removeQueuedMessage', async () => {
+      await agentManager.startInteractiveAgent('test-project');
+
+      mockAgent.removeQueuedMessage.mockReturnValue(true);
+      const result = agentManager.removeQueuedMessage('test-project', 0);
+
+      expect(mockAgent.removeQueuedMessage).toHaveBeenCalledWith(0);
+      expect(result).toBe(true);
+    });
+  });
+
+  describe('off removes listener', () => {
+    it('should remove message listener', async () => {
+      const messageListener = jest.fn();
+      agentManager.on('message', messageListener);
+      agentManager.off('message', messageListener);
+
+      await agentManager.startInteractiveAgent('test-project');
+
+      (mockAgent as unknown as { _emit: (event: string, ...args: unknown[]) => void })._emit(
+        'message',
+        { type: 'stdout', content: 'Hello', timestamp: new Date().toISOString() }
+      );
+
+      expect(messageListener).not.toHaveBeenCalled();
+    });
+
+    it('should remove waitingForInput listener', () => {
+      const waitingListener = jest.fn();
+      agentManager.on('waitingForInput', waitingListener);
+      agentManager.off('waitingForInput', waitingListener);
+
+      // Listener should be removed - confirm by checking it still doesn't throw
+      expect(() => agentManager.off('waitingForInput', waitingListener)).not.toThrow();
+    });
+  });
+
+  describe('getLastCommand with agent', () => {
+    it('should return agent.lastCommand when agent exists', async () => {
+      await agentManager.startInteractiveAgent('test-project');
+
+      Object.defineProperty(mockAgent, 'lastCommand', { value: 'claude --version' });
+
+      expect(agentManager.getLastCommand('test-project')).toBe('claude --version');
+    });
+  });
+
+  describe('getProcessInfo with agent', () => {
+    it('should return agent.processInfo when agent exists', async () => {
+      await agentManager.startInteractiveAgent('test-project');
+
+      const mockProcessInfo = { pid: 12345, cwd: '/test', startedAt: new Date().toISOString() };
+      Object.defineProperty(mockAgent, 'processInfo', { value: mockProcessInfo });
+
+      expect(agentManager.getProcessInfo('test-project')).toEqual(mockProcessInfo);
+    });
+  });
+
+  describe('getContextUsage with agent', () => {
+    it('should return agent.contextUsage when agent exists', async () => {
+      await agentManager.startInteractiveAgent('test-project');
+
+      const mockContextUsage: ContextUsage = {
+        inputTokens: 100,
+        outputTokens: 50,
+        totalTokens: 150,
+        cacheCreationInputTokens: 0,
+        cacheReadInputTokens: 0,
+        maxContextTokens: 200000,
+        percentUsed: 0.075,
+      };
+      (mockAgent as unknown as { _setContextUsage: (c: ContextUsage) => void })._setContextUsage(
+        mockContextUsage
+      );
+
+      expect(agentManager.getContextUsage('test-project')).toEqual(mockContextUsage);
+    });
+  });
+
+  describe('getSessionId with agent', () => {
+    it('should return agent.sessionId when agent exists', async () => {
+      await agentManager.startInteractiveAgent('test-project');
+
+      // The session ID is set from the conversation
+      const sessionId = agentManager.getSessionId('test-project');
+      expect(sessionId).toBeDefined();
+    });
+  });
+
+  describe('getQueuedMessageCount with agent', () => {
+    it('should return agent.queuedMessageCount when agent exists', async () => {
+      await agentManager.startInteractiveAgent('test-project');
+
+      Object.defineProperty(mockAgent, 'queuedMessageCount', { value: 5 });
+
+      expect(agentManager.getQueuedMessageCount('test-project')).toBe(5);
     });
   });
 });

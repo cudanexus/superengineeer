@@ -133,7 +133,8 @@
     },
     gitContextTarget: null, // { path, type, status } for git context menu
     activePromptType: null, // 'question' | 'permission' | 'plan_mode' | null - blocks input while prompt is active
-    isGitOperating: false // Blocks git UI during operations
+    isGitOperating: false, // Blocks git UI during operations
+    shellEnabled: true // Whether shell tab is available (disabled when server bound to 0.0.0.0)
   };
 
   // Local storage keys - use module's KEYS
@@ -2617,6 +2618,7 @@
     renderProjectDetail(project);
     loadAgentStatus(projectId);
     TaskDisplayModule.loadOptimizationsBadge(projectId);
+    checkShellEnabled(projectId);
 
     // Restore saved tab preference and refresh tab content
     var savedTab = loadFromLocalStorage(LOCAL_STORAGE_KEYS.ACTIVE_TAB, 'agent-output');
@@ -2707,6 +2709,23 @@
       $('#agent-output-spinner').addClass('hidden');
       $('#agent-status-label').addClass('hidden');
     }
+  }
+
+  function checkShellEnabled(projectId) {
+    api.isShellEnabled(projectId)
+      .done(function(data) {
+        state.shellEnabled = data.enabled;
+      })
+      .fail(function() {
+        // If we can't check, assume enabled (fallback)
+        state.shellEnabled = true;
+      });
+  }
+
+  function showShellDisabledNotification() {
+    var message = 'Shell is disabled because the server is bound to all interfaces (0.0.0.0). ' +
+      'To enable, set CLAUDITO_FORCE_SHELL_ENABLED=1 or bind to a specific host (e.g., HOST=127.0.0.1).';
+    showToast(message, 'warning');
   }
 
   function loadConversationHistory(projectId) {
@@ -3638,6 +3657,10 @@
     });
 
     $('#tab-shell').on('click', function() {
+      if (!state.shellEnabled) {
+        showShellDisabledNotification();
+        return;
+      }
       switchTab('shell');
     });
   }

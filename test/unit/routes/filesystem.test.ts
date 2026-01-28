@@ -141,7 +141,7 @@ jest.mock('fs', () => ({
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const fs = require('fs');
-const mockFsPromises = fs.promises as jest.Mocked<typeof fs.promises>;
+const mockFsPromises = fs.promises;
 
 describe('WindowsFilesystemService filesystem operations', () => {
   let service: WindowsFilesystemService;

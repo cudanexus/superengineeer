@@ -143,7 +143,7 @@ describe('retry utility', () => {
         const originalSetTimeout = global.setTimeout;
         jest.spyOn(global, 'setTimeout').mockImplementation((callback, ms) => {
           if (ms && ms > 0) {
-            delays.push(ms as number);
+            delays.push(ms);
           }
           return originalSetTimeout(callback, 0);
         });
@@ -174,7 +174,7 @@ describe('retry utility', () => {
         const originalSetTimeout = global.setTimeout;
         jest.spyOn(global, 'setTimeout').mockImplementation((callback, ms) => {
           if (ms && ms > 0) {
-            delays.push(ms as number);
+            delays.push(ms);
           }
           return originalSetTimeout(callback, 0);
         });
@@ -209,7 +209,7 @@ describe('retry utility', () => {
         const originalSetTimeout = global.setTimeout;
         jest.spyOn(global, 'setTimeout').mockImplementation((callback, ms) => {
           if (ms && ms > 0) {
-            delays.push(ms as number);
+            delays.push(ms);
           }
           return originalSetTimeout(callback, 0);
         });

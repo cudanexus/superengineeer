@@ -24,7 +24,7 @@ function getWriteCallData(
   if (!call || !call[1]) {
     throw new Error(`No write call at index ${callIndex}`);
   }
-  return JSON.parse(call[1] as string) as Conversation;
+  return JSON.parse(call[1]) as Conversation;
 }
 
 describe('FileConversationRepository', () => {

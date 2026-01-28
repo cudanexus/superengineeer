@@ -161,7 +161,8 @@ export interface ProjectRouterDependencies {
   conversationRepository: ConversationRepository;
   settingsRepository: SettingsRepository;
   gitService: GitService;
-  shellService?: ShellService;
+  shellService?: ShellService | null;
+  shellEnabled?: boolean;
 }
 
 export interface ConversationStats {
@@ -1290,9 +1291,23 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
 
   // ===== Shell Routes =====
 
+  const shellDisabledMessage = 'Shell is disabled when server is bound to all interfaces (0.0.0.0). ' +
+    'Set CLAUDITO_FORCE_SHELL_ENABLED=1 to enable, or bind to a specific host.';
+
+  // Check if shell is enabled
+  router.get('/:id/shell/enabled', (_req: Request, res: Response) => {
+    const { shellEnabled } = deps;
+    res.json({ enabled: shellEnabled !== false });
+  });
+
   // Create or get shell session for project
   router.post('/:id/shell/start', asyncHandler(async (req: Request, res: Response) => {
-    const { shellService } = deps;
+    const { shellService, shellEnabled } = deps;
+
+    if (shellEnabled === false) {
+      res.status(403).json({ error: shellDisabledMessage, shellDisabled: true });
+      return;
+    }
 
     if (!shellService) {
       res.status(503).json({ error: 'Shell service not available' });
@@ -1315,8 +1330,13 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
   }));
 
   // Get current shell session status
-  router.get('/:id/shell/status', asyncHandler(async (req: Request, res: Response) => {
-    const { shellService } = deps;
+  router.get('/:id/shell/status', (req: Request, res: Response) => {
+    const { shellService, shellEnabled } = deps;
+
+    if (shellEnabled === false) {
+      res.status(403).json({ error: shellDisabledMessage, shellDisabled: true });
+      return;
+    }
 
     if (!shellService) {
       res.status(503).json({ error: 'Shell service not available' });
@@ -1337,12 +1357,17 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
       cwd: session.cwd,
       createdAt: session.createdAt
     });
-  }));
+  });
 
   // Send input to shell
-  router.post('/:id/shell/input', asyncHandler(async (req: Request, res: Response) => {
-    const { shellService } = deps;
+  router.post('/:id/shell/input', (req: Request, res: Response) => {
+    const { shellService, shellEnabled } = deps;
     const logger = getLogger('shell-routes');
+
+    if (shellEnabled === false) {
+      res.status(403).json({ error: shellDisabledMessage, shellDisabled: true });
+      return;
+    }
 
     if (!shellService) {
       res.status(503).json({ error: 'Shell service not available' });
@@ -1373,11 +1398,16 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
     const success = shellService.write(session.id, input);
     logger.withProject(id).debug('Shell input write result', { success, sessionId: session.id });
     res.json({ success });
-  }));
+  });
 
   // Resize shell terminal
-  router.post('/:id/shell/resize', asyncHandler(async (req: Request, res: Response) => {
-    const { shellService } = deps;
+  router.post('/:id/shell/resize', (req: Request, res: Response) => {
+    const { shellService, shellEnabled } = deps;
+
+    if (shellEnabled === false) {
+      res.status(403).json({ error: shellDisabledMessage, shellDisabled: true });
+      return;
+    }
 
     if (!shellService) {
       res.status(503).json({ error: 'Shell service not available' });
@@ -1400,11 +1430,16 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
 
     shellService.resize(session.id, cols, rows);
     res.json({ success: true });
-  }));
+  });
 
   // Stop shell session
-  router.post('/:id/shell/stop', asyncHandler(async (req: Request, res: Response) => {
-    const { shellService } = deps;
+  router.post('/:id/shell/stop', (req: Request, res: Response) => {
+    const { shellService, shellEnabled } = deps;
+
+    if (shellEnabled === false) {
+      res.status(403).json({ error: shellDisabledMessage, shellDisabled: true });
+      return;
+    }
 
     if (!shellService) {
       res.status(503).json({ error: 'Shell service not available' });
@@ -1421,7 +1456,7 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
 
     shellService.killSession(session.id);
     res.json({ success: true });
-  }));
+  });
 
   return router;
 }

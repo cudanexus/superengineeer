@@ -1,4 +1,4 @@
-import { FilePidTracker, TrackedProcess, OrphanCleanupResult } from '../../../src/utils/pid-tracker';
+import { FilePidTracker, TrackedProcess } from '../../../src/utils/pid-tracker';
 
 // Mock dependencies
 jest.mock('../../../src/utils/paths', () => ({
@@ -379,12 +379,10 @@ describe('FilePidTracker', () => {
       mockFs.existsSync.mockReturnValue(true);
       mockFs.readFileSync.mockReturnValue(JSON.stringify(existingProcesses));
 
-      let killCallCount = 0;
-      (process.kill as jest.Mock).mockImplementation((pid: number, signal: string | number) => {
+      (process.kill as jest.Mock).mockImplementation((pid: number, _signal: string | number) => {
         if (pid === 1000) {
           throw new Error('Not running');
         }
-        killCallCount++;
         return true;
       });
 

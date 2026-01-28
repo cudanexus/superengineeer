@@ -31,6 +31,8 @@ describe('EnvironmentConfigLoader', () => {
         logLevel: 'info',
         maxConcurrentAgents: 3,
         devMode: false,
+        shellEnabled: false,
+        shellForceEnabled: false,
       });
     });
 
@@ -135,6 +137,61 @@ describe('EnvironmentConfigLoader', () => {
       const config = loader.load();
 
       expect(config.logLevel).toBe('info');
+    });
+
+    it('should disable shell when host is 0.0.0.0', () => {
+      process.env['HOST'] = '0.0.0.0';
+      delete process.env['CLAUDITO_FORCE_SHELL_ENABLED'];
+
+      const loader = new EnvironmentConfigLoader();
+      const config = loader.load();
+
+      expect(config.shellEnabled).toBe(false);
+      expect(config.shellForceEnabled).toBe(false);
+    });
+
+    it('should enable shell when host is 127.0.0.1', () => {
+      process.env['HOST'] = '127.0.0.1';
+      delete process.env['CLAUDITO_FORCE_SHELL_ENABLED'];
+
+      const loader = new EnvironmentConfigLoader();
+      const config = loader.load();
+
+      expect(config.shellEnabled).toBe(true);
+      expect(config.shellForceEnabled).toBe(false);
+    });
+
+    it('should enable shell when host is localhost', () => {
+      process.env['HOST'] = 'localhost';
+      delete process.env['CLAUDITO_FORCE_SHELL_ENABLED'];
+
+      const loader = new EnvironmentConfigLoader();
+      const config = loader.load();
+
+      expect(config.shellEnabled).toBe(true);
+      expect(config.shellForceEnabled).toBe(false);
+    });
+
+    it('should force enable shell with CLAUDITO_FORCE_SHELL_ENABLED=1', () => {
+      process.env['HOST'] = '0.0.0.0';
+      process.env['CLAUDITO_FORCE_SHELL_ENABLED'] = '1';
+
+      const loader = new EnvironmentConfigLoader();
+      const config = loader.load();
+
+      expect(config.shellEnabled).toBe(true);
+      expect(config.shellForceEnabled).toBe(true);
+    });
+
+    it('should not force enable shell with CLAUDITO_FORCE_SHELL_ENABLED=0', () => {
+      process.env['HOST'] = '0.0.0.0';
+      process.env['CLAUDITO_FORCE_SHELL_ENABLED'] = '0';
+
+      const loader = new EnvironmentConfigLoader();
+      const config = loader.load();
+
+      expect(config.shellEnabled).toBe(false);
+      expect(config.shellForceEnabled).toBe(false);
     });
   });
 });

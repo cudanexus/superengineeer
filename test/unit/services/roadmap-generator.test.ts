@@ -4,10 +4,9 @@ import {
   ClaudeRoadmapGenerator,
   RoadmapGeneratorDependencies,
   ProcessSpawner,
-  SpawnOptions,
   FileOperations,
-  RoadmapMessage,
   GenerateRoadmapResult,
+  RoadmapMessage,
 } from '../../../src/services/roadmap-generator';
 
 // Mock process that extends EventEmitter so process.on() works
@@ -67,11 +66,6 @@ function createMockFileOps(): jest.Mocked<FileOperations> {
     mkdir: jest.fn().mockResolvedValue(undefined),
     exists: jest.fn().mockResolvedValue(true),
   };
-}
-
-// Helper to wait for next tick so event listeners can be registered
-async function nextTick(): Promise<void> {
-  return new Promise(resolve => setImmediate(resolve));
 }
 
 describe('ClaudeRoadmapGenerator', () => {

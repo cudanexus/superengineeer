@@ -2,8 +2,6 @@ import {
   createAuthService,
   AuthService,
   DefaultAuthService,
-  Credentials,
-  Session
 } from '../../../src/services/auth-service';
 
 describe('AuthService', () => {

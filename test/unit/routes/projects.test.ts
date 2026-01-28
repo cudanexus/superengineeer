@@ -16,11 +16,8 @@ import {
   createMockGitService,
   createMockInstructionGenerator,
   sampleProject,
-  sampleParsedRoadmap,
-  sampleGitStatus,
-  sampleBranchInfo,
 } from '../helpers/mock-factories';
-import { NotFoundError, ValidationError, ConflictError, createErrorHandler } from '../../../src/utils';
+import { createErrorHandler } from '../../../src/utils';
 
 // Mock fs module
 jest.mock('fs', () => {

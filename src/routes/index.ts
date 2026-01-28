@@ -31,6 +31,7 @@ export interface ApiRouterDependencies {
   agentManager?: AgentManager;
   maxConcurrentAgents?: number;
   devMode?: boolean;
+  shellEnabled?: boolean;
   onShutdown?: () => void;
 }
 
@@ -152,8 +153,9 @@ export function createApiRouter(deps: ApiRouterDependencies = {}): Router {
   // Git service
   const gitService = createGitService();
 
-  // Shell service (singleton for WebSocket integration)
-  const shellService = getOrCreateShellService();
+  // Shell service (singleton for WebSocket integration) - only create if enabled
+  const shellEnabled = deps.shellEnabled !== false;
+  const shellService = shellEnabled ? getOrCreateShellService() : null;
 
   // Project routes
   router.use('/projects', createProjectsRouter({
@@ -168,6 +170,7 @@ export function createApiRouter(deps: ApiRouterDependencies = {}): Router {
     settingsRepository,
     gitService,
     shellService,
+    shellEnabled,
   }));
 
   return router;

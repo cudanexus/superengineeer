@@ -356,11 +356,11 @@ describe('asyncHandler', () => {
     mockNext = jest.fn();
   });
 
-  it('should call the wrapped function', async () => {
+  it('should call the wrapped function', () => {
     const handler = jest.fn().mockResolvedValue(undefined);
     const wrapped = asyncHandler(handler);
 
-    await wrapped(mockReq as Request, mockRes as Response, mockNext);
+    wrapped(mockReq as Request, mockRes as Response, mockNext);
 
     expect(handler).toHaveBeenCalledWith(mockReq, mockRes, mockNext);
   });
@@ -370,7 +370,7 @@ describe('asyncHandler', () => {
     const handler = jest.fn().mockRejectedValue(error);
     const wrapped = asyncHandler(handler);
 
-    await wrapped(mockReq as Request, mockRes as Response, mockNext);
+    wrapped(mockReq as Request, mockRes as Response, mockNext);
 
     // Allow promise to resolve
     await new Promise((resolve) => setImmediate(resolve));
@@ -383,7 +383,7 @@ describe('asyncHandler', () => {
     const handler = jest.fn().mockRejectedValue(error);
     const wrapped = asyncHandler(handler);
 
-    await wrapped(mockReq as Request, mockRes as Response, mockNext);
+    wrapped(mockReq as Request, mockRes as Response, mockNext);
 
     await new Promise((resolve) => setImmediate(resolve));
 
@@ -394,24 +394,22 @@ describe('asyncHandler', () => {
     const handler = jest.fn().mockResolvedValue(undefined);
     const wrapped = asyncHandler(handler);
 
-    await wrapped(mockReq as Request, mockRes as Response, mockNext);
+    wrapped(mockReq as Request, mockRes as Response, mockNext);
 
     await new Promise((resolve) => setImmediate(resolve));
 
     expect(mockNext).not.toHaveBeenCalled();
   });
 
-  it('should handle synchronous functions that return promises', async () => {
-    const handler = jest.fn().mockImplementation(async () => {
-      throw new Error('Sync error');
-    });
+  it('should handle async functions that throw', async () => {
+    const handler = jest.fn().mockRejectedValue(new Error('Async throw'));
     const wrapped = asyncHandler(handler);
 
-    await wrapped(mockReq as Request, mockRes as Response, mockNext);
+    wrapped(mockReq as Request, mockRes as Response, mockNext);
 
     await new Promise((resolve) => setImmediate(resolve));
 
-    expect(mockNext).toHaveBeenCalled();
+    expect(mockNext).toHaveBeenCalledWith(expect.any(Error));
   });
 });
 
