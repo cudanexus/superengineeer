@@ -1,10 +1,47 @@
 # Claudito Roadmap
 
-## Phase 1: Autonomous Loop UI
+## Phase 1: Frontend Refactoring
+
+Extract testable modules from the monolithic app.js (9,738 lines) to improve maintainability and test coverage.
+
+### Milestone 1.1: Pure Utilities (Completed)
+
+- [x] Create public/js/modules/ directory
+- [x] Extract local-storage.js module (~50 lines, 40 tests)
+- [x] Extract diff-engine.js module (~570 lines, 72 tests)
+- [x] Extract api-client.js module (~335 lines, 68 tests)
+- [x] Update app.js to use new modules
+- [x] Update index.html script loading order
+
+### Milestone 1.2: State Layer
+
+- [ ] Extract state-manager.js module (~200 lines, ~30 tests)
+- [ ] Implement centralized state with pub/sub pattern
+- [ ] Migrate state reads in app.js to StateManager.get()
+- [ ] Migrate state writes in app.js to StateManager.set()
+- [ ] Verify app still works after migration
+
+### Milestone 1.3: Business Logic Modules
+
+- [ ] Extract search-engine.js module (~320 lines, ~25 tests)
+- [ ] Extract message-renderer.js module (~530 lines, ~45 tests)
+- [ ] Extract websocket-client.js module (~380 lines, ~25 tests)
+- [ ] Update app.js to use new modules
+- [ ] Verify app still works after migration
+
+### Milestone 1.4: Feature Modules
+
+- [ ] Extract roadmap-renderer.js module (~260 lines, ~20 tests)
+- [ ] Extract file-browser.js module (~550 lines, ~25 tests)
+- [ ] Extract git-module.js module (~800 lines, ~30 tests)
+- [ ] Update app.js to use new modules
+- [ ] Final verification and cleanup
+
+## Phase 2: Autonomous Loop UI
 
 Complete the autonomous mode with full UI controls.
 
-### Milestone 1.1: Autonomous Loop Controls
+### Milestone 2.1: Autonomous Loop Controls
 
 - [ ] Add Start Autonomous Loop button in project view
 - [ ] Add Pause/Resume controls for running loop
@@ -12,7 +49,7 @@ Complete the autonomous mode with full UI controls.
 - [ ] Show loop progress indicator (items completed / total)
 - [ ] Add Stop Autonomous Loop button
 
-### Milestone 1.2: Autonomous Loop Feedback
+### Milestone 2.2: Autonomous Loop Feedback
 
 - [ ] Display failure reasons when loop pauses
 - [ ] Add Retry Failed Item button
@@ -20,7 +57,7 @@ Complete the autonomous mode with full UI controls.
 - [ ] Add loop history/log view
 - [ ] Display estimated context usage per item
 
-### Milestone 1.3: Autonomous Loop Reliability
+### Milestone 2.3: Autonomous Loop Reliability
 
 - [ ] Implement graceful handling of agent crashes during loop
 - [ ] Add timeout handling for stuck agents
@@ -28,18 +65,18 @@ Complete the autonomous mode with full UI controls.
 - [ ] Implement rate limiting between items
 - [ ] Add option to skip failed items and continue
 
-## Phase 2: Default Permission Mode Support
+## Phase 3: Default Permission Mode Support
 
 Add support for Claude's interactive permission prompts.
 
-### Milestone 2.1: Permission Prompt Protocol
+### Milestone 3.1: Permission Prompt Protocol
 
 - [ ] Research Claude Code CLI permission prompt format
 - [ ] Design UI for displaying permission requests
 - [ ] Implement permission prompt detection in agent output parser
 - [ ] Create permission request event emission
 
-### Milestone 2.2: Permission Prompt UI
+### Milestone 3.2: Permission Prompt UI
 
 - [ ] Display permission prompts in agent output area
 - [ ] Add Allow/Deny buttons for permission requests
@@ -47,25 +84,25 @@ Add support for Claude's interactive permission prompts.
 - [ ] Add "Always Deny" option for specific tools
 - [ ] Show pending permission indicator in sidebar
 
-### Milestone 2.3: Permission Memory
+### Milestone 3.3: Permission Memory
 
 - [ ] Store permission decisions in session
 - [ ] Option to save decisions to project permission rules
 - [ ] Display history of permission decisions
 - [ ] Add bulk permission management
 
-## Phase 3: Conversation Management
+## Phase 4: Conversation Management
 
 Enhanced conversation features.
 
-### Milestone 3.1: Export/Import Conversations
+### Milestone 4.1: Export/Import Conversations
 
 - [ ] Export conversation to Markdown format
 - [ ] Export conversation to JSON format
 - [ ] Import conversation from JSON
 - [ ] Export all project conversations as archive
 
-### Milestone 3.2: Conversation Branching
+### Milestone 4.2: Conversation Branching
 
 - [ ] Fork conversation at any message
 - [ ] Display branch indicator in conversation list
@@ -73,11 +110,11 @@ Enhanced conversation features.
 - [ ] Compare branches side-by-side
 - [ ] Merge learnings from branches
 
-## Phase 4: Theme Support
+## Phase 5: Theme Support
 
 Add visual customization options.
 
-### Milestone 4.1: Light Mode
+### Milestone 5.1: Light Mode
 
 - [ ] Create light mode color palette
 - [ ] Add theme toggle in settings
@@ -85,18 +122,18 @@ Add visual customization options.
 - [ ] Update all UI components for light mode
 - [ ] Ensure syntax highlighting works in both modes
 
-### Milestone 4.2: Custom Themes
+### Milestone 5.2: Custom Themes
 
 - [ ] Define theme schema (colors, fonts, spacing)
 - [ ] Add theme customization UI
 - [ ] Import/export custom themes
 - [ ] Add preset themes (high contrast, sepia, etc.)
 
-## Phase 5: Agent Templates & Presets
+## Phase 6: Agent Templates & Presets
 
 Quick-start configurations for common tasks.
 
-### Milestone 5.1: Agent Templates
+### Milestone 6.1: Agent Templates
 
 - [ ] Create template schema (name, description, prompt, settings)
 - [ ] Add built-in templates (debugging, refactoring, testing, code review)
@@ -104,18 +141,18 @@ Quick-start configurations for common tasks.
 - [ ] Custom template creation
 - [ ] Template import/export
 
-### Milestone 5.2: Agent Presets
+### Milestone 6.2: Agent Presets
 
 - [ ] Save current settings as preset (permission mode, system prompt, rules)
 - [ ] Quick-switch between presets
 - [ ] Per-project default preset
 - [ ] Preset management UI
 
-## Phase 6: Search & Navigation
+## Phase 7: Search & Navigation
 
 Improved output navigation and search.
 
-### Milestone 6.1: Search in Output
+### Milestone 7.1: Search in Output
 
 - [x] Add search input in agent output header
 - [x] Highlight search matches in output
@@ -123,7 +160,7 @@ Improved output navigation and search.
 - [x] Filter output by message type (user, assistant, tool, system)
 - [x] Search across conversation history
 
-### Milestone 6.2: Keyboard Shortcuts
+### Milestone 7.2: Keyboard Shortcuts
 
 - [ ] Define keyboard shortcut schema
 - [ ] Implement global hotkeys (Ctrl+K search, Escape cancel, etc.)
@@ -133,11 +170,11 @@ Improved output navigation and search.
 - [ ] Keyboard shortcut customization UI
 - [ ] Display keyboard shortcut hints in UI
 
-## Phase 7: Multi-Project Features
+## Phase 8: Multi-Project Features
 
 Enhanced multi-project management.
 
-### Milestone 7.1: Multi-Project Dashboard
+### Milestone 8.1: Multi-Project Dashboard
 
 - [ ] Create dashboard view showing all projects
 - [ ] Display agent status for each project
@@ -145,18 +182,18 @@ Enhanced multi-project management.
 - [ ] Quick actions from dashboard (start/stop agent)
 - [ ] Project grouping/folders
 
-### Milestone 7.2: Cross-Project Search
+### Milestone 8.2: Cross-Project Search
 
 - [ ] Search conversations across all projects
 - [ ] Search in project files across all projects
 - [ ] Display unified search results
 - [ ] Jump to result in context
 
-## Phase 8: Notifications & Webhooks
+## Phase 9: Notifications & Webhooks
 
 External integrations and alerts.
 
-### Milestone 8.1: Desktop Notifications Enhancement
+### Milestone 9.1: Desktop Notifications Enhancement
 
 - [ ] Notification when autonomous loop completes
 - [ ] Notification when agent encounters error
@@ -164,7 +201,7 @@ External integrations and alerts.
 - [ ] Notification grouping for multiple events
 - [ ] Do Not Disturb mode
 
-### Milestone 8.2: Webhook Integration
+### Milestone 9.2: Webhook Integration
 
 - [ ] Define webhook event types (agent_complete, agent_error, milestone_done)
 - [ ] Webhook configuration UI
@@ -172,31 +209,31 @@ External integrations and alerts.
 - [ ] Webhook history/logs
 - [ ] Retry failed webhooks
 
-### Milestone 8.3: Chat Integrations
+### Milestone 9.3: Chat Integrations
 
 - [ ] Slack notification integration
 - [ ] Discord notification integration
 - [ ] Custom webhook templates for chat services
 
-## Phase 9: Plugin System
+## Phase 10: Plugin System
 
 Extensibility framework.
 
-### Milestone 9.1: Plugin Architecture
+### Milestone 10.1: Plugin Architecture
 
 - [ ] Define plugin API (hooks, events, UI extensions)
 - [ ] Create plugin loader
 - [ ] Plugin manifest schema
 - [ ] Plugin isolation/sandboxing
 
-### Milestone 9.2: Built-in Plugin Types
+### Milestone 10.2: Built-in Plugin Types
 
 - [ ] Custom output formatters
 - [ ] Custom tool visualizations
 - [ ] Custom file type handlers
 - [ ] Custom syntax highlighters
 
-### Milestone 9.3: Plugin Management
+### Milestone 10.3: Plugin Management
 
 - [ ] Plugin installation from file
 - [ ] Plugin enable/disable

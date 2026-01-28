@@ -145,6 +145,8 @@ set PORT=8080 && set HOST=0.0.0.0 && claudito
 | `LOG_LEVEL` | `info` | Log level (debug/info/warn/error) |
 | `MAX_CONCURRENT_AGENTS` | `3` | Maximum concurrent agents |
 | `DEV_MODE` | `true` (dev) / `false` (prod) | Enable development features |
+| `CLAUDITO_USERNAME` | (generated) | Override login username |
+| `CLAUDITO_PASSWORD` | (generated) | Override login password |
 
 ## Features
 
@@ -176,11 +178,22 @@ Runs through ROADMAP.md milestones automatically.
 - **Concurrent Execution**: Run multiple agents at once (configurable limit)
 - **Queue System**: Automatic queuing when at max capacity
 
+### Authentication
+
+Claudito includes built-in authentication to protect your agent manager:
+
+- **Auto-generated credentials**: On each server start, a unique username and password are generated
+- **QR Code login**: Scan the QR code displayed in the terminal for quick access
+- **Session persistence**: Sessions last 7 days
+- **Custom credentials**: Set `CLAUDITO_USERNAME` and `CLAUDITO_PASSWORD` environment variables for persistent credentials
+- **Logout**: Click the logout button in the sidebar header
+
 ### User Interface
 
 | Feature | Description |
 |---------|-------------|
-| **Tabbed Interface** | Switch between Agent Output, Project Files, and Git |
+| **Tabbed Interface** | Switch between Agent Output, Project Files, Shell, and Git |
+| **Shell Terminal** | Full PTY terminal with directory restriction to project folder |
 | **File Browser** | Browse, view, edit, create, delete files and folders |
 | **Syntax Highlighting** | 30+ languages supported via highlight.js |
 | **Tool Visualization** | See Claude's tool usage with icons and arguments |
@@ -225,6 +238,18 @@ Full Git support directly in the UI:
 - **Inline Change Highlighting**: Word-level diff showing exactly what changed within modified lines
 - **Color Coding**: Red for removed, green for added, orange for modified lines
 - **Syntax Highlighting**: Language-aware highlighting preserved in diffs
+
+### Shell Terminal
+
+A full PTY-based terminal integrated into the UI:
+
+| Feature | Description |
+|---------|-------------|
+| **PTY Support** | True terminal emulation with proper input handling |
+| **Directory Restriction** | Users cannot navigate outside the project folder |
+| **Resize Support** | Terminal resizes with the browser window |
+| **PowerShell/Bash** | Uses PowerShell on Windows, bash on Unix |
+| **Session Persistence** | Shell sessions persist while browsing other tabs |
 
 ### Additional Features
 
@@ -408,6 +433,24 @@ PUT    /api/fs/write                       # Write file content
 DELETE /api/fs/delete                      # Delete file or folder
 ```
 
+### Shell
+
+```
+POST   /api/projects/:id/shell/start       # Start shell session
+GET    /api/projects/:id/shell/status      # Get shell status
+POST   /api/projects/:id/shell/input       # Send input to shell
+POST   /api/projects/:id/shell/resize      # Resize terminal
+POST   /api/projects/:id/shell/stop        # Stop shell session
+```
+
+### Authentication
+
+```
+POST   /api/auth/login                     # Login with credentials
+POST   /api/auth/logout                    # Logout current session
+GET    /api/auth/check                     # Check session validity
+```
+
 ### Settings
 
 ```
@@ -432,6 +475,9 @@ ws.send(JSON.stringify({ type: 'subscribe', projectId: 'your-project-id' }));
 // - queue_change: Queue updates
 // - roadmap_message: Roadmap generation output
 // - session_recovery: Session couldn't be resumed, new conversation created
+// - shell_output: Shell terminal output
+// - shell_exit: Shell session exited
+// - shell_error: Shell error occurred
 ```
 
 ## Development
@@ -590,6 +636,42 @@ npx claudito --help
 cd ..
 rm -rf /tmp/claudito-test
 ```
+
+## Security Recommendations
+
+### Network Binding
+
+By default, Claudito binds to `localhost` which only accepts connections from the local machine. When exposing Claudito to other devices, consider these recommendations:
+
+| Scenario | Recommended HOST | Notes |
+|----------|------------------|-------|
+| **Local development** | `127.0.0.1` or `localhost` | Only accessible from your machine |
+| **LAN access** | Your private IP (e.g., `192.168.1.x`) | Accessible from your local network |
+| **All interfaces** | `0.0.0.0` | Accessible from anywhere - use with caution |
+
+```bash
+# Local only (most secure)
+claudito --host 127.0.0.1
+
+# Specific network interface (LAN access)
+claudito --host 192.168.1.100
+
+# All interfaces (least secure - requires authentication)
+claudito --host 0.0.0.0
+```
+
+### Best Practices
+
+1. **Use authentication**: Claudito requires login by default. Set custom credentials via environment variables for production use:
+   ```bash
+   CLAUDITO_USERNAME=myuser CLAUDITO_PASSWORD=mystrongpassword claudito
+   ```
+
+2. **Avoid exposing to the internet**: Claudito is designed for local/LAN use. If you must expose it, use a reverse proxy with HTTPS.
+
+3. **Firewall rules**: When using LAN access, configure your firewall to only allow trusted IP addresses.
+
+4. **Review permission rules**: Configure Claude Code permission rules to restrict what agents can do.
 
 ## Troubleshooting
 

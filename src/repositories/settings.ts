@@ -42,6 +42,18 @@ When finished, you MUST return a JSON object with the following structure:
   "reason": "explanation of what was done or why it failed"
 }`;
 
+export interface AgentLimitsSettings {
+  /** Maximum number of agentic turns before stopping (0 = unlimited) */
+  maxTurns: number;
+}
+
+export interface AgentStreamingSettings {
+  /** Include partial streaming events for smoother real-time display */
+  includePartialMessages: boolean;
+  /** Disable session persistence - sessions won't be saved to disk */
+  noSessionPersistence: boolean;
+}
+
 export interface GlobalSettings {
   maxConcurrentAgents: number;
   claudePermissions: ClaudePermissions;
@@ -51,6 +63,10 @@ export interface GlobalSettings {
   enableDesktopNotifications: boolean;
   appendSystemPrompt: string;
   claudeMdMaxSizeKB: number;
+  /** Agent execution limits (turns, budget) */
+  agentLimits: AgentLimitsSettings;
+  /** Agent streaming options */
+  agentStreaming: AgentStreamingSettings;
 }
 
 const DEFAULT_SETTINGS: GlobalSettings = {
@@ -69,9 +85,16 @@ const DEFAULT_SETTINGS: GlobalSettings = {
   enableDesktopNotifications: false,
   appendSystemPrompt: '* ALWAYS use tasks instead of todos',
   claudeMdMaxSizeKB: 50,
+  agentLimits: {
+    maxTurns: 0,       // 0 = unlimited
+  },
+  agentStreaming: {
+    includePartialMessages: false,
+    noSessionPersistence: false,
+  },
 };
 
-// Update type that allows partial claudePermissions for incremental updates
+// Update type that allows partial nested objects for incremental updates
 export interface SettingsUpdate {
   maxConcurrentAgents?: number;
   claudePermissions?: Partial<ClaudePermissions>;
@@ -81,6 +104,8 @@ export interface SettingsUpdate {
   enableDesktopNotifications?: boolean;
   appendSystemPrompt?: string;
   claudeMdMaxSizeKB?: number;
+  agentLimits?: Partial<AgentLimitsSettings>;
+  agentStreaming?: Partial<AgentStreamingSettings>;
 }
 
 export interface SettingsRepository {
@@ -136,6 +161,8 @@ export class FileSettingsRepository implements SettingsRepository {
 
   private mergeWithDefaults(parsed: Partial<GlobalSettings>): GlobalSettings {
     const parsedPerms = parsed.claudePermissions;
+    const parsedLimits = parsed.agentLimits;
+    const parsedStreaming = parsed.agentStreaming;
 
     return {
       maxConcurrentAgents: parsed.maxConcurrentAgents ?? DEFAULT_SETTINGS.maxConcurrentAgents,
@@ -153,6 +180,13 @@ export class FileSettingsRepository implements SettingsRepository {
       enableDesktopNotifications: parsed.enableDesktopNotifications ?? DEFAULT_SETTINGS.enableDesktopNotifications,
       appendSystemPrompt: parsed.appendSystemPrompt ?? DEFAULT_SETTINGS.appendSystemPrompt,
       claudeMdMaxSizeKB: parsed.claudeMdMaxSizeKB ?? DEFAULT_SETTINGS.claudeMdMaxSizeKB,
+      agentLimits: {
+        maxTurns: parsedLimits?.maxTurns ?? DEFAULT_SETTINGS.agentLimits.maxTurns,
+      },
+      agentStreaming: {
+        includePartialMessages: parsedStreaming?.includePartialMessages ?? DEFAULT_SETTINGS.agentStreaming.includePartialMessages,
+        noSessionPersistence: parsedStreaming?.noSessionPersistence ?? DEFAULT_SETTINGS.agentStreaming.noSessionPersistence,
+      },
     };
   }
 
@@ -199,6 +233,25 @@ export class FileSettingsRepository implements SettingsRepository {
 
     if (updates.claudeMdMaxSizeKB !== undefined) {
       this.settings.claudeMdMaxSizeKB = Math.max(10, Math.min(500, updates.claudeMdMaxSizeKB));
+    }
+
+    if (updates.agentLimits) {
+      this.settings.agentLimits = {
+        ...this.settings.agentLimits,
+        ...updates.agentLimits,
+      };
+
+      // Ensure non-negative values
+      if (this.settings.agentLimits.maxTurns < 0) {
+        this.settings.agentLimits.maxTurns = 0;
+      }
+    }
+
+    if (updates.agentStreaming) {
+      this.settings.agentStreaming = {
+        ...this.settings.agentStreaming,
+        ...updates.agentStreaming,
+      };
     }
 
     this.saveToFile();

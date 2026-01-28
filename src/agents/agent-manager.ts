@@ -9,6 +9,8 @@ import {
   ProcessInfo,
   ContextUsage,
   PermissionConfig,
+  AgentLimits,
+  AgentStreamingOptions,
 } from './claude-agent';
 import { DefaultPermissionGenerator, PermissionGenerator } from '../services/permission-generator';
 import {
@@ -93,6 +95,8 @@ export interface StartInteractiveAgentOptions {
   images?: ImageData[];
   sessionId?: string;
   permissionMode?: 'acceptEdits' | 'plan';
+  /** If true, use --session-id to create new session. If false/undefined, use --resume for existing sessions. */
+  isNewSession?: boolean;
 }
 
 export interface FullAgentStatus {
@@ -140,12 +144,23 @@ export interface AgentManager {
   off<K extends keyof AgentManagerEvents>(event: K, listener: AgentManagerEvents[K]): void;
 }
 
+export interface AgentFactoryOptions {
+  projectId: string;
+  projectPath: string;
+  mode: AgentMode;
+  permissions?: PermissionConfig;
+  limits?: AgentLimits;
+  streaming?: AgentStreamingOptions;
+  sessionId?: string;
+  isNewSession?: boolean;
+}
+
 export interface AgentFactory {
-  create(projectId: string, projectPath: string, mode: AgentMode, permissions?: PermissionConfig, sessionId?: string, isNewSession?: boolean): ClaudeAgent;
+  create(options: AgentFactoryOptions): ClaudeAgent;
 }
 
 const defaultAgentFactory: AgentFactory = {
-  create: (projectId, projectPath, mode, permissions, sessionId, isNewSession) => new DefaultClaudeAgent({ projectId, projectPath, mode, permissions, sessionId, isNewSession }),
+  create: (options) => new DefaultClaudeAgent(options),
 };
 
 export interface AgentManagerDependencies {
@@ -257,18 +272,19 @@ export class DefaultAgentManager implements AgentManager {
       throw new Error('Project not found');
     }
 
-    const { initialMessage, images, sessionId, permissionMode } = options || {};
+    const { initialMessage, images, sessionId, permissionMode, isNewSession: forceNewSession } = options || {};
 
     this.logger.withProject(projectId).info('Starting interactive agent', {
       hasMessage: !!initialMessage,
       imageCount: images?.length || 0,
-      resumingSession: !!sessionId,
+      resumingSession: !!sessionId && !forceNewSession,
       permissionMode,
+      forceNewSession,
     });
 
     // Determine the session ID to use and whether it's a new session
     let effectiveSessionId = sessionId;
-    let isNewSession = false;
+    let isNewSession = forceNewSession ?? false;
     let oldConversationId: string | null = null;
 
     // Create a new conversation if none exists (for storing messages and sessionId)
@@ -340,10 +356,11 @@ export class DefaultAgentManager implements AgentManager {
         // Emit session recovery event to notify frontend
         const reason = 'This conversation is from an older application version and cannot be resumed. Started a new conversation.';
         this.emit('sessionRecovery', projectId, oldConversationId, conversation.id, reason);
-      } else {
-        // Valid UUID - it's a resume operation
+      } else if (!forceNewSession) {
+        // Valid UUID and not forcing new session - it's a resume operation
         isNewSession = false;
       }
+      // If forceNewSession is true, keep isNewSession as true (set earlier)
     }
 
     // Build multimodal instructions if images are provided
@@ -718,7 +735,26 @@ export class DefaultAgentManager implements AgentManager {
       appendSystemPrompt: settings.appendSystemPrompt,
     };
 
-    const agent = this.agentFactory.create(projectId, projectPath, mode, permissions, sessionId, isNewSession);
+    // Convert settings limits/streaming to agent config
+    const limits: AgentLimits = {
+      maxTurns: settings.agentLimits.maxTurns > 0 ? settings.agentLimits.maxTurns : undefined,
+    };
+
+    const streaming: AgentStreamingOptions = {
+      includePartialMessages: settings.agentStreaming.includePartialMessages,
+      noSessionPersistence: settings.agentStreaming.noSessionPersistence,
+    };
+
+    const agent = this.agentFactory.create({
+      projectId,
+      projectPath,
+      mode,
+      permissions,
+      limits,
+      streaming,
+      sessionId,
+      isNewSession,
+    });
     this.setupAgentListeners(agent);
     this.agents.set(projectId, agent);
 
@@ -769,7 +805,16 @@ export class DefaultAgentManager implements AgentManager {
       this.emit('sessionRecovery', projectId, oldConversationId, newConversation.id, reason);
 
       // Restart with the new conversation's UUID as the session ID (new session)
-      const freshAgent = this.agentFactory.create(projectId, projectPath, mode, permissions, newConversation.id, true);
+      const freshAgent = this.agentFactory.create({
+        projectId,
+        projectPath,
+        mode,
+        permissions,
+        limits,
+        streaming,
+        sessionId: newConversation.id,
+        isNewSession: true,
+      });
       this.setupAgentListeners(freshAgent);
       this.agents.set(projectId, freshAgent);
       freshAgent.start(instructions);
@@ -1016,10 +1061,15 @@ export class DefaultAgentManager implements AgentManager {
       void this.handleAgentExit(agent, code);
     };
 
+    const sessionNotFoundListener = (missingSessionId: string): void => {
+      void this.handleSessionNotFound(agent, missingSessionId);
+    };
+
     agent.on('message', messageListener);
     agent.on('status', statusListener);
     agent.on('waitingForInput', waitingListener);
     agent.on('exit', exitListener);
+    agent.on('sessionNotFound', sessionNotFoundListener);
   }
 
   private async handleAgentExit(agent: ClaudeAgent, _code: number | null): Promise<void> {
@@ -1027,10 +1077,14 @@ export class DefaultAgentManager implements AgentManager {
     const projectLogger = this.logger.withProject(projectId);
     const loopState = this.loopStates.get(projectId);
 
+    // Check if this agent is still the current one (a new agent may have been started during session recovery)
+    const currentAgent = this.agents.get(projectId);
+    const isCurrentAgent = currentAgent === agent;
+
     // Save final context usage before cleaning up
     const finalContextUsage = agent.contextUsage;
 
-    if (finalContextUsage) {
+    if (finalContextUsage && isCurrentAgent) {
       projectLogger.debug('Saving final context usage on exit', {
         totalTokens: finalContextUsage.totalTokens,
         inputTokens: finalContextUsage.inputTokens,
@@ -1050,7 +1104,21 @@ export class DefaultAgentManager implements AgentManager {
       }
     }
 
-    this.agents.delete(projectId);
+    // Only delete from agents map if this is still the current agent
+    // (a new agent may have been started during session recovery)
+    if (isCurrentAgent) {
+      this.agents.delete(projectId);
+    } else {
+      projectLogger.debug('Skipping agent cleanup - a new agent was already started', {
+        exitingAgent: agent.sessionId,
+        currentAgent: currentAgent?.sessionId,
+      });
+    }
+
+    // Skip further processing if this agent was replaced (session recovery)
+    if (!isCurrentAgent) {
+      return;
+    }
 
     // If we're in an autonomous loop, handle the completion
     if (loopState && loopState.isLooping) {
@@ -1107,6 +1175,46 @@ export class DefaultAgentManager implements AgentManager {
         }
       }
     }
+  }
+
+  private async handleSessionNotFound(agent: ClaudeAgent, missingSessionId: string): Promise<void> {
+    const projectId = agent.projectId;
+    const projectLogger = this.logger.withProject(projectId);
+
+    projectLogger.info('Handling session not found error', {
+      missingSessionId,
+      agentMode: agent.mode,
+    });
+
+    // Get project info
+    const project = await this.projectRepository.findById(projectId);
+
+    if (!project) {
+      projectLogger.error('Project not found during session recovery');
+      return;
+    }
+
+    const oldConversationId = project.currentConversationId;
+
+    // Stop the current agent
+    if (agent.processInfo?.pid) {
+      this.pidTracker.removeProcess(agent.processInfo.pid);
+    }
+    await agent.stop();
+    this.agents.delete(projectId);
+
+    // Clear the current conversation (same as "Clear" button)
+    // This will cause the next agent start to create a fresh conversation
+    await this.projectRepository.setCurrentConversation(projectId, null);
+
+    projectLogger.info('Cleared conversation due to session not found', {
+      oldConversationId,
+      missingSessionId,
+    });
+
+    // Emit session recovery event to notify the UI
+    const reason = 'Session not found in Claude. The previous conversation may have been deleted. Please start a new conversation.';
+    this.emit('sessionRecovery', projectId, oldConversationId || missingSessionId, '', reason);
   }
 
   private async processQueue(): Promise<void> {

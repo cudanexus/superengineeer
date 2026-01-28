@@ -15,6 +15,7 @@ import {
   DefaultInstructionGenerator,
 } from '../services';
 import { createGitService } from '../services/git-service';
+import { createShellService, ShellService } from '../services/shell-service';
 import { DefaultAgentManager, AgentManager } from '../agents';
 import { getDataDirectory, getLogger } from '../utils';
 import { RoadmapGenerator } from '../services';
@@ -24,6 +25,7 @@ const frontendLogger = getLogger('frontend');
 
 let sharedAgentManager: AgentManager | null = null;
 let sharedRoadmapGenerator: RoadmapGenerator | null = null;
+let sharedShellService: ShellService | null = null;
 
 export interface ApiRouterDependencies {
   agentManager?: AgentManager;
@@ -150,6 +152,9 @@ export function createApiRouter(deps: ApiRouterDependencies = {}): Router {
   // Git service
   const gitService = createGitService();
 
+  // Shell service (singleton for WebSocket integration)
+  const shellService = getOrCreateShellService();
+
   // Project routes
   router.use('/projects', createProjectsRouter({
     projectRepository,
@@ -162,6 +167,7 @@ export function createApiRouter(deps: ApiRouterDependencies = {}): Router {
     conversationRepository,
     settingsRepository,
     gitService,
+    shellService,
   }));
 
   return router;
@@ -205,4 +211,16 @@ function getOrCreateRoadmapGenerator(): RoadmapGenerator {
 
 export function getRoadmapGenerator(): RoadmapGenerator | null {
   return sharedRoadmapGenerator;
+}
+
+function getOrCreateShellService(): ShellService {
+  if (!sharedShellService) {
+    sharedShellService = createShellService();
+  }
+
+  return sharedShellService;
+}
+
+export function getShellService(): ShellService | null {
+  return sharedShellService;
 }

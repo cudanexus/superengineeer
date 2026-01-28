@@ -33,8 +33,44 @@ const defaultFileOps: FileOperations = {
   },
 };
 
+const isWindows = process.platform === 'win32';
+
+function escapeArgForShell(arg: string): string {
+  if (isWindows) {
+    // Windows cmd.exe: wrap in double quotes if contains special chars
+    // Internal double quotes are escaped by doubling them
+    // Newlines must be removed/replaced as cmd.exe treats them as command separators
+    const needsQuoting = /[\s"&|<>^()\n\r]/.test(arg);
+
+    if (needsQuoting) {
+      // Replace newlines with space - cmd.exe cannot handle literal newlines in args
+      const sanitized = arg.replace(/\r?\n/g, ' ').replace(/"/g, '""');
+      return `"${sanitized}"`;
+    }
+    return arg;
+  } else {
+    // Unix: wrap in single quotes (safest), escape internal single quotes
+    if (/[\s"'&|<>()$`\\!*?[\]{}\n]/.test(arg)) {
+      return `'${arg.replace(/'/g, "'\\''")}'`;
+    }
+    return arg;
+  }
+}
+
+function buildShellCommand(command: string, args: string[]): string {
+  const escapedArgs = args.map(escapeArgForShell);
+  return `${command} ${escapedArgs.join(' ')}`;
+}
+
 const defaultSpawner: ProcessSpawner = {
-  spawn: (command, args, options) => spawn(command, args, options),
+  spawn: (command, args, options) => {
+    if (options.shell) {
+      // Build properly escaped command string for shell execution
+      const fullCommand = buildShellCommand(command, args);
+      return spawn(fullCommand, [], options);
+    }
+    return spawn(command, args, options);
+  },
 };
 
 export interface GenerateRoadmapOptions {

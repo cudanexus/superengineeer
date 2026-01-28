@@ -1,8 +1,24 @@
 import { WebSocketServer, WebSocket } from 'ws';
-import { Server } from 'http';
+import { Server, IncomingMessage } from 'http';
 import { AgentManager, AgentMessage, QueuedProject, AgentResourceStatus, ContextUsage, WaitingStatus, FullAgentStatus } from '../agents';
-import { RoadmapGenerator, RoadmapMessage } from '../services';
+import { RoadmapGenerator, RoadmapMessage, AuthService, ShellService } from '../services';
 import { getLogger, Logger } from '../utils/logger';
+import { parseCookie, COOKIE_NAME } from '../middleware/auth-middleware';
+
+export interface ShellOutputData {
+  sessionId: string;
+  data: string;
+}
+
+export interface ShellExitData {
+  sessionId: string;
+  code: number | null;
+}
+
+export interface ShellErrorData {
+  sessionId: string;
+  error: string;
+}
 
 export interface AgentMessageWithContext extends AgentMessage {
   contextUsage?: ContextUsage;
@@ -17,6 +33,9 @@ export type WebSocketMessageData =
   | RoadmapMessage
   | WaitingStatus
   | FullAgentStatus
+  | ShellOutputData
+  | ShellExitData
+  | ShellErrorData
   | string; // Covers 'connected' messages
 
 export interface SessionRecoveryData {
@@ -26,7 +45,7 @@ export interface SessionRecoveryData {
 }
 
 export interface WebSocketMessage {
-  type: 'agent_message' | 'agent_status' | 'agent_waiting' | 'queue_change' | 'connected' | 'roadmap_message' | 'session_recovery';
+  type: 'agent_message' | 'agent_status' | 'agent_waiting' | 'queue_change' | 'connected' | 'roadmap_message' | 'session_recovery' | 'shell_output' | 'shell_exit' | 'shell_error';
   projectId?: string;
   data?: WebSocketMessageData | SessionRecoveryData;
 }
@@ -41,26 +60,57 @@ export interface ProjectWebSocketServer {
 export interface WebSocketServerDependencies {
   agentManager: AgentManager;
   roadmapGenerator?: RoadmapGenerator;
+  authService?: AuthService;
+  shellService?: ShellService;
 }
 
 export class DefaultWebSocketServer implements ProjectWebSocketServer {
   private wss: WebSocketServer | null = null;
   private readonly agentManager: AgentManager;
   private readonly roadmapGenerator?: RoadmapGenerator;
+  private readonly authService?: AuthService;
+  private readonly shellService?: ShellService;
   private readonly projectSubscriptions: Map<string, Set<WebSocket>> = new Map();
   private readonly logger: Logger;
 
   constructor(deps: WebSocketServerDependencies) {
     this.agentManager = deps.agentManager;
     this.roadmapGenerator = deps.roadmapGenerator;
+    this.authService = deps.authService;
+    this.shellService = deps.shellService;
     this.logger = getLogger('websocket');
     this.setupAgentListeners();
     this.setupRoadmapListeners();
+    this.setupShellListeners();
   }
 
   initialize(httpServer: Server): void {
-    this.wss = new WebSocketServer({ server: httpServer });
+    this.wss = new WebSocketServer({
+      server: httpServer,
+      verifyClient: (info, callback) => this.verifyClient(info, callback),
+    });
     this.wss.on('connection', (ws) => this.handleConnection(ws));
+  }
+
+  private verifyClient(
+    info: { origin: string; secure: boolean; req: IncomingMessage },
+    callback: (result: boolean, code?: number, message?: string) => void
+  ): void {
+    // Skip auth validation if no auth service is configured
+    if (!this.authService) {
+      callback(true);
+      return;
+    }
+
+    const sessionId = parseCookie(info.req.headers.cookie as string | undefined, COOKIE_NAME);
+
+    if (!sessionId || !this.authService.validateSession(sessionId)) {
+      this.logger.debug('WebSocket connection rejected: invalid session');
+      callback(false, 401, 'Unauthorized');
+      return;
+    }
+
+    callback(true);
   }
 
   broadcast(message: WebSocketMessage): void {
@@ -247,6 +297,55 @@ export class DefaultWebSocketServer implements ProjectWebSocketServer {
         projectId,
         data: message,
       });
+    });
+  }
+
+  private setupShellListeners(): void {
+    if (!this.shellService) {
+      this.logger.debug('No shell service provided, skipping listener setup');
+      return;
+    }
+
+    this.logger.info('Setting up shell service listeners');
+
+    this.shellService.on('data', (sessionId, data) => {
+      // Extract projectId from sessionId (format: shell-{projectId}-{timestamp}-{counter})
+      const parts = sessionId.split('-');
+
+      if (parts.length >= 3) {
+        const projectId = parts.slice(1, -2).join('-');
+        this.broadcastToProject(projectId, {
+          type: 'shell_output',
+          projectId,
+          data: { sessionId, data },
+        });
+      }
+    });
+
+    this.shellService.on('exit', (sessionId, code) => {
+      const parts = sessionId.split('-');
+
+      if (parts.length >= 3) {
+        const projectId = parts.slice(1, -2).join('-');
+        this.broadcastToProject(projectId, {
+          type: 'shell_exit',
+          projectId,
+          data: { sessionId, code },
+        });
+      }
+    });
+
+    this.shellService.on('error', (sessionId, error) => {
+      const parts = sessionId.split('-');
+
+      if (parts.length >= 3) {
+        const projectId = parts.slice(1, -2).join('-');
+        this.broadcastToProject(projectId, {
+          type: 'shell_error',
+          projectId,
+          data: { sessionId, error },
+        });
+      }
     });
   }
 }

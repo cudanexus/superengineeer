@@ -59,6 +59,7 @@ export interface AgentEvents {
   status: (status: AgentStatus) => void;
   exit: (code: number | null) => void;
   waitingForInput: (status: WaitingStatus) => void;
+  sessionNotFound: (sessionId: string) => void;
 }
 
 export interface ProcessInfo {
@@ -110,8 +111,42 @@ export interface SpawnOptions {
   detached?: boolean;
 }
 
+function escapeArgForShell(arg: string): string {
+  if (isWindows) {
+    // Windows cmd.exe: wrap in double quotes if contains special chars
+    // Internal double quotes are escaped by doubling them
+    // Newlines must be removed/replaced as cmd.exe treats them as command separators
+    const needsQuoting = /[\s"&|<>^()\n\r]/.test(arg);
+
+    if (needsQuoting) {
+      // Replace newlines with space - cmd.exe cannot handle literal newlines in args
+      const sanitized = arg.replace(/\r?\n/g, ' ').replace(/"/g, '""');
+      return `"${sanitized}"`;
+    }
+    return arg;
+  } else {
+    // Unix: wrap in single quotes (safest), escape internal single quotes
+    if (/[\s"'&|<>()$`\\!*?[\]{}\n]/.test(arg)) {
+      return `'${arg.replace(/'/g, "'\\''")}'`;
+    }
+    return arg;
+  }
+}
+
+function buildShellCommand(command: string, args: string[]): string {
+  const escapedArgs = args.map(escapeArgForShell);
+  return `${command} ${escapedArgs.join(' ')}`;
+}
+
 const defaultSpawner: ProcessSpawner = {
-  spawn: (command, args, options) => spawn(command, args, options),
+  spawn: (command, args, options) => {
+    if (options.shell) {
+      // Build properly escaped command string for shell execution
+      const fullCommand = buildShellCommand(command, args);
+      return spawn(fullCommand, [], options);
+    }
+    return spawn(command, args, options);
+  },
 };
 
 interface ContentBlock {
@@ -137,6 +172,8 @@ interface StreamEvent {
   subtype?: string;
   session_id?: string;
   tool_use_id?: string;
+  is_error?: boolean;
+  errors?: string[];
   message?: {
     role?: string;
     content: ContentBlock[];
@@ -159,6 +196,18 @@ export interface PermissionConfig {
   appendSystemPrompt?: string;
 }
 
+export interface AgentLimits {
+  /** Maximum number of agentic turns before stopping (print mode only) */
+  maxTurns?: number;
+}
+
+export interface AgentStreamingOptions {
+  /** Include partial streaming events in output (requires stream-json output) */
+  includePartialMessages?: boolean;
+  /** Disable session persistence - sessions won't be saved to disk */
+  noSessionPersistence?: boolean;
+}
+
 export interface ClaudeAgentConfig {
   projectId: string;
   projectPath: string;
@@ -166,6 +215,10 @@ export interface ClaudeAgentConfig {
   /** @deprecated Use permissions instead */
   skipPermissions?: boolean;
   permissions?: PermissionConfig;
+  /** Agent limits (max turns, max budget) */
+  limits?: AgentLimits;
+  /** Streaming options (partial messages, session persistence) */
+  streaming?: AgentStreamingOptions;
   processSpawner?: ProcessSpawner;
   /** Session ID to resume or create with a specific ID */
   sessionId?: string;
@@ -178,6 +231,8 @@ export class DefaultClaudeAgent implements ClaudeAgent {
   private readonly projectPath: string;
   private readonly _mode: AgentMode;
   private readonly _permissions: PermissionConfig;
+  private readonly _limits: AgentLimits;
+  private readonly _streaming: AgentStreamingOptions;
   private readonly processSpawner: ProcessSpawner;
   private readonly emitter: EventEmitter;
   private readonly logger: Logger;
@@ -207,6 +262,8 @@ export class DefaultClaudeAgent implements ClaudeAgent {
     this._permissions = config.permissions ?? {
       skipPermissions: config.skipPermissions ?? true,
     };
+    this._limits = config.limits ?? {};
+    this._streaming = config.streaming ?? {};
     this.processSpawner = config.processSpawner || defaultSpawner;
     this.emitter = new EventEmitter();
     this.logger = getLogger('ClaudeAgent').withProject(config.projectId);
@@ -301,7 +358,29 @@ export class DefaultClaudeAgent implements ClaudeAgent {
         cwd: this.projectPath,
         startedAt: new Date().toISOString(),
       };
-      this.logger.info('Claude process started', { pid: this.process.pid });
+      this.logger.info('Claude process started', {
+        pid: this.process.pid,
+        hasStdin: !!this.process.stdin,
+        hasStdout: !!this.process.stdout,
+        hasStderr: !!this.process.stderr,
+      });
+    } else {
+      this.logger.error('Claude process started but no PID assigned', {
+        hasStdin: !!this.process.stdin,
+        hasStdout: !!this.process.stdout,
+        hasStderr: !!this.process.stderr,
+      });
+    }
+
+    // Verify stdio streams are available
+    if (!this.process.stdout) {
+      this.logger.error('CRITICAL: stdout stream not available');
+      this.emitMessage('stderr', 'ERROR: stdout stream not available');
+    }
+
+    if (!this.process.stdin) {
+      this.logger.error('CRITICAL: stdin stream not available');
+      this.emitMessage('stderr', 'ERROR: stdin stream not available');
     }
 
     this.setupProcessHandlers();
@@ -344,7 +423,16 @@ export class DefaultClaudeAgent implements ClaudeAgent {
           contentPreview: isMultimodal ? '[multimodal content]' : this.truncateForLog(instructions, 500),
         });
 
-        this.process.stdin.write(message + '\n');
+        const writeSuccess = this.process.stdin.write(message + '\n');
+        this.logger.info('STDIN >>> Write result', {
+          success: writeSuccess,
+          bufferFull: !writeSuccess,
+          messageLength: message.length,
+        });
+
+        if (!writeSuccess) {
+          this.logger.warn('STDIN buffer full, waiting for drain');
+        }
       }
 
       // In autonomous mode, close stdin after writing instructions
@@ -492,7 +580,20 @@ export class DefaultClaudeAgent implements ClaudeAgent {
   }
 
   private writeInputToStdin(input: string): void {
-    if (!this.process?.stdin || this.process.stdin.destroyed) {
+    if (!this.process?.stdin) {
+      this.logger.error('STDIN >>> Cannot send message - stdin not available', {
+        hasProcess: !!this.process,
+        hasStdin: !!this.process?.stdin,
+      });
+      this.emitMessage('stderr', 'Cannot send message - stdin not available');
+      return;
+    }
+
+    if (this.process.stdin.destroyed) {
+      this.logger.error('STDIN >>> Cannot send message - stdin destroyed', {
+        destroyed: true,
+      });
+      this.emitMessage('stderr', 'Cannot send message - stdin destroyed');
       return;
     }
 
@@ -534,7 +635,16 @@ export class DefaultClaudeAgent implements ClaudeAgent {
       contentPreview: isMultimodal ? '[multimodal content]' : this.truncateForLog(input, 500),
     });
 
-    this.process.stdin.write(message + '\n');
+    const writeSuccess = this.process.stdin.write(message + '\n');
+    this.logger.info('STDIN >>> Write result', {
+      success: writeSuccess,
+      bufferFull: !writeSuccess,
+      messageLength: message.length,
+    });
+
+    if (!writeSuccess) {
+      this.logger.warn('STDIN buffer full, waiting for drain');
+    }
   }
 
   private processNextQueuedInput(): void {
@@ -577,6 +687,12 @@ export class DefaultClaudeAgent implements ClaudeAgent {
     // Add permission-related arguments
     this.addPermissionArgs(args);
 
+    // Add agent limits
+    this.addLimitArgs(args);
+
+    // Add streaming options
+    this.addStreamingArgs(args);
+
     // Handle session ID: use --session-id for new sessions, --resume for existing
     if (this._configuredSessionId) {
       if (this._isNewSession) {
@@ -608,30 +724,36 @@ export class DefaultClaudeAgent implements ClaudeAgent {
 
     if (this._permissions.allowedTools && this._permissions.allowedTools.length > 0) {
       // Claude CLI expects tools as a single space-separated string
+      // Node.js spawn handles quoting automatically when using args array
       const toolsArg = this._permissions.allowedTools.join(' ');
-      args.push('--allowedTools', this.quoteShellArg(toolsArg));
+      args.push('--allowedTools', toolsArg);
     }
 
     if (this._permissions.disallowedTools && this._permissions.disallowedTools.length > 0) {
       // Claude CLI expects tools as a single space-separated string
       const toolsArg = this._permissions.disallowedTools.join(' ');
-      args.push('--disallowedTools', this.quoteShellArg(toolsArg));
+      args.push('--disallowedTools', toolsArg);
     }
 
     if (this._permissions.appendSystemPrompt && this._permissions.appendSystemPrompt.trim().length > 0) {
-      args.push('--append-system-prompt', this.quoteShellArg(this._permissions.appendSystemPrompt.trim()));
+      args.push('--append-system-prompt', this._permissions.appendSystemPrompt.trim());
     }
   }
 
-  private quoteShellArg(arg: string): string {
-    // Check if argument contains shell metacharacters that need quoting
-    // Common metacharacters: space, (, ), *, ?, [, ], {, }, <, >, |, &, ;, $, ", ', \, newline
-    if (/[\s()*?[\]{}<>|&;$"'\\]/.test(arg)) {
-      // Use double quotes and escape any existing double quotes and backslashes
-      return `"${arg.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+  private addLimitArgs(args: string[]): void {
+    if (this._limits.maxTurns !== undefined && this._limits.maxTurns > 0) {
+      args.push('--max-turns', String(this._limits.maxTurns));
+    }
+  }
+
+  private addStreamingArgs(args: string[]): void {
+    if (this._streaming.includePartialMessages) {
+      args.push('--include-partial-messages');
     }
 
-    return arg;
+    if (this._streaming.noSessionPersistence) {
+      args.push('--no-session-persistence');
+    }
   }
 
   private setupProcessHandlers(): void {
@@ -641,11 +763,40 @@ export class DefaultClaudeAgent implements ClaudeAgent {
 
     this.lineBuffer = '';
 
+    // Set up stdin error handling
+    if (this.process.stdin) {
+      this.process.stdin.on('error', (err) => {
+        this.logger.error('STDIN error', {
+          error: err.message,
+          code: (err as NodeJS.ErrnoException).code,
+        });
+        this.emitMessage('stderr', `stdin error: ${err.message}`);
+      });
+
+      this.process.stdin.on('close', () => {
+        this.logger.info('STDIN closed');
+      });
+    }
+
     this.process.stdout?.on('data', (data: Buffer) => {
       const content = data.toString();
+
+      // Log raw stdout data - use larger limit for errors
+      const isError = content.includes('error') || content.includes('Error');
+      this.logger.debug('STDOUT <<< Raw data received', {
+        direction: 'output',
+        bytes: data.length,
+        preview: this.truncateForLog(content, isError ? 2000 : 500),
+      });
+
       this.lineBuffer += content;
       const lines = this.lineBuffer.split('\n');
       this.lineBuffer = lines.pop() || '';
+
+      this.logger.debug('STDOUT <<< Parsed lines', {
+        completeLines: lines.length,
+        bufferRemainder: this.lineBuffer.length,
+      });
 
       for (const line of lines) {
         if (!line.trim()) continue;
@@ -702,8 +853,10 @@ export class DefaultClaudeAgent implements ClaudeAgent {
 
       const event = parsed as StreamEvent;
 
-      // Log the raw event from Claude
-      this.logger.debug('STDOUT <<< Raw stream event', {
+      // Log the raw event from Claude - use info level for important events, debug for streaming deltas
+      const isStreamingDelta = event.type === 'content_block_delta';
+      const logMethod = isStreamingDelta ? 'debug' : 'info';
+      this.logger[logMethod]('STDOUT <<< Stream event', {
         direction: 'output',
         eventType: event.type,
         eventSubtype: event.subtype,
@@ -714,7 +867,7 @@ export class DefaultClaudeAgent implements ClaudeAgent {
     } catch {
       // Not JSON or parse error - emit as plain text
       if (line.trim()) {
-        this.logger.debug('STDOUT <<< Non-JSON output', {
+        this.logger.info('STDOUT <<< Non-JSON output', {
           direction: 'output',
           content: this.truncateForLog(line, 300),
         });
@@ -801,7 +954,15 @@ export class DefaultClaudeAgent implements ClaudeAgent {
           direction: 'output',
           eventType: 'result',
           subtype: event.subtype,
+          isError: event.is_error,
+          errors: event.errors,
         });
+
+        // Handle errors in result
+        if (event.is_error && event.errors && event.errors.length > 0) {
+          this.handleResultErrors(event.errors);
+        }
+
         this.setProcessing(false);
         this.processNextQueuedInput();
         break;
@@ -905,6 +1066,33 @@ export class DefaultClaudeAgent implements ClaudeAgent {
       maxContextTokens,
       percentUsed,
     };
+  }
+
+  private handleResultErrors(errors: string[]): void {
+    // Check for session not found error
+    const sessionNotFoundPattern = /No conversation found with session ID: ([a-f0-9-]+)/i;
+
+    for (const error of errors) {
+      const match = error.match(sessionNotFoundPattern);
+
+      if (match) {
+        const missingSessionId = match[1];
+        this.logger.warn('Session not found error detected', {
+          missingSessionId,
+          configuredSessionId: this._configuredSessionId,
+        });
+
+        // Emit session not found event for the agent manager to handle
+        this.emitter.emit('sessionNotFound', missingSessionId);
+
+        // Also show a user-friendly message
+        this.emitMessage('stderr', `Session not found: ${missingSessionId}. Creating new conversation...`);
+        return;
+      }
+
+      // For other errors, just display them
+      this.emitMessage('stderr', `Error: ${error}`);
+    }
   }
 
   private handleAssistantEvent(event: StreamEvent): void {

@@ -512,4 +512,131 @@ describe('FileProjectRepository', () => {
       expect(projects[0]!.name).toBe('Existing Project');
     });
   });
+
+  describe('getProjectPath', () => {
+    it('should return project path for valid id', async () => {
+      const created = await repository.create({ name: 'Test', path: '/test/project' });
+
+      const projectPath = repository.getProjectPath(created.id);
+
+      expect(projectPath).toBe('/test/project');
+    });
+
+    it('should return null for non-existent id', () => {
+      const projectPath = repository.getProjectPath('non-existent');
+
+      expect(projectPath).toBeNull();
+    });
+  });
+
+  describe('updateContextUsage', () => {
+    const testContextUsage = {
+      inputTokens: 1000,
+      outputTokens: 500,
+      totalTokens: 1500,
+      cacheCreationInputTokens: 200,
+      cacheReadInputTokens: 100,
+      maxContextTokens: 100000,
+      percentUsed: 1.5,
+    };
+
+    it('should return null for non-existent project', async () => {
+      const result = await repository.updateContextUsage('non-existent', testContextUsage);
+      expect(result).toBeNull();
+    });
+
+    it('should update context usage', async () => {
+      const created = await repository.create({ name: 'Test', path: '/test' });
+
+      const updated = await repository.updateContextUsage(created.id, testContextUsage);
+
+      expect(updated).toBeDefined();
+      expect(updated!.lastContextUsage).toEqual(testContextUsage);
+    });
+
+    it('should allow setting context usage to null', async () => {
+      const created = await repository.create({ name: 'Test', path: '/test' });
+      await repository.updateContextUsage(created.id, testContextUsage);
+
+      const updated = await repository.updateContextUsage(created.id, null);
+
+      expect(updated!.lastContextUsage).toBeNull();
+    });
+
+    it('should persist context usage change', async () => {
+      const created = await repository.create({ name: 'Test', path: '/test' });
+      await repository.updateContextUsage(created.id, testContextUsage);
+
+      const found = await repository.findById(created.id);
+
+      expect(found!.lastContextUsage).toEqual(testContextUsage);
+    });
+  });
+
+  describe('updatePermissionOverrides', () => {
+    const testOverrides = {
+      enabled: true,
+      allowRules: ['Read', 'Bash(npm:*)'],
+      denyRules: ['Bash(rm:*)'],
+      defaultMode: 'plan' as const,
+    };
+
+    it('should return null for non-existent project', async () => {
+      const result = await repository.updatePermissionOverrides('non-existent', testOverrides);
+      expect(result).toBeNull();
+    });
+
+    it('should update permission overrides', async () => {
+      const created = await repository.create({ name: 'Test', path: '/test' });
+
+      const updated = await repository.updatePermissionOverrides(created.id, testOverrides);
+
+      expect(updated).toBeDefined();
+      expect(updated!.permissionOverrides).toEqual(testOverrides);
+    });
+
+    it('should allow setting permission overrides to null', async () => {
+      const created = await repository.create({ name: 'Test', path: '/test' });
+      await repository.updatePermissionOverrides(created.id, testOverrides);
+
+      const updated = await repository.updatePermissionOverrides(created.id, null);
+
+      expect(updated!.permissionOverrides).toBeNull();
+    });
+
+    it('should persist permission overrides change', async () => {
+      const created = await repository.create({ name: 'Test', path: '/test' });
+      await repository.updatePermissionOverrides(created.id, testOverrides);
+
+      const found = await repository.findById(created.id);
+
+      expect(found!.permissionOverrides).toEqual(testOverrides);
+    });
+  });
+
+  describe('loadStatus edge cases', () => {
+    it('should return null when status file is corrupted', async () => {
+      const created = await repository.create({ name: 'Test', path: '/test' });
+      // Corrupt the status file
+      const statusPath = '/test/.claudito/status.json';
+      mockFs.files.set(statusPath, 'not valid json');
+
+      // Clear cache to force reload
+      const newRepo = new FileProjectRepository(dataDir, mockFs);
+      const found = await newRepo.findById(created.id);
+
+      expect(found).toBeNull();
+    });
+
+    it('should return null when status file does not exist', async () => {
+      // Set up index with a project but no status file
+      const indexContent = JSON.stringify([{ id: 'test_id', name: 'Test', path: '/missing/status' }]);
+      mockFs.files.set(indexPath, indexContent);
+
+      const newRepo = new FileProjectRepository(dataDir, mockFs);
+      const found = await newRepo.findById('test_id');
+
+      expect(found).toBeNull();
+    });
+  });
 });

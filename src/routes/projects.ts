@@ -3,9 +3,10 @@ import fs from 'fs';
 import path from 'path';
 import { ProjectRepository, ConversationRepository, MilestoneItemRef, ProjectPermissionOverrides } from '../repositories';
 import { MilestoneRef, AgentMessage, ImageData } from '../agents';
-import { ProjectService, RoadmapParser, RoadmapGenerator, InstructionGenerator, RoadmapEditor } from '../services';
+import { ProjectService, RoadmapParser, RoadmapGenerator, InstructionGenerator, RoadmapEditor, ShellService } from '../services';
 import { GitService } from '../services/git-service';
 import { AgentManager } from '../agents';
+import { getLogger } from '../utils';
 
 // Request body types
 interface CreateProjectBody {
@@ -104,6 +105,15 @@ interface GitPushTagBody {
   remote?: string;
 }
 
+interface ShellInputBody {
+  input?: string;
+}
+
+interface ShellResizeBody {
+  cols?: number;
+  rows?: number;
+}
+
 function computeConversationStats(
   messages: AgentMessage[],
   createdAt: string | null
@@ -151,6 +161,7 @@ export interface ProjectRouterDependencies {
   conversationRepository: ConversationRepository;
   settingsRepository: SettingsRepository;
   gitService: GitService;
+  shellService?: ShellService;
 }
 
 export interface ConversationStats {
@@ -1275,6 +1286,141 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
 
     const output = await gitService.pushTag(project.path, tagName, remote);
     res.json({ success: true, output });
+  }));
+
+  // ===== Shell Routes =====
+
+  // Create or get shell session for project
+  router.post('/:id/shell/start', asyncHandler(async (req: Request, res: Response) => {
+    const { shellService } = deps;
+
+    if (!shellService) {
+      res.status(503).json({ error: 'Shell service not available' });
+      return;
+    }
+
+    const id = req.params['id'] as string;
+    const project = await projectRepository.findById(id);
+
+    if (!project) {
+      throw new NotFoundError('Project');
+    }
+
+    const session = shellService.createSession(id, project.path);
+    res.json({
+      sessionId: session.id,
+      projectId: session.projectId,
+      cwd: session.cwd
+    });
+  }));
+
+  // Get current shell session status
+  router.get('/:id/shell/status', asyncHandler(async (req: Request, res: Response) => {
+    const { shellService } = deps;
+
+    if (!shellService) {
+      res.status(503).json({ error: 'Shell service not available' });
+      return;
+    }
+
+    const id = req.params['id'] as string;
+    const session = shellService.getSessionByProject(id);
+
+    if (!session) {
+      res.json({ active: false });
+      return;
+    }
+
+    res.json({
+      active: true,
+      sessionId: session.id,
+      cwd: session.cwd,
+      createdAt: session.createdAt
+    });
+  }));
+
+  // Send input to shell
+  router.post('/:id/shell/input', asyncHandler(async (req: Request, res: Response) => {
+    const { shellService } = deps;
+    const logger = getLogger('shell-routes');
+
+    if (!shellService) {
+      res.status(503).json({ error: 'Shell service not available' });
+      return;
+    }
+
+    const id = req.params['id'] as string;
+    const body = req.body as ShellInputBody;
+    const { input } = body;
+
+    logger.withProject(id).debug('Shell input request received', {
+      inputLength: input?.length,
+      inputPreview: typeof input === 'string' ? JSON.stringify(input.substring(0, 20)) : typeof input
+    });
+
+    const session = shellService.getSessionByProject(id);
+
+    if (!session) {
+      logger.withProject(id).warn('Shell input failed: no active session');
+      res.status(404).json({ error: 'No active shell session' });
+      return;
+    }
+
+    if (typeof input !== 'string') {
+      throw new ValidationError('input must be a string');
+    }
+
+    const success = shellService.write(session.id, input);
+    logger.withProject(id).debug('Shell input write result', { success, sessionId: session.id });
+    res.json({ success });
+  }));
+
+  // Resize shell terminal
+  router.post('/:id/shell/resize', asyncHandler(async (req: Request, res: Response) => {
+    const { shellService } = deps;
+
+    if (!shellService) {
+      res.status(503).json({ error: 'Shell service not available' });
+      return;
+    }
+
+    const id = req.params['id'] as string;
+    const body = req.body as ShellResizeBody;
+    const { cols, rows } = body;
+    const session = shellService.getSessionByProject(id);
+
+    if (!session) {
+      res.status(404).json({ error: 'No active shell session' });
+      return;
+    }
+
+    if (typeof cols !== 'number' || typeof rows !== 'number') {
+      throw new ValidationError('cols and rows must be numbers');
+    }
+
+    shellService.resize(session.id, cols, rows);
+    res.json({ success: true });
+  }));
+
+  // Stop shell session
+  router.post('/:id/shell/stop', asyncHandler(async (req: Request, res: Response) => {
+    const { shellService } = deps;
+
+    if (!shellService) {
+      res.status(503).json({ error: 'Shell service not available' });
+      return;
+    }
+
+    const id = req.params['id'] as string;
+    const session = shellService.getSessionByProject(id);
+
+    if (!session) {
+      res.status(404).json({ error: 'No active shell session' });
+      return;
+    }
+
+    shellService.killSession(session.id);
+    res.json({ success: true });
   }));
 
   return router;

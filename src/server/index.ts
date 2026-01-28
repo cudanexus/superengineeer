@@ -3,9 +3,14 @@ import { Server, createServer } from 'http';
 import fs from 'fs';
 import path from 'path';
 import { AppConfig } from '../config';
-import { createApiRouter, getAgentManager, getRoadmapGenerator } from '../routes';
+import { createApiRouter, getAgentManager, getRoadmapGenerator, getShellService } from '../routes';
+import { createAuthRouter } from '../routes/auth';
 import { DefaultWebSocketServer, ProjectWebSocketServer } from '../websocket';
 import { createErrorHandler, formatAccessibleUrls } from '../utils';
+import { AuthService, createAuthService } from '../services/auth-service';
+import { createAuthMiddleware, parseCookie, COOKIE_NAME } from '../middleware/auth-middleware';
+import { displayLoginCredentials } from '../utils/qr-generator';
+import packageJson from '../../package.json';
 
 export interface HttpServer {
   start(): Promise<void>;
@@ -20,21 +25,51 @@ export interface ExpressAppOptions {
   maxConcurrentAgents?: number;
   devMode?: boolean;
   onShutdown?: () => void;
+  authService?: AuthService;
 }
 
 export function createExpressApp(options: ExpressAppOptions = {}): Application {
   const app = express();
 
-  app.use(express.json());
-  app.use(express.urlencoded({ extended: true }));
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
   const publicPath = path.join(__dirname, '../../public');
 
-  app.get('/', (_req: Request, res: Response) => {
+  // Serve login page (unprotected)
+  app.get('/login', (_req: Request, res: Response) => {
+    res.sendFile(path.join(publicPath, 'login.html'));
+  });
+
+  // Auth routes (unprotected)
+  if (options.authService) {
+    app.use('/api/auth', createAuthRouter({ authService: options.authService }));
+  }
+
+  // Health check (unprotected)
+  app.get('/api/health', (_req: Request, res: Response) => {
+    res.json({ status: 'ok', version: packageJson.version });
+  });
+
+  // Root route - check auth and redirect to login if needed
+  app.get('/', (req: Request, res: Response) => {
+    if (options.authService) {
+      const sessionId = parseCookie(req.headers.cookie, COOKIE_NAME);
+
+      if (!sessionId || !options.authService.validateSession(sessionId)) {
+        res.redirect('/login');
+        return;
+      }
+    }
     serveIndexWithCacheBusting(publicPath, res);
   });
 
   app.use(express.static(publicPath));
+
+  // Apply auth middleware to all /api routes (except /api/auth and /api/health)
+  if (options.authService) {
+    app.use('/api', createAuthMiddleware({ authService: options.authService }));
+  }
 
   app.use('/api', createApiRouter({
     maxConcurrentAgents: options.maxConcurrentAgents,
@@ -76,14 +111,17 @@ export class ExpressHttpServer implements HttpServer {
   private wsServer: ProjectWebSocketServer | null = null;
   private readonly app: Application;
   private readonly config: AppConfig;
+  private readonly authService: AuthService;
   private shutdownCallback?: () => void;
 
   constructor(deps: ServerDependencies) {
     this.config = deps.config;
+    this.authService = createAuthService();
     this.app = createExpressApp({
       maxConcurrentAgents: this.config.maxConcurrentAgents,
       devMode: this.config.devMode,
       onShutdown: () => this.triggerShutdown(),
+      authService: this.authService,
     });
   }
 
@@ -187,6 +225,7 @@ export class ExpressHttpServer implements HttpServer {
   private initializeWebSocket(): void {
     const agentManager = getAgentManager();
     const roadmapGenerator = getRoadmapGenerator();
+    const shellService = getShellService();
 
     if (!agentManager || !this.httpServer) {
       return;
@@ -195,6 +234,8 @@ export class ExpressHttpServer implements HttpServer {
     this.wsServer = new DefaultWebSocketServer({
       agentManager,
       roadmapGenerator: roadmapGenerator || undefined,
+      authService: this.authService,
+      shellService: shellService || undefined,
     });
     this.wsServer.initialize(this.httpServer);
   }
@@ -209,5 +250,16 @@ export class ExpressHttpServer implements HttpServer {
     }
 
     console.log('');
+
+    // Display login credentials and QR code
+    displayLoginCredentials({
+      credentials: this.authService.getCredentials(),
+      host: this.config.host,
+      port: this.config.port,
+    });
+  }
+
+  getAuthService(): AuthService {
+    return this.authService;
   }
 }
