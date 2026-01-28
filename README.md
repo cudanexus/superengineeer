@@ -14,6 +14,7 @@ A web-based manager for [Claude Code](https://docs.anthropic.com/en/docs/claude-
 
 - **Shell Terminal**: Full PTY-based terminal integrated into the UI with proper terminal emulation via node-pty
 - **Authentication**: Built-in login system
+- **Bug Fixes & Stability**: Numerous fixes improving overall reliability
 
 ## Security Considerations
 

@@ -3438,14 +3438,20 @@
       }
 
       // Sync waiting state if provided (only when agent is running)
+      // Only update if server version is newer to avoid stale updates
       if (fullStatus && status === 'running') {
-        updateWaitingIndicator(fullStatus.isWaitingForInput);
+        var serverVersion = fullStatus.waitingVersion || 0;
 
-        var project = findProjectById(projectId);
+        if (serverVersion > state.waitingVersion) {
+          state.waitingVersion = serverVersion;
+          updateWaitingIndicator(fullStatus.isWaitingForInput);
 
-        if (project) {
-          project.isWaitingForInput = fullStatus.isWaitingForInput;
-          project.waitingVersion = fullStatus.waitingVersion;
+          var project = findProjectById(projectId);
+
+          if (project) {
+            project.isWaitingForInput = fullStatus.isWaitingForInput;
+            project.waitingVersion = fullStatus.waitingVersion;
+          }
         }
       }
     }

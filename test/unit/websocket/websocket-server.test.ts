@@ -1,5 +1,3 @@
-import { Server } from 'http';
-import { WebSocket } from 'ws';
 import {
   DefaultWebSocketServer,
   WebSocketServerDependencies,
@@ -9,7 +7,6 @@ import { AgentManager, AgentMessage } from '../../../src/agents';
 describe('DefaultWebSocketServer', () => {
   let wsServer: DefaultWebSocketServer;
   let mockAgentManager: jest.Mocked<AgentManager>;
-  let mockHttpServer: jest.Mocked<Server>;
 
   const createMockAgentManager = (): jest.Mocked<AgentManager> => {
     const listeners: Map<string, Set<(...args: unknown[]) => void>> = new Map();
@@ -75,9 +72,6 @@ describe('DefaultWebSocketServer', () => {
 
   beforeEach(() => {
     mockAgentManager = createMockAgentManager();
-    mockHttpServer = {
-      on: jest.fn(),
-    } as unknown as jest.Mocked<Server>;
 
     const deps: WebSocketServerDependencies = {
       agentManager: mockAgentManager,
