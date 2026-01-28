@@ -16,6 +16,9 @@
   var getErrorMessage, highlightCode, getLanguageFromPath;
   var findProjectById, switchTab, FileBrowser, computeWordDiff;
 
+  // Module state
+  var gitOperationInProgress = false;
+
   /**
    * Initialize the module with dependencies
    */
@@ -320,11 +323,22 @@
   }
 
   function setGitOperationState(loading) {
+    gitOperationInProgress = loading;
+    var $gitContent = $('#git-content');
+
     if (loading) {
-      $('#git-content').addClass('git-loading');
+      $gitContent.addClass('git-loading');
+      $gitContent.find('button, select').prop('disabled', true);
+      $gitContent.find('.git-action-btn, .git-branch-item, .git-push-tag-btn').addClass('pointer-events-none opacity-50');
     } else {
-      $('#git-content').removeClass('git-loading');
+      $gitContent.removeClass('git-loading');
+      $gitContent.find('button, select').prop('disabled', false);
+      $gitContent.find('.git-action-btn, .git-branch-item, .git-push-tag-btn').removeClass('pointer-events-none opacity-50');
     }
+  }
+
+  function isOperationInProgress() {
+    return gitOperationInProgress;
   }
 
   function parseUnifiedDiff(diffText) {
@@ -523,10 +537,12 @@
 
   function setupGitHandlers() {
     $('#btn-git-refresh').on('click', function() {
+      if (gitOperationInProgress) return;
       loadGitStatus();
     });
 
     $('#git-branch-select').on('change', function() {
+      if (gitOperationInProgress) return;
       var branch = $(this).val();
 
       if (branch && state.selectedProjectId) {
@@ -547,6 +563,7 @@
     });
 
     $(document).on('click', '.git-branch-item', function() {
+      if (gitOperationInProgress) return;
       var branch = $(this).data('branch');
 
       if (branch && state.selectedProjectId) {
@@ -566,6 +583,7 @@
     });
 
     $('#btn-git-new-branch').on('click', function() {
+      if (gitOperationInProgress) return;
       showPrompt('New Branch', 'Branch name:', { placeholder: 'feature/my-branch', submitText: 'Create' })
         .then(function(name) {
           if (name && state.selectedProjectId) {
@@ -586,7 +604,7 @@
     });
 
     $('#btn-git-stage-all').on('click', function() {
-      if (!state.selectedProjectId) return;
+      if (gitOperationInProgress || !state.selectedProjectId) return;
 
       setGitOperationState(true);
       api.gitStageAll(state.selectedProjectId)
@@ -602,7 +620,7 @@
     });
 
     $('#btn-git-unstage-all').on('click', function() {
-      if (!state.selectedProjectId) return;
+      if (gitOperationInProgress || !state.selectedProjectId) return;
 
       setGitOperationState(true);
       api.gitUnstageAll(state.selectedProjectId)
@@ -619,6 +637,7 @@
 
     $(document).on('click', '.git-stage-btn', function(e) {
       e.stopPropagation();
+      if (gitOperationInProgress) return;
       var path = $(this).data('path');
 
       if (path && state.selectedProjectId) {
@@ -638,6 +657,7 @@
 
     $(document).on('click', '.git-unstage-btn', function(e) {
       e.stopPropagation();
+      if (gitOperationInProgress) return;
       var path = $(this).data('path');
 
       if (path && state.selectedProjectId) {
@@ -657,6 +677,7 @@
 
     $(document).on('click', '.git-stage-dir-btn', function(e) {
       e.stopPropagation();
+      if (gitOperationInProgress) return;
       var dirPath = $(this).data('path');
 
       if (dirPath && state.selectedProjectId) {
@@ -676,6 +697,7 @@
 
     $(document).on('click', '.git-unstage-dir-btn', function(e) {
       e.stopPropagation();
+      if (gitOperationInProgress) return;
       var dirPath = $(this).data('path');
 
       if (dirPath && state.selectedProjectId) {
@@ -777,6 +799,7 @@
     $('#git-ctx-stage').on('click', function(e) {
       e.stopPropagation();
       $('#git-context-menu').addClass('hidden');
+      if (gitOperationInProgress) return;
 
       if (state.gitContextTarget && state.selectedProjectId) {
         setGitOperationState(true);
@@ -794,6 +817,7 @@
     $('#git-ctx-unstage').on('click', function(e) {
       e.stopPropagation();
       $('#git-context-menu').addClass('hidden');
+      if (gitOperationInProgress) return;
 
       if (state.gitContextTarget && state.selectedProjectId) {
         setGitOperationState(true);
@@ -811,6 +835,7 @@
     $('#git-ctx-discard').on('click', function(e) {
       e.stopPropagation();
       $('#git-context-menu').addClass('hidden');
+      if (gitOperationInProgress) return;
 
       if (state.gitContextTarget && state.selectedProjectId) {
         var targetPath = state.gitContextTarget.path;
@@ -861,6 +886,7 @@
     });
 
     $('#btn-git-commit').on('click', function() {
+      if (gitOperationInProgress) return;
       var message = $('#git-commit-message').val().trim();
 
       if (!message) {
@@ -889,7 +915,7 @@
     });
 
     $('#btn-git-push').on('click', function() {
-      if (!state.selectedProjectId) return;
+      if (gitOperationInProgress || !state.selectedProjectId) return;
 
       setGitOperationState(true);
       $(this).text('Pushing...');
@@ -908,7 +934,7 @@
     });
 
     $('#btn-git-pull').on('click', function() {
-      if (!state.selectedProjectId) return;
+      if (gitOperationInProgress || !state.selectedProjectId) return;
 
       setGitOperationState(true);
       $(this).text('Pulling...');
@@ -932,6 +958,7 @@
     });
 
     $('#btn-git-new-tag').on('click', function() {
+      if (gitOperationInProgress) return;
       $('#input-tag-name').val('');
       $('#input-tag-message').val('');
       $('#modal-create-tag').removeClass('hidden');
@@ -939,6 +966,7 @@
 
     $('#form-create-tag').on('submit', function(e) {
       e.preventDefault();
+      if (gitOperationInProgress) return;
       var name = $('#input-tag-name').val().trim();
       var message = $('#input-tag-message').val().trim();
 
@@ -961,6 +989,7 @@
 
     $(document).on('click', '.git-push-tag-btn', function(e) {
       e.stopPropagation();
+      if (gitOperationInProgress) return;
       var tagName = $(this).data('tag');
 
       if (tagName && state.selectedProjectId) {
@@ -988,6 +1017,7 @@
     loadGitStatus: loadGitStatus,
     setupGitHandlers: setupGitHandlers,
     showMobileGitDiff: showMobileGitDiff,
-    hideMobileGitDiff: hideMobileGitDiff
+    hideMobileGitDiff: hideMobileGitDiff,
+    isOperationInProgress: isOperationInProgress
   };
 }));

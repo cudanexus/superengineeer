@@ -1977,6 +1977,31 @@ body {
   opacity: 0.5;
 }
 
+#git-content.git-loading {
+  position: relative;
+}
+
+#git-content.git-loading::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(17, 24, 39, 0.3);
+  pointer-events: none;
+  z-index: 10;
+}
+
+#git-content.git-loading button,
+#git-content.git-loading select {
+  cursor: not-allowed;
+}
+
+#git-content.git-loading button:not(:disabled) {
+  opacity: 0.6;
+}
+
 /* Git diff side-by-side (inherits from tool-diff) */
 .git-diff.side-by-side {
   display: flex;
