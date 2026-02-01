@@ -16,13 +16,17 @@ describe('MessageRenderer', () => {
     };
     mockMarked = {
       setOptions: jest.fn(),
-      parse: jest.fn((content) => `<p>${content}</p>`)
+      parse: jest.fn((content) => `<p>${content}</p>`),
+      Renderer: jest.fn().mockImplementation(() => ({
+        code: jest.fn()
+      }))
     };
 
     MessageRenderer.init({
       escapeHtml: mockEscapeHtml,
       ToolRenderer: mockToolRenderer,
-      marked: mockMarked
+      marked: mockMarked,
+      mermaid: null // Not needed for most tests
     });
   });
 
@@ -34,7 +38,13 @@ describe('MessageRenderer', () => {
     it('should use marked to parse markdown', () => {
       const result = MessageRenderer.renderMarkdown('**bold** text');
 
-      expect(mockMarked.setOptions).toHaveBeenCalledWith({ breaks: true, gfm: true });
+      expect(mockMarked.setOptions).toHaveBeenCalledWith(
+        expect.objectContaining({
+          breaks: true,
+          gfm: true,
+          renderer: expect.any(Object)
+        })
+      );
       expect(mockMarked.parse).toHaveBeenCalledWith('**bold** text');
     });
 
@@ -42,7 +52,8 @@ describe('MessageRenderer', () => {
       MessageRenderer.init({
         escapeHtml: mockEscapeHtml,
         ToolRenderer: mockToolRenderer,
-        marked: undefined
+        marked: undefined,
+        mermaid: null
       });
 
       const result = MessageRenderer.renderMarkdown('<script>alert(1)</script>');

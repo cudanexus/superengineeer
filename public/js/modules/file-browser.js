@@ -559,6 +559,124 @@
     $('#btn-claude-files-back').addClass('hidden');
   }
 
+  function searchFiles(searchTerm) {
+    if (!searchTerm || !state.fileBrowser.rootEntries) {
+      return [];
+    }
+
+    var results = [];
+    var lowerSearchTerm = searchTerm.toLowerCase();
+
+    function searchInEntries(entries, parentPath) {
+      entries.forEach(function(entry) {
+        if (entry.name.toLowerCase().indexOf(lowerSearchTerm) !== -1) {
+          results.push({
+            name: entry.name,
+            path: entry.path,
+            isDirectory: entry.isDirectory,
+            parentPath: parentPath
+          });
+        }
+
+        if (entry.isDirectory && entry.children) {
+          searchInEntries(entry.children, entry.path);
+        }
+      });
+    }
+
+    searchInEntries(state.fileBrowser.rootEntries, '');
+    return results;
+  }
+
+  function renderSearchResults(results, searchTerm) {
+    var $results = $('#file-search-results');
+    $results.empty();
+
+    if (results.length === 0) {
+      $results.html('<div class="text-gray-500 text-center py-4">No files found for "' + escapeHtml(searchTerm) + '"</div>');
+      return;
+    }
+
+    $results.html('<div class="text-gray-400 text-xs px-2 py-1 border-b border-gray-700">Found ' + results.length + ' result' + (results.length > 1 ? 's' : '') + '</div>');
+
+    results.forEach(function(result) {
+      var icon = result.isDirectory ?
+        '<svg class="tree-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>' +
+        '</svg>' :
+        '<svg class="tree-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>' +
+        '</svg>';
+
+      var highlightedName = highlightSearchMatch(result.name, searchTerm);
+      var relativePath = result.parentPath ? result.parentPath.replace(/^.*[\\\/]/, '') + '/' : '';
+
+      var $item = $('<div class="file-search-result" data-path="' + escapeHtml(result.path) + '" data-is-dir="' + result.isDirectory + '">' +
+        icon +
+        '<div class="flex-1 min-w-0">' +
+          '<div class="tree-name">' + highlightedName + '</div>' +
+          '<div class="text-xs text-gray-500 truncate">' + escapeHtml(relativePath) + '</div>' +
+        '</div>' +
+      '</div>');
+
+      $results.append($item);
+    });
+  }
+
+  function highlightSearchMatch(text, searchTerm) {
+    if (!searchTerm) return escapeHtml(text);
+
+    var escaped = escapeHtml(text);
+    var regex = new RegExp('(' + escapeHtml(searchTerm).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+    return escaped.replace(regex, '<mark class="bg-yellow-600/30 text-yellow-300">$1</mark>');
+  }
+
+  function showSearchMode() {
+    $('#file-browser-tree').addClass('hidden');
+    $('#file-search-results').removeClass('hidden');
+    $('#btn-clear-file-search').removeClass('hidden');
+  }
+
+  function hideSearchMode() {
+    $('#file-search-results').addClass('hidden');
+    $('#file-browser-tree').removeClass('hidden');
+    $('#btn-clear-file-search').addClass('hidden');
+    $('#file-search-input').val('');
+  }
+
+  function expandPathInTree(targetPath) {
+    // Split the path and expand each parent directory
+    var pathParts = targetPath.split(/[\\\/]/);
+    var currentPath = '';
+    var separator = targetPath.indexOf('\\') !== -1 ? '\\' : '/';
+
+    // Build and expand each parent path
+    for (var i = 0; i < pathParts.length - 1; i++) {
+      currentPath += (i > 0 ? separator : '') + pathParts[i];
+      if (!state.fileBrowser.expandedDirs[currentPath]) {
+        toggleDirectory(currentPath);
+      }
+    }
+
+    // Select the target item
+    state.fileBrowser.selectedFile = targetPath;
+    updateTreeSelection();
+
+    // Scroll to the item
+    setTimeout(function() {
+      var $item = $('.file-tree-item[data-path="' + CSS.escape(targetPath) + '"]');
+      if ($item.length) {
+        var $container = $('#file-browser-tree');
+        var itemTop = $item.position().top;
+        var containerHeight = $container.height();
+
+        if (itemTop < 0 || itemTop > containerHeight) {
+          $container.scrollTop($container.scrollTop() + itemTop - containerHeight / 2);
+        }
+      }
+    }, 100);
+  }
+
   function setupHandlers() {
     // Click on file tree item (but not on delete button)
     $(document).on('click', '.file-tree-item', function(e) {
@@ -782,6 +900,46 @@
     // Mobile Claude files back button
     $('#btn-claude-files-back').on('click', function() {
       hideMobileClaudeFileEditor();
+    });
+
+    // File search input
+    var searchTimeout;
+    $('#file-search-input').on('input', function() {
+      clearTimeout(searchTimeout);
+      var searchTerm = $(this).val().trim();
+
+      if (!searchTerm) {
+        hideSearchMode();
+        return;
+      }
+
+      searchTimeout = setTimeout(function() {
+        showSearchMode();
+        var results = searchFiles(searchTerm);
+        renderSearchResults(results, searchTerm);
+      }, 300);
+    });
+
+    // Clear search button
+    $('#btn-clear-file-search').on('click', function() {
+      hideSearchMode();
+    });
+
+    // Click on search result
+    $(document).on('click', '.file-search-result', function() {
+      var filePath = $(this).data('path');
+      var isDir = $(this).data('is-dir') === true;
+
+      if (!isDir) {
+        openFile(filePath);
+        if (isMobileView()) {
+          showMobileFileEditor();
+        }
+      } else {
+        // For directories, expand the path in the tree and hide search
+        expandPathInTree(filePath);
+        hideSearchMode();
+      }
     });
   }
 

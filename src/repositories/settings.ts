@@ -1,8 +1,6 @@
 import fs from 'fs';
 import path from 'path';
 
-import { DEFAULT_MODEL, isValidModel } from '../config/models';
-
 export interface PermissionRule {
   tool: string;
   specifier?: string;
@@ -61,6 +59,7 @@ export interface PromptTemplate {
   name: string;
   description: string;
   content: string;
+  isQuickAction?: boolean;
 }
 
 export interface RalphLoopSettings {
@@ -70,6 +69,12 @@ export interface RalphLoopSettings {
   defaultWorkerModel: string;
   /** Default model for reviewer agent */
   defaultReviewerModel: string;
+  /** Default append system prompt for worker agent */
+  defaultWorkerSystemPrompt?: string;
+  /** Default append system prompt for reviewer agent */
+  defaultReviewerSystemPrompt?: string;
+  /** Maximum number of Ralph Loop task directories to keep (older ones are automatically deleted) */
+  historyLimit: number;
 }
 
 export const DEFAULT_PROMPT_TEMPLATES: PromptTemplate[] = [
@@ -161,7 +166,47 @@ export const DEFAULT_PROMPT_TEMPLATES: PromptTemplate[] = [
 **Edge cases:**
 \${textarea:edge_cases}`,
   },
+  {
+    id: 'explain-project',
+    name: 'Explain this project',
+    description: 'Get a comprehensive overview of the current project',
+    content: `Please analyze this project and provide a comprehensive overview including:
+
+1. **Project Purpose**: What is this project designed to do?
+2. **Technology Stack**: What languages, frameworks, and tools are used?
+3. **Architecture**: How is the code organized? What are the main components?
+4. **Key Features**: What are the main functionalities implemented?
+5. **Development Status**: What appears to be completed vs. in progress?
+6. **Notable Patterns**: Any interesting design patterns or approaches?
+
+Base your analysis on the project files, configuration, and code structure.`,
+    isQuickAction: true,
+  },
 ];
+
+export interface McpServerConfig {
+  id: string;                    // Unique identifier
+  name: string;                  // Display name
+  enabled: boolean;              // Whether server is active
+  type: 'stdio' | 'http';        // Connection type
+
+  // For stdio type
+  command?: string;              // Executable command
+  args?: string[];               // Command arguments
+  env?: Record<string, string>;  // Environment variables
+
+  // For http type
+  url?: string;                  // Server URL
+  headers?: Record<string, string>; // HTTP headers
+
+  // Common settings
+  description?: string;          // User description
+}
+
+export interface McpSettings {
+  enabled: boolean;              // Master toggle
+  servers: McpServerConfig[];    // Server configurations
+}
 
 export interface GlobalSettings {
   maxConcurrentAgents: number;
@@ -180,8 +225,8 @@ export interface GlobalSettings {
   promptTemplates: PromptTemplate[];
   /** Ralph Loop settings for worker/reviewer iterations */
   ralphLoop: RalphLoopSettings;
-  /** Default Claude model for agents */
-  defaultModel: string;
+  /** MCP (Model Context Protocol) server configurations */
+  mcp: McpSettings;
 }
 
 const DEFAULT_SETTINGS: GlobalSettings = {
@@ -210,10 +255,52 @@ const DEFAULT_SETTINGS: GlobalSettings = {
   promptTemplates: DEFAULT_PROMPT_TEMPLATES,
   ralphLoop: {
     defaultMaxTurns: 5,
-    defaultWorkerModel: 'claude-sonnet-4-20250514',
+    defaultWorkerModel: 'claude-opus-4-20250514',
     defaultReviewerModel: 'claude-sonnet-4-20250514',
+    defaultWorkerSystemPrompt: `# Worker Agent Instructions
+
+You are a software development worker agent. Your role is to implement the requested changes or features with precision and thoroughness.
+
+## Key Principles:
+- Focus on completing the specific task assigned
+- Write clean, maintainable code following project conventions
+- Include appropriate error handling and edge cases
+- Create or update tests to verify your implementation
+- Document any significant design decisions or trade-offs
+
+## Process:
+1. Analyze the task requirements thoroughly
+2. Implement the solution step by step
+3. Test your implementation
+4. Verify all changes work as expected
+5. Provide a clear summary of what was accomplished
+
+Remember: Quality over speed. It's better to do the job right than to rush and create technical debt.`,
+    defaultReviewerSystemPrompt: `# Reviewer Agent Instructions
+
+You are a code review agent. Your role is to critically evaluate the worker's implementation for correctness, quality, and completeness.
+
+## Review Criteria:
+- Does the implementation fully address the requirements?
+- Is the code clean, readable, and maintainable?
+- Are there appropriate tests with good coverage?
+- Are edge cases and error scenarios handled?
+- Does it follow project conventions and best practices?
+- Are there any security concerns or performance issues?
+
+## Feedback Guidelines:
+- Be specific and constructive in your feedback
+- Point out both issues and good practices
+- Suggest concrete improvements when identifying problems
+- Focus on the most important issues first
+
+Your goal is to ensure high-quality deliverables. Be thorough but fair in your assessment.`,
+    historyLimit: 5,
   },
-  defaultModel: DEFAULT_MODEL,
+  mcp: {
+    enabled: true,
+    servers: [],
+  },
 };
 
 // Update type that allows partial nested objects for incremental updates
@@ -230,7 +317,7 @@ export interface SettingsUpdate {
   agentStreaming?: Partial<AgentStreamingSettings>;
   promptTemplates?: PromptTemplate[];
   ralphLoop?: Partial<RalphLoopSettings>;
-  defaultModel?: string;
+  mcp?: Partial<McpSettings>;
 }
 
 export interface SettingsRepository {
@@ -289,6 +376,7 @@ export class FileSettingsRepository implements SettingsRepository {
     const parsedLimits = parsed.agentLimits;
     const parsedStreaming = parsed.agentStreaming;
     const parsedRalphLoop = parsed.ralphLoop;
+    const parsedMcp = parsed.mcp;
 
     return {
       maxConcurrentAgents: parsed.maxConcurrentAgents ?? DEFAULT_SETTINGS.maxConcurrentAgents,
@@ -316,10 +404,19 @@ export class FileSettingsRepository implements SettingsRepository {
       promptTemplates: Array.isArray(parsed.promptTemplates) ? parsed.promptTemplates : DEFAULT_SETTINGS.promptTemplates,
       ralphLoop: {
         defaultMaxTurns: parsedRalphLoop?.defaultMaxTurns ?? DEFAULT_SETTINGS.ralphLoop.defaultMaxTurns,
-        defaultWorkerModel: parsedRalphLoop?.defaultWorkerModel ?? DEFAULT_SETTINGS.ralphLoop.defaultWorkerModel,
+        // Migrate old Sonnet default to Opus
+        defaultWorkerModel: (parsedRalphLoop?.defaultWorkerModel === 'claude-sonnet-4-20250514'
+          ? 'claude-opus-4-20250514'
+          : parsedRalphLoop?.defaultWorkerModel) ?? DEFAULT_SETTINGS.ralphLoop.defaultWorkerModel,
         defaultReviewerModel: parsedRalphLoop?.defaultReviewerModel ?? DEFAULT_SETTINGS.ralphLoop.defaultReviewerModel,
+        defaultWorkerSystemPrompt: parsedRalphLoop?.defaultWorkerSystemPrompt ?? DEFAULT_SETTINGS.ralphLoop.defaultWorkerSystemPrompt,
+        defaultReviewerSystemPrompt: parsedRalphLoop?.defaultReviewerSystemPrompt ?? DEFAULT_SETTINGS.ralphLoop.defaultReviewerSystemPrompt,
+        historyLimit: parsedRalphLoop?.historyLimit ?? DEFAULT_SETTINGS.ralphLoop.historyLimit,
       },
-      defaultModel: parsed.defaultModel ?? DEFAULT_SETTINGS.defaultModel,
+      mcp: {
+        enabled: parsedMcp?.enabled ?? DEFAULT_SETTINGS.mcp.enabled,
+        servers: parsedMcp?.servers ?? DEFAULT_SETTINGS.mcp.servers,
+      },
     };
   }
 
@@ -401,13 +498,20 @@ export class FileSettingsRepository implements SettingsRepository {
       if (this.settings.ralphLoop.defaultMaxTurns < 1) {
         this.settings.ralphLoop.defaultMaxTurns = 1;
       }
+
+      // Ensure reasonable history limit (1-50)
+      if (this.settings.ralphLoop.historyLimit < 1) {
+        this.settings.ralphLoop.historyLimit = 1;
+      } else if (this.settings.ralphLoop.historyLimit > 50) {
+        this.settings.ralphLoop.historyLimit = 50;
+      }
     }
 
-    if (updates.defaultModel !== undefined) {
-      // Validate model if provided, otherwise keep current
-      if (isValidModel(updates.defaultModel)) {
-        this.settings.defaultModel = updates.defaultModel;
-      }
+    if (updates.mcp) {
+      this.settings.mcp = {
+        ...this.settings.mcp,
+        ...updates.mcp,
+      };
     }
 
     this.saveToFile();

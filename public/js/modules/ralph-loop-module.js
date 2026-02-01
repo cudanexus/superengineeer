@@ -22,6 +22,8 @@
   var currentLoop = null;
   var outputBuffer = [];
   var isTabActive = false;
+  var roadmapData = null;
+  var taskSource = 'custom'; // 'custom' or 'roadmap'
 
   function init(deps) {
     state = deps.state;
@@ -58,6 +60,24 @@
       '<h3 class="text-sm font-medium text-gray-200 mb-2">Start New Ralph Loop</h3>' +
       '<div class="space-y-2">' +
         '<div>' +
+          '<label class="block text-xs text-gray-400 mb-1">Task Source</label>' +
+          '<div class="flex gap-2 mb-2">' +
+            '<button type="button" id="ralph-source-custom" class="flex-1 py-1 px-2 bg-purple-600 text-white rounded text-xs transition-colors hover:bg-purple-500 source-btn active">Custom</button>' +
+            '<button type="button" id="ralph-source-roadmap" class="flex-1 py-1 px-2 bg-gray-700 text-gray-200 rounded text-xs transition-colors hover:bg-gray-600 source-btn">From Roadmap</button>' +
+          '</div>' +
+        '</div>' +
+        '<div id="ralph-roadmap-selector" class="hidden">' +
+          '<label class="block text-xs text-gray-400 mb-1">Selected Roadmap Tasks</label>' +
+          '<div class="space-y-2">' +
+            '<div id="ralph-selected-tasks" class="min-h-[2rem] p-2 bg-gray-700 text-gray-300 rounded text-sm border-dashed border border-gray-600">' +
+              '<span class="text-gray-500">No tasks selected</span>' +
+            '</div>' +
+            '<button type="button" id="btn-select-roadmap-tasks" class="w-full py-2 px-3 bg-blue-600 hover:bg-blue-500 text-white rounded text-sm transition-colors" ' + disabled + '>' +
+              'Select from Roadmap' +
+            '</button>' +
+          '</div>' +
+        '</div>' +
+        '<div id="ralph-custom-description">' +
           '<label class="block text-xs text-gray-400 mb-1">Task Description</label>' +
           '<textarea id="ralph-task-description" class="w-full p-2 bg-gray-700 text-gray-200 rounded text-sm resize-none" ' +
             'rows="3" placeholder="Describe the task for the worker agent..." ' + disabled + '></textarea>' +
@@ -71,16 +91,16 @@
           '<div>' +
             '<label class="block text-xs text-gray-400 mb-1">Worker Model</label>' +
             '<select id="ralph-worker-model" class="w-full p-2 bg-gray-700 text-gray-200 rounded text-sm" ' + disabled + '>' +
+              '<option value="claude-opus-4-20250514" selected>Claude Opus 4</option>' +
               '<option value="claude-sonnet-4-20250514">Claude Sonnet 4</option>' +
-              '<option value="claude-opus-4-20250514">Claude Opus 4</option>' +
             '</select>' +
           '</div>' +
         '</div>' +
         '<div>' +
           '<label class="block text-xs text-gray-400 mb-1">Reviewer Model</label>' +
           '<select id="ralph-reviewer-model" class="w-full p-2 bg-gray-700 text-gray-200 rounded text-sm" ' + disabled + '>' +
+            '<option value="claude-opus-4-20250514" selected>Claude Opus 4</option>' +
             '<option value="claude-sonnet-4-20250514">Claude Sonnet 4</option>' +
-            '<option value="claude-opus-4-20250514">Claude Opus 4</option>' +
           '</select>' +
         '</div>' +
       '</div>' +
@@ -308,11 +328,24 @@
       return;
     }
 
-    var taskDescription = $('#ralph-task-description').val();
+    var taskDescription = '';
 
-    if (!taskDescription || !taskDescription.trim()) {
-      showToast('Please enter a task description', 'warning');
-      return;
+    if (taskSource === 'roadmap') {
+      var selectedTask = $('#ralph-roadmap-task').val();
+      if (!selectedTask) {
+        showToast('Please select a task from the roadmap', 'warning');
+        return;
+      }
+
+      var selectedOption = $('#ralph-roadmap-task').find(':selected');
+      taskDescription = selectedOption.data('description') || selectedOption.text();
+    } else {
+      taskDescription = $('#ralph-task-description').val();
+
+      if (!taskDescription || !taskDescription.trim()) {
+        showToast('Please enter a task description', 'warning');
+        return;
+      }
     }
 
     var config = {
@@ -403,15 +436,9 @@
           $container.html(renderHistoryList(loops));
         }
 
-        // Update currentLoop if there's an active one
-        var activeLoop = loops.find(function(loop) {
-          return isLoopActive(loop.status);
-        });
-
-        if (activeLoop && (!currentLoop || currentLoop.taskId !== activeLoop.taskId)) {
-          currentLoop = activeLoop;
-          render();
-        }
+        // Don't automatically adopt loops from other tabs/windows
+        // This prevents state confusion when multiple instances are open
+        // Users must explicitly interact with loops in each tab
       })
       .fail(function() {
         var $container = $('#ralph-history-container');
@@ -500,8 +527,9 @@
 
   function handleOutput(data) {
     if (currentLoop && currentLoop.taskId === data.taskId) {
-      var cssClass = data.source === 'worker' ? 'text-blue-300' : 'text-purple-300';
-      addOutput('[' + data.source + '] ' + data.content, cssClass);
+      var cssClass = data.phase === 'worker' ? 'text-blue-300' : 'text-purple-300';
+      var timestamp = new Date(data.timestamp).toLocaleTimeString();
+      addOutput('[' + timestamp + '] [' + data.phase + '] ' + data.content, cssClass);
     }
   }
 
@@ -596,6 +624,58 @@
   // Event Listeners
   // ============================================================
 
+  function loadRoadmapTasks() {
+    if (!state.selectedProjectId) {
+      showToast('No project selected', 'error');
+      return;
+    }
+
+    api.getProjectRoadmap(state.selectedProjectId)
+      .done(function(data) {
+        roadmapData = data;
+        populateRoadmapTasks(data.parsed);
+      })
+      .fail(function() {
+        showToast('Failed to load roadmap', 'error');
+        // Switch back to custom mode
+        $('#ralph-source-custom').click();
+      });
+  }
+
+  function populateRoadmapTasks(parsed) {
+    var $select = $('#ralph-roadmap-task');
+    $select.empty();
+    $select.append('<option value="">Select a task from roadmap...</option>');
+
+    if (!parsed || !parsed.phases || parsed.phases.length === 0) {
+      $select.append('<option value="" disabled>No roadmap tasks available</option>');
+      return;
+    }
+
+    parsed.phases.forEach(function(phase, phaseIndex) {
+      if (phase.milestones && phase.milestones.length > 0) {
+        phase.milestones.forEach(function(milestone, milestoneIndex) {
+          if (milestone.tasks && milestone.tasks.length > 0) {
+            milestone.tasks.forEach(function(task, taskIndex) {
+              // Only show incomplete tasks
+              if (!task.completed) {
+                var optionText = phase.title + ' › ' + milestone.title + ' › ' + task.title;
+                var taskDescription = 'Phase: ' + phase.title + '\nMilestone: ' + milestone.title + '\nTask: ' + task.title;
+
+                $select.append('<option value="' + phaseIndex + '-' + milestoneIndex + '-' + taskIndex + '" data-description="' +
+                  escapeHtml(taskDescription) + '">' + escapeHtml(optionText) + '</option>');
+              }
+            });
+          }
+        });
+      }
+    });
+
+    if ($select.find('option').length === 1) {
+      $select.append('<option value="" disabled>No incomplete tasks found</option>');
+    }
+  }
+
   function setupEventListeners() {
     $(document).on('click', '#ralph-loop-start-btn', function() {
       startLoop();
@@ -618,25 +698,296 @@
       deleteLoop(taskId);
     });
 
-    $(document).on('click', '#tab-ralph-loop', function() {
-      onTabActivated();
+
+    // Task source selection
+    $(document).on('click', '.source-btn', function() {
+      $('.source-btn')
+        .removeClass('active bg-purple-600 text-white hover:bg-purple-500')
+        .addClass('bg-gray-700 text-gray-200 hover:bg-gray-600');
+
+      $(this)
+        .addClass('active bg-purple-600 text-white hover:bg-purple-500')
+        .removeClass('bg-gray-700 text-gray-200 hover:bg-gray-600');
+
+      var source = $(this).attr('id').replace('ralph-source-', '');
+      taskSource = source;
+
+      if (source === 'roadmap') {
+        $('#ralph-roadmap-selector').removeClass('hidden');
+        $('#ralph-custom-description').addClass('hidden');
+        if (!roadmapData) {
+          loadRoadmapTasks();
+        }
+      } else {
+        $('#ralph-roadmap-selector').addClass('hidden');
+        $('#ralph-custom-description').removeClass('hidden');
+      }
+    });
+
+    // Roadmap task selection (legacy - keep for compatibility)
+    $(document).on('change', '#ralph-roadmap-task', function() {
+      var selectedOption = $(this).find(':selected');
+      var taskDescription = selectedOption.data('description') || selectedOption.text();
+      $('#ralph-task-description').val(taskDescription);
+    });
+
+    // Open roadmap selection modal
+    $(document).on('click', '#btn-select-roadmap-tasks', function() {
+      openRalphRoadmapModal();
+    });
+
+    // Clear roadmap selection
+    $(document).on('click', '#btn-clear-ralph-selection', function() {
+      clearRalphRoadmapSelection();
+    });
+
+    // Use selected roadmap items
+    $(document).on('click', '#btn-use-ralph-roadmap-selection', function() {
+      useRalphRoadmapSelection();
     });
   }
 
   function onTabActivated() {
     isTabActive = true;
+    taskSource = 'custom'; // Reset to custom mode
     render();
     loadHistory();
   }
 
   function onProjectChanged() {
-    currentLoop = null;
-    clearOutput();
+    // Don't clear currentLoop immediately - wait for server status
+    roadmapData = null;
+    taskSource = 'custom';
 
     if (isTabActive) {
+      clearOutput();
       render();
       loadHistory();
     }
+  }
+
+  function setCurrentLoop(loop) {
+    currentLoop = loop;
+    if (isTabActive) {
+      render();
+    }
+  }
+
+  // ============================================================
+  // Ralph Loop Roadmap Selection Modal
+  // ============================================================
+
+  var ralphSelectedItems = [];
+
+  function openRalphRoadmapModal() {
+    if (!roadmapData || !roadmapData.parsed) {
+      // Load roadmap data if not already available
+      if (!state.selectedProjectId) {
+        showToast('No project selected', 'error');
+        return;
+      }
+
+      // Show loading state in modal
+      openModal('modal-ralph-roadmap');
+      $('#ralph-roadmap-content').html('<div class="text-center text-gray-500 py-8">Loading roadmap...</div>');
+
+      api.getProjectRoadmap(state.selectedProjectId)
+        .done(function(data) {
+          roadmapData = data;
+          if (data.parsed && data.parsed.phases && data.parsed.phases.length > 0) {
+            renderRalphRoadmapContent(data.parsed);
+          } else {
+            $('#ralph-roadmap-content').html('<div class="text-center text-gray-500 py-8">No roadmap available. Please create a roadmap first.</div>');
+          }
+        })
+        .fail(function() {
+          $('#ralph-roadmap-content').html('<div class="text-center text-red-500 py-8">Failed to load roadmap. Please try again.</div>');
+          showToast('Failed to load roadmap', 'error');
+        });
+      return;
+    }
+
+    // Render roadmap in modal
+    renderRalphRoadmapContent(roadmapData.parsed);
+    openModal('modal-ralph-roadmap');
+  }
+
+  function renderRalphRoadmapContent(parsed) {
+    var content = '<div class="roadmap-phases">';
+
+    if (!parsed.phases || parsed.phases.length === 0) {
+      content += '<div class="text-center text-gray-500 py-8">No roadmap phases available</div>';
+    } else {
+      parsed.phases.forEach(function(phase, phaseIndex) {
+        content += '<div class="roadmap-phase mb-6">' +
+          '<div class="flex items-center gap-2 mb-3">' +
+            '<input type="checkbox" id="phase-' + phaseIndex + '" class="phase-checkbox" data-phase="' + phaseIndex + '">' +
+            '<h3 class="font-semibold text-blue-300">' + escapeHtml(phase.title) + '</h3>' +
+          '</div>' +
+          '<div class="ml-6">';
+
+        if (phase.milestones && phase.milestones.length > 0) {
+          phase.milestones.forEach(function(milestone, milestoneIndex) {
+            content += '<div class="roadmap-milestone mb-4">' +
+              '<div class="flex items-center gap-2 mb-2">' +
+                '<input type="checkbox" id="milestone-' + phaseIndex + '-' + milestoneIndex + '" class="milestone-checkbox" data-phase="' + phaseIndex + '" data-milestone="' + milestoneIndex + '">' +
+                '<h4 class="font-medium text-green-300">' + escapeHtml(milestone.title) + '</h4>' +
+              '</div>';
+
+            if (milestone.tasks && milestone.tasks.length > 0) {
+              content += '<div class="ml-6 space-y-1">';
+              milestone.tasks.forEach(function(task, taskIndex) {
+                content += '<div class="flex items-start gap-2">' +
+                  '<input type="checkbox" id="task-' + phaseIndex + '-' + milestoneIndex + '-' + taskIndex + '" class="task-checkbox mt-0.5" data-phase="' + phaseIndex + '" data-milestone="' + milestoneIndex + '" data-task="' + taskIndex + '">' +
+                  '<span class="text-gray-300 text-xs leading-relaxed">' + escapeHtml(task) + '</span>' +
+                '</div>';
+              });
+              content += '</div>';
+            }
+
+            content += '</div>';
+          });
+        }
+
+        content += '</div></div>';
+      });
+    }
+
+    content += '</div>';
+    $('#ralph-roadmap-content').html(content);
+
+    // Set up checkbox event handlers
+    setupRalphCheckboxHandlers();
+  }
+
+  function setupRalphCheckboxHandlers() {
+    // Phase checkbox - select/deselect all milestones and tasks in phase
+    $(document).off('change.ralph-roadmap').on('change.ralph-roadmap', '.phase-checkbox', function() {
+      var phaseIndex = $(this).data('phase');
+      var isChecked = $(this).prop('checked');
+
+      $('[data-phase="' + phaseIndex + '"]').not(this).prop('checked', isChecked);
+      updateRalphSelectionDisplay();
+    });
+
+    // Milestone checkbox - select/deselect all tasks in milestone
+    $(document).off('change.ralph-roadmap').on('change.ralph-roadmap', '.milestone-checkbox', function() {
+      var phaseIndex = $(this).data('phase');
+      var milestoneIndex = $(this).data('milestone');
+      var isChecked = $(this).prop('checked');
+
+      $('[data-phase="' + phaseIndex + '"][data-milestone="' + milestoneIndex + '"]').not(this).prop('checked', isChecked);
+      updateParentCheckboxes(phaseIndex, milestoneIndex);
+      updateRalphSelectionDisplay();
+    });
+
+    // Task checkbox - update parent checkboxes
+    $(document).off('change.ralph-roadmap').on('change.ralph-roadmap', '.task-checkbox', function() {
+      var phaseIndex = $(this).data('phase');
+      var milestoneIndex = $(this).data('milestone');
+      updateParentCheckboxes(phaseIndex, milestoneIndex);
+      updateRalphSelectionDisplay();
+    });
+  }
+
+  function updateParentCheckboxes(phaseIndex, milestoneIndex) {
+    // Update milestone checkbox based on task checkboxes
+    var taskCheckboxes = $('[data-phase="' + phaseIndex + '"][data-milestone="' + milestoneIndex + '"].task-checkbox');
+    var checkedTasks = taskCheckboxes.filter(':checked');
+    var milestoneCheckbox = $('#milestone-' + phaseIndex + '-' + milestoneIndex);
+
+    if (checkedTasks.length === 0) {
+      milestoneCheckbox.prop('checked', false);
+    } else if (checkedTasks.length === taskCheckboxes.length) {
+      milestoneCheckbox.prop('checked', true);
+    } else {
+      milestoneCheckbox.prop('checked', true); // Partial selection still counts as checked
+    }
+
+    // Update phase checkbox based on milestone checkboxes
+    var milestoneCheckboxes = $('[data-phase="' + phaseIndex + '"].milestone-checkbox');
+    var checkedMilestones = milestoneCheckboxes.filter(':checked');
+    var phaseCheckbox = $('#phase-' + phaseIndex);
+
+    if (checkedMilestones.length === 0) {
+      phaseCheckbox.prop('checked', false);
+    } else if (checkedMilestones.length === milestoneCheckboxes.length) {
+      phaseCheckbox.prop('checked', true);
+    } else {
+      phaseCheckbox.prop('checked', true); // Partial selection still counts as checked
+    }
+  }
+
+  function updateRalphSelectionDisplay() {
+    var selectedCount = $('.task-checkbox:checked, .milestone-checkbox:checked, .phase-checkbox:checked').length;
+    $('#ralph-selected-count').text(selectedCount);
+
+    if (selectedCount > 0) {
+      $('#ralph-roadmap-selected').removeClass('hidden');
+    } else {
+      $('#ralph-roadmap-selected').addClass('hidden');
+    }
+  }
+
+  function clearRalphRoadmapSelection() {
+    $('.phase-checkbox, .milestone-checkbox, .task-checkbox').prop('checked', false);
+    updateRalphSelectionDisplay();
+  }
+
+  function useRalphRoadmapSelection() {
+    var selectedTasks = [];
+
+    // Collect all checked items and build task descriptions
+    $('.phase-checkbox:checked').each(function() {
+      var phaseIndex = $(this).data('phase');
+      var phase = roadmapData.parsed.phases[phaseIndex];
+      selectedTasks.push('Complete all tasks in phase: ' + phase.title);
+    });
+
+    $('.milestone-checkbox:checked').each(function() {
+      var phaseIndex = $(this).data('phase');
+      var milestoneIndex = $(this).data('milestone');
+      var phase = roadmapData.parsed.phases[phaseIndex];
+      var milestone = phase.milestones[milestoneIndex];
+
+      // Skip if parent phase is already selected
+      if (!$('#phase-' + phaseIndex).prop('checked')) {
+        selectedTasks.push('Complete milestone: ' + milestone.title + ' (from ' + phase.title + ')');
+      }
+    });
+
+    $('.task-checkbox:checked').each(function() {
+      var phaseIndex = $(this).data('phase');
+      var milestoneIndex = $(this).data('milestone');
+      var taskIndex = $(this).data('task');
+      var phase = roadmapData.parsed.phases[phaseIndex];
+      var milestone = phase.milestones[milestoneIndex];
+      var task = milestone.tasks[taskIndex];
+
+      // Skip if parent milestone or phase is already selected
+      if (!$('#milestone-' + phaseIndex + '-' + milestoneIndex).prop('checked') && !$('#phase-' + phaseIndex).prop('checked')) {
+        selectedTasks.push(task + ' (from ' + milestone.title + ')');
+      }
+    });
+
+    if (selectedTasks.length === 0) {
+      showToast('Please select at least one item', 'error');
+      return;
+    }
+
+    // Update the UI
+    var taskDescription = selectedTasks.join('\n\n');
+    $('#ralph-task-description').val(taskDescription);
+
+    // Update selected tasks display
+    var displayHtml = selectedTasks.map(function(task, index) {
+      return '<div class="text-xs p-1 bg-gray-600 rounded">' + (index + 1) + '. ' + escapeHtml(task.substring(0, 100)) + (task.length > 100 ? '...' : '') + '</div>';
+    }).join('');
+
+    $('#ralph-selected-tasks').html(displayHtml);
+
+    closeModal('modal-ralph-roadmap');
+    showToast(selectedTasks.length + ' item(s) selected for Ralph Loop', 'success');
   }
 
   // ============================================================
@@ -661,6 +1012,7 @@
     },
     _setCurrentLoop: function(loop) {
       currentLoop = loop;
-    }
+    },
+    setCurrentLoop: setCurrentLoop
   };
 }));

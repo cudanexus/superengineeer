@@ -59,7 +59,6 @@
     fontSize: 14, // Font size for Claude output (10-24px)
     agentStarting: false, // Prevents concurrent agent starts
     messageSending: false, // Prevents concurrent message sends
-    agentMode: 'interactive', // 'interactive' or 'autonomous'
     permissionMode: 'plan', // 'acceptEdits' or 'plan'
     pendingPermissionMode: null, // Mode to apply when agent finishes current operation
     currentAgentMode: null, // mode of currently running agent
@@ -140,9 +139,13 @@
     },
     gitContextTarget: null, // { path, type, status } for git context menu
     activePromptType: null, // 'question' | 'permission' | 'plan_mode' | null - blocks input while prompt is active
+    pendingMessageBeforeQuestion: null, // Stores input text that was cleared when Claude asked a question
+    justAnsweredQuestion: false, // Flag to prevent auto-restoring messages right after answering a question
     isGitOperating: false, // Blocks git UI during operations
     shellEnabled: true, // Whether shell tab is available (disabled when server bound to 0.0.0.0)
-    projectInputs: {} // Per-project input text: { projectId: 'input text' }
+    projectInputs: {}, // Per-project input text: { projectId: 'input text' }
+    currentRalphLoopId: null, // Currently running Ralph Loop task ID
+    isRalphLoopRunning: false // Whether Ralph Loop is currently active
   };
 
   // Local storage keys - use module's KEYS
@@ -696,11 +699,8 @@
           .text(capitalizeFirst(statusClass));
 
     if (statusClass === 'running') {
-      $('#mode-selector').addClass('disabled');
     } else if (statusClass === 'queued') {
-      $('#mode-selector').addClass('disabled');
     } else {
-      $('#mode-selector').removeClass('disabled');
       state.currentAgentMode = null;
     }
 
@@ -734,6 +734,9 @@
       $conv.html('<div class="text-gray-500 text-center">No conversation yet</div>');
       return;
     }
+
+    // Reset timestamp context for time differences
+    MessageRenderer.resetRenderingContext();
 
     filteredMessages.forEach(function(msg) {
       $conv.append(MessageRenderer.renderMessage(msg));
@@ -833,6 +836,17 @@
       // Clear "No conversation yet" placeholder if present
       if ($conv.find('.text-gray-500.text-center').length > 0) {
         $conv.empty();
+        // Reset context when starting fresh conversation
+        MessageRenderer.resetRenderingContext();
+      } else {
+        // Set context to last message's timestamp for time differences
+        var conversation = state.conversations[state.selectedProjectId];
+        if (conversation && conversation.length > 1) {
+          var lastMessage = conversation[conversation.length - 2]; // -2 because current message is already added
+          if (lastMessage && lastMessage.timestamp) {
+            MessageRenderer.setStartingTimestamp(lastMessage.timestamp);
+          }
+        }
       }
 
       var $rendered = $(MessageRenderer.renderMessage(message));
@@ -899,18 +913,8 @@
   }
 
   function renderMarkdownContent(content) {
-    // Use marked library for proper markdown rendering
-    try {
-      marked.setOptions({
-        breaks: true,
-        gfm: true
-      });
-
-      return marked.parse(content);
-    } catch (e) {
-      // Fallback to escaped pre-formatted text
-      return '<pre class="whitespace-pre-wrap text-gray-300">' + escapeHtml(content) + '</pre>';
-    }
+    // Use MessageRenderer for consistent markdown rendering with Mermaid support
+    return MessageRenderer.renderMarkdown(content);
   }
 
   function updateStatsFromMessage(message) {
@@ -1040,6 +1044,19 @@
       $('#settings-tab-' + tabName).removeClass('hidden');
     });
 
+    // Ralph Loop Config tab switching
+    $(document).on('click', '.ralph-config-tab', function() {
+      var tabName = $(this).data('tab');
+
+      // Update tab buttons
+      $('.ralph-config-tab').removeClass('border-purple-500 text-white').addClass('border-transparent text-gray-400');
+      $(this).addClass('border-purple-500 text-white').removeClass('border-transparent text-gray-400');
+
+      // Show/hide content
+      $('.ralph-config-tab-content').addClass('hidden');
+      $('#ralph-config-tab-' + tabName).removeClass('hidden');
+    });
+
     // Permission skip checkbox toggles other permission fields
     $('#input-skip-permissions').on('change', function() {
       updatePermissionFieldsState();
@@ -1059,25 +1076,29 @@
       DebugModal.open();
     });
 
-    $('#btn-toggle-dev').on('click', function() {
-      openModal('modal-dev');
+    $('#btn-ralph-loop').on('click', function() {
+      openRalphLoopConfigModal();
     });
 
-    $('#btn-dev-shutdown').on('click', function() {
-      showConfirm('Shutdown Server', 'Are you sure you want to shutdown the server?', { danger: true, confirmText: 'Shutdown' })
-        .then(function(confirmed) {
-          if (confirmed) {
-            api.shutdownServer()
-              .done(function() {
-                showToast('Server is shutting down...', 'info');
-                closeModal('modal-dev');
-              })
-              .fail(function(xhr) {
-                showToast(getErrorMessage(xhr), 'error');
-              });
-          }
-        });
+    $('#btn-agent-mode').on('click', function() {
+      if (state.isRalphLoopRunning) {
+        showToast('Please stop the Ralph Loop before switching to Agent mode', 'warning');
+        return;
+      }
+      // Switch to agent mode - hide the button
+      $('#btn-agent-mode').addClass('hidden');
     });
+
+    $('#btn-start-ralph-loop').on('click', function() {
+      startRalphLoopFromModal();
+    });
+
+    // Pause button handler is dynamically set in updateRalphLoopPauseButton()
+
+    $('#btn-ralph-loop-stop').on('click', function() {
+      stopRalphLoop();
+    });
+
 
     $('#btn-create-roadmap').on('click', function() {
       closeModal('modal-roadmap');
@@ -1268,12 +1289,16 @@
         $('#input-history-limit').val(settings.historyLimit || 25);
         $('#input-claude-md-max-size').val(settings.claudeMdMaxSizeKB || 50);
         $('#input-desktop-notifications').prop('checked', settings.enableDesktopNotifications || false);
-        $('#input-default-model').val(settings.defaultModel || 'claude-sonnet-4-20250514');
+        $('#input-ralph-loop-history-limit').val(settings.ralphLoop?.historyLimit || 5);
         updatePermissionFieldsState();
 
         // Store settings for templates module
         state.settings = settings;
         PromptTemplatesModule.renderSettingsTab();
+
+        // MCP settings
+        $('#input-mcp-enabled').prop('checked', settings.mcp?.enabled !== false);
+        McpSettingsModule.renderMcpServers();
 
         openModal('modal-settings');
       })
@@ -1383,7 +1408,7 @@
     var claudeMdMaxSizeKB = parseInt($('#input-claude-md-max-size').val(), 10) || 50;
     var enableDesktopNotifications = $('#input-desktop-notifications').is(':checked');
     var appendSystemPrompt = $('#input-append-system-prompt').val() || '';
-    var defaultModel = $('#input-default-model').val() || 'claude-sonnet-4-20250514';
+    var ralphLoopHistoryLimit = parseInt($('#input-ralph-loop-history-limit').val(), 10) || 5;
     var settings = {
       maxConcurrentAgents: parseInt($('#input-max-concurrent').val(), 10),
       claudePermissions: {
@@ -1398,7 +1423,13 @@
       historyLimit: historyLimit,
       claudeMdMaxSizeKB: claudeMdMaxSizeKB,
       enableDesktopNotifications: enableDesktopNotifications,
-      defaultModel: defaultModel
+      ralphLoop: {
+        historyLimit: ralphLoopHistoryLimit
+      },
+      mcp: {
+        enabled: $('#input-mcp-enabled').is(':checked'),
+        servers: state.settings.mcp?.servers || []
+      }
     };
 
     // Request notification permission if enabling notifications
@@ -1732,17 +1763,13 @@
     });
 
     $('#btn-stop-agent').on('click', function() {
-      stopSelectedAgent();
+      if (state.isRalphLoopRunning) {
+        stopRalphLoop();
+      } else {
+        stopSelectedAgent();
+      }
     });
 
-    // Mode toggle handlers
-    $('#btn-mode-interactive').on('click', function() {
-      setAgentMode('interactive');
-    });
-
-    $('#btn-mode-autonomous').on('click', function() {
-      showToast('Autonomous mode is currently in development', 'info');
-    });
 
     // Permission mode handlers are in PermissionModeModule.setupHandlers()
 
@@ -1782,6 +1809,31 @@
     // Claude Files button
     $('#btn-claude-files').on('click', function() {
       ModalsModule.openClaudeFilesModal();
+    });
+
+    // Quick Actions button
+    $('#btn-quick-actions').on('click', function(e) {
+      e.stopPropagation();
+      QuickActionsModule.toggleQuickActions();
+    });
+
+    // Quick Actions dropdown handlers
+    $(document).on('click', '.quick-action-item', function() {
+      var templateId = $(this).data('template-id');
+      QuickActionsModule.handleQuickActionClick(templateId);
+    });
+
+    $('#btn-close-quick-actions').on('click', function() {
+      QuickActionsModule.closeQuickActions();
+    });
+
+    // Click outside to close quick actions
+    $(document).on('click', function(e) {
+      if (state.quickActionsOpen &&
+          !$(e.target).closest('#quick-actions-dropdown').length &&
+          !$(e.target).closest('#btn-quick-actions').length) {
+        QuickActionsModule.closeQuickActions();
+      }
     });
 
     // Search button
@@ -1893,10 +1945,7 @@
       }
     });
 
-    // Save Claude file button
-    $('#btn-save-claude-file').on('click', function() {
-      saveClaudeFile();
-    });
+    // Save Claude file button - handler is in ModalsModule
 
     // Rename conversation button click
     $(document).on('click', '.btn-rename-conversation', function(e) {
@@ -1968,7 +2017,11 @@
       sendPermissionResponse(response);
 
       // Clear prompt blocking
+      state.justAnsweredQuestion = true;
       setPromptBlockingState(null);
+      setTimeout(function() {
+        state.justAnsweredQuestion = false;
+      }, 100);
 
       // Disable all buttons in this permission request
       $btn.closest('.permission-actions').find('.permission-btn').prop('disabled', true);
@@ -1983,16 +2036,27 @@
 
       if (optionIndex === -1) {
         // "Other" option - clear blocking and focus the input
+        state.justAnsweredQuestion = true;
         setPromptBlockingState(null);
-        $('#agent-input').focus();
+        // Clear any pending message for "Other" option
+        state.pendingMessageBeforeQuestion = null;
+        $('#input-message').focus();
+        setTimeout(function() {
+          state.justAnsweredQuestion = false;
+        }, 100);
         return;
       }
 
       // Send the selected option as response
       sendQuestionResponse(optionLabel);
 
-      // Clear prompt blocking
+      // Clear prompt blocking (but don't restore pending message immediately)
+      state.justAnsweredQuestion = true;
       setPromptBlockingState(null);
+      // Reset the flag after a short delay to allow restoring messages later
+      setTimeout(function() {
+        state.justAnsweredQuestion = false;
+      }, 100);
 
       // Disable all options in this question
       $btn.closest('.question-options').find('.question-option').prop('disabled', true);
@@ -2194,22 +2258,7 @@
       });
   }
 
-  function setAgentMode(mode) {
-    state.agentMode = mode;
-    updateModeButtons();
-    updateStartStopButtons();
-    updateInputArea();
-  }
 
-  function updateModeButtons() {
-    if (state.agentMode === 'interactive') {
-      $('#btn-mode-interactive').addClass('mode-active');
-      $('#btn-mode-autonomous').removeClass('mode-active');
-    } else {
-      $('#btn-mode-interactive').removeClass('mode-active');
-      $('#btn-mode-autonomous').addClass('mode-active');
-    }
-  }
 
   // Permission mode functions are now in PermissionModeModule
 
@@ -2227,9 +2276,27 @@
         : 'Please respond to the prompt above...';
       $('#input-message').attr('placeholder', placeholder);
       $('#form-send-message').addClass('opacity-50');
+
+      // Clear any pending text when Claude asks a question
+      // This ensures queued messages don't get sent after the question is answered
+      if (promptType === 'question') {
+        state.pendingMessageBeforeQuestion = $('#input-message').val();
+        $('#input-message').val('');
+      }
     } else {
       $('#input-message').attr('placeholder', 'Type a message to Claude...');
       $('#form-send-message').removeClass('opacity-50');
+
+      // Restore the pending message if it was cleared due to a question
+      // But only if the input is currently empty (user hasn't typed anything new)
+      // And only if we didn't just answer a question (to prevent automatic sending)
+      if (state.pendingMessageBeforeQuestion && $('#input-message').val() === '' && !state.justAnsweredQuestion) {
+        $('#input-message').val(state.pendingMessageBeforeQuestion);
+        state.pendingMessageBeforeQuestion = null;
+      } else if (state.justAnsweredQuestion) {
+        // Clear the pending message if we just answered a question
+        state.pendingMessageBeforeQuestion = null;
+      }
     }
   }
 
@@ -2264,29 +2331,15 @@
   function updateStartStopButtons() {
     var project = findProjectById(state.selectedProjectId);
     var isRunning = project && project.status === 'running';
-    var isInteractive = state.agentMode === 'interactive';
 
-    if (isInteractive) {
-      // Interactive mode: hide start button, only show stop when running
-      $('#btn-start-agent').addClass('hidden');
-      $('#loop-controls').addClass('hidden');
+    // Always in interactive mode: hide start button, only show stop when running
+    $('#btn-start-agent').addClass('hidden');
+    $('#loop-controls').addClass('hidden');
 
-      if (isRunning) {
-        $('#btn-stop-agent').removeClass('hidden');
-      } else {
-        $('#btn-stop-agent').addClass('hidden');
-      }
+    if (isRunning) {
+      $('#btn-stop-agent').removeClass('hidden');
     } else {
-      // Autonomous mode: show basic start/stop buttons (use Ralph Loop for enhanced features)
-      $('#loop-controls').addClass('hidden');
-
-      if (isRunning) {
-        $('#btn-start-agent').addClass('hidden');
-        $('#btn-stop-agent').removeClass('hidden');
-      } else {
-        $('#btn-start-agent').removeClass('hidden');
-        $('#btn-stop-agent').addClass('hidden');
-      }
+      $('#btn-stop-agent').addClass('hidden');
     }
   }
 
@@ -2294,7 +2347,7 @@
     var project = findProjectById(state.selectedProjectId);
     var isRunning = project && project.status === 'running';
     var isInteractive = state.currentAgentMode === 'interactive';
-    var isInteractiveMode = state.agentMode === 'interactive';
+    var isInteractiveMode = true; // Always in interactive mode now
 
     // Interactive mode: always enable input (will auto-start agent if needed)
     if (isInteractiveMode) {
@@ -2330,8 +2383,8 @@
 
     if (!project) return;
 
-    // If agent is not running in interactive mode, start it first
-    if (project.status !== 'running' && state.agentMode === 'interactive') {
+    // If agent is not running, start it first (always interactive mode)
+    if (project.status !== 'running') {
       startInteractiveAgentWithMessage(message);
       return;
     }
@@ -2403,6 +2456,12 @@
 
   function startInteractiveAgentWithMessage(message) {
     if (state.agentStarting) return;
+
+    // Don't start agent if Ralph Loop is running
+    if (state.isRalphLoopRunning) {
+      showToast('Cannot start agent while Ralph Loop is running', 'warning');
+      return;
+    }
 
     var $input = $('#input-message');
     var projectId = state.selectedProjectId;
@@ -2612,6 +2671,8 @@
       var currentInput = $('#input-message').val() || '';
       state.projectInputs[previousId] = currentInput;
 
+      // Don't clear Ralph Loop state - will be loaded from server
+
       unsubscribeFromProject(previousId);
       stopAgentStatusPolling(); // Stop polling for previous project
       FileCache.clear(); // Clear read file cache when switching projects
@@ -2653,6 +2714,7 @@
     updateSelectedProject();
     renderProjectDetail(project);
     loadAgentStatus(projectId);
+    loadRalphLoopStatus(projectId);
     TaskDisplayModule.loadOptimizationsBadge(projectId);
     checkShellEnabled(projectId);
 
@@ -2724,7 +2786,6 @@
         updateInputArea();
         updateCancelButton();
         PermissionModeModule.updatePendingIndicator();
-        $('#mode-selector').toggleClass('disabled', data.status === 'running');
       })
       .fail(function() {
         updateInputArea();
@@ -2747,19 +2808,65 @@
     loadProjectModel(projectId);
   }
 
+  function loadRalphLoopStatus(projectId) {
+    if (!projectId) return;
+
+    api.getRalphLoops(projectId)
+      .done(function(loops) {
+        // Find active loop (worker_running, reviewer_running, or paused)
+        var activeLoop = loops.find(function(loop) {
+          return loop.status === 'worker_running' ||
+                 loop.status === 'reviewer_running' ||
+                 loop.status === 'paused';
+        });
+
+        if (activeLoop) {
+          state.currentRalphLoopId = activeLoop.taskId;
+
+          // Set iteration info from the loaded loop
+          if (activeLoop.currentIteration !== undefined && activeLoop.config && activeLoop.config.maxTurns !== undefined) {
+            state.ralphLoopCurrentIteration = activeLoop.currentIteration;
+            state.ralphLoopMaxTurns = activeLoop.config.maxTurns;
+          }
+
+          updateRalphLoopControls(activeLoop.status);
+
+          // Notify Ralph Loop module if it exists
+          if (window.RalphLoopModule) {
+            RalphLoopModule.setCurrentLoop(activeLoop);
+          }
+        } else {
+          // No active loop - ensure UI is clear
+          state.currentRalphLoopId = null;
+          state.ralphLoopCurrentIteration = null;
+          state.ralphLoopMaxTurns = null;
+          updateRalphLoopControls(null);
+        }
+      })
+      .fail(function() {
+        // On error, ensure UI is clear
+        state.currentRalphLoopId = null;
+        state.ralphLoopCurrentIteration = null;
+        state.ralphLoopMaxTurns = null;
+        updateRalphLoopControls(null);
+      });
+  }
+
   function loadProjectModel(projectId) {
     api.getProjectModel(projectId)
       .done(function(data) {
         // data = { projectModel, effectiveModel, globalDefault }
-        $('#project-model-select').val(data.projectModel || '');
+        // If no project override, default to Opus
+        var modelValue = data.projectModel || 'claude-opus-4-20250514';
+        $('#project-model-select').val(modelValue);
         state.currentProjectModel = data.projectModel;
         state.effectiveModel = data.effectiveModel;
         state.globalDefaultModel = data.globalDefault;
         updateModelSelectorTitle(data);
       })
       .fail(function() {
-        // On failure, reset to default
-        $('#project-model-select').val('');
+        // On failure, default to Opus
+        $('#project-model-select').val('claude-opus-4-20250514');
         state.currentProjectModel = null;
       });
   }
@@ -2770,7 +2877,7 @@
     if (modelData.projectModel) {
       title = 'Using: ' + getModelDisplayName(modelData.projectModel) + ' (project override)';
     } else {
-      title = 'Using: ' + getModelDisplayName(modelData.globalDefault) + ' (global default)';
+      title = 'Using: Opus 4 (default)';
     }
 
     $('#model-selector').attr('title', title);
@@ -2813,19 +2920,22 @@
         }
       })
       .fail(function(xhr) {
-        // Revert the selector to the previous value
-        $('#project-model-select').val(state.currentProjectModel || '');
+        // Revert the selector to the previous value or Opus if no override
+        $('#project-model-select').val(state.currentProjectModel || 'claude-opus-4-20250514');
         showErrorToast(xhr, 'Failed to change model');
       });
   }
 
-  function showAgentRunningIndicator(running) {
-    if (running) {
-      $('#agent-output-spinner').removeClass('hidden');
-      $('#agent-status-label').removeClass('hidden');
+  function showAgentRunningIndicator(isRunning, statusText) {
+    var spinner = $('#agent-output-spinner');
+    var label = $('#agent-status-label');
+
+    if (isRunning) {
+      spinner.removeClass('hidden');
+      label.text(statusText || 'Agent running...').removeClass('hidden');
     } else {
-      $('#agent-output-spinner').addClass('hidden');
-      $('#agent-status-label').addClass('hidden');
+      spinner.addClass('hidden');
+      label.addClass('hidden');
     }
   }
 
@@ -2975,13 +3085,12 @@
     if (state.agentStarting) return;
 
     var projectId = state.selectedProjectId;
-    var mode = state.agentMode;
+    var mode = 'interactive'; // Always interactive mode now
 
     state.agentStarting = true;
     setQuickActionLoading(projectId, true);
     showContentLoading('Starting agent...');
     $('#btn-start-agent').prop('disabled', true);
-    $('#mode-selector').addClass('disabled');
 
     var startPromise;
 
@@ -3007,8 +3116,7 @@
       })
       .fail(function(xhr) {
         showErrorToast(xhr, 'Failed to start agent');
-        $('#mode-selector').removeClass('disabled');
-      })
+        })
       .always(function() {
         state.agentStarting = false;
         setQuickActionLoading(projectId, false);
@@ -3247,6 +3355,490 @@
       });
   }
 
+  function openRalphLoopConfigModal() {
+    if (!state.selectedProjectId) {
+      showToast('Please select a project first', 'warning');
+      return;
+    }
+
+    // Load current Ralph Loop status if any
+    api.getRalphLoops(state.selectedProjectId)
+      .done(function(loops) {
+        // Check if there's an active loop
+        var activeLoop = loops.find(function(loop) {
+          return loop.status === 'worker_running' || loop.status === 'reviewer_running' || loop.status === 'paused';
+        });
+
+        if (activeLoop) {
+          showToast('A Ralph Loop is already running for this project', 'warning');
+          return;
+        }
+
+        // Reset form with default values from settings
+        $('#ralph-config-task-description').val('');
+        $('#ralph-config-max-turns').val(state.settings?.ralphLoop?.defaultMaxTurns || 5);
+        // Always default to Opus for worker model
+        var workerModel = state.settings?.ralphLoop?.defaultWorkerModel || 'claude-opus-4-20250514';
+        // Override Sonnet with Opus if it's the old default
+        if (workerModel === 'claude-sonnet-4-20250514') {
+          workerModel = 'claude-opus-4-20250514';
+        }
+        $('#ralph-config-worker-model').val(workerModel);
+        $('#ralph-config-reviewer-model').val(state.settings?.ralphLoop?.defaultReviewerModel || 'claude-sonnet-4-20250514');
+        $('#ralph-config-worker-system-prompt').val('');
+        $('#ralph-config-reviewer-system-prompt').val('');
+
+        // Load and display default prompts
+        var defaultWorkerPrompt = state.settings?.ralphLoop?.defaultWorkerSystemPrompt || '';
+        var defaultReviewerPrompt = state.settings?.ralphLoop?.defaultReviewerSystemPrompt || '';
+        $('#ralph-default-worker-prompt').text(defaultWorkerPrompt);
+        $('#ralph-default-reviewer-prompt').text(defaultReviewerPrompt);
+
+        // Reset to first tab
+        $('.ralph-config-tab').removeClass('border-purple-500 text-white').addClass('border-transparent text-gray-400');
+        $('.ralph-config-tab:first').addClass('border-purple-500 text-white').removeClass('border-transparent text-gray-400');
+        $('.ralph-config-tab-content').addClass('hidden');
+        $('#ralph-config-tab-config').removeClass('hidden');
+
+        // Open the modal
+        openModal('modal-ralph-loop-config');
+      })
+      .fail(function() {
+        // If we can't check status, open anyway
+        // Reset form with default values from settings
+        $('#ralph-config-task-description').val('');
+        $('#ralph-config-max-turns').val(state.settings?.ralphLoop?.defaultMaxTurns || 5);
+        // Always default to Opus for worker model
+        var workerModel = state.settings?.ralphLoop?.defaultWorkerModel || 'claude-opus-4-20250514';
+        // Override Sonnet with Opus if it's the old default
+        if (workerModel === 'claude-sonnet-4-20250514') {
+          workerModel = 'claude-opus-4-20250514';
+        }
+        $('#ralph-config-worker-model').val(workerModel);
+        $('#ralph-config-reviewer-model').val(state.settings?.ralphLoop?.defaultReviewerModel || 'claude-sonnet-4-20250514');
+        $('#ralph-config-worker-system-prompt').val('');
+        $('#ralph-config-reviewer-system-prompt').val('');
+
+        // Load and display default prompts
+        var defaultWorkerPrompt = state.settings?.ralphLoop?.defaultWorkerSystemPrompt || '';
+        var defaultReviewerPrompt = state.settings?.ralphLoop?.defaultReviewerSystemPrompt || '';
+        $('#ralph-default-worker-prompt').text(defaultWorkerPrompt);
+        $('#ralph-default-reviewer-prompt').text(defaultReviewerPrompt);
+
+        // Reset to first tab
+        $('.ralph-config-tab').removeClass('border-purple-500 text-white').addClass('border-transparent text-gray-400');
+        $('.ralph-config-tab:first').addClass('border-purple-500 text-white').removeClass('border-transparent text-gray-400');
+        $('.ralph-config-tab-content').addClass('hidden');
+        $('#ralph-config-tab-config').removeClass('hidden');
+
+        openModal('modal-ralph-loop-config');
+      });
+  }
+
+  function startRalphLoopFromModal() {
+    if (!state.selectedProjectId) {
+      return;
+    }
+
+    // Don't start Ralph Loop if agent is already running
+    var project = findProjectById(state.selectedProjectId);
+    if (project && project.status === 'running') {
+      showToast('Cannot start Ralph Loop while agent is running', 'warning');
+      return;
+    }
+
+    var taskDescription = $('#ralph-config-task-description').val().trim();
+    if (!taskDescription) {
+      showToast('Please enter a task description', 'warning');
+      return;
+    }
+
+    var config = {
+      taskDescription: taskDescription,
+      maxTurns: parseInt($('#ralph-config-max-turns').val(), 10) || 5,
+      workerModel: $('#ralph-config-worker-model').val(),
+      reviewerModel: $('#ralph-config-reviewer-model').val(),
+      workerSystemPrompt: $('#ralph-config-worker-system-prompt').val().trim() || undefined,
+      reviewerSystemPrompt: $('#ralph-config-reviewer-system-prompt').val().trim() || undefined
+    };
+
+    // Close the modal
+    closeModal('modal-ralph-loop-config');
+
+    // Start the Ralph Loop
+    api.startRalphLoop(state.selectedProjectId, config)
+      .done(function(loopState) {
+        showToast('Ralph Loop started', 'success');
+
+        // Track the current Ralph Loop
+        state.currentRalphLoopId = loopState.taskId;
+
+        // Set initial iteration info from the returned state
+        if (loopState.currentIteration !== undefined && loopState.config && loopState.config.maxTurns !== undefined) {
+          state.ralphLoopCurrentIteration = loopState.currentIteration;
+          state.ralphLoopMaxTurns = loopState.config.maxTurns;
+        }
+
+        updateRalphLoopControls('worker_running');
+
+        // Mark project as running
+        updateProjectStatusById(state.selectedProjectId, 'running');
+
+        // Show Ralph Loop output in the agent conversation
+        appendMessage(state.selectedProjectId, {
+          type: 'system',
+          content: 'Ralph Loop started: ' + taskDescription,
+          timestamp: new Date().toISOString()
+        });
+      })
+      .fail(function(xhr) {
+        var message = xhr.responseJSON ? xhr.responseJSON.error : 'Failed to start Ralph Loop';
+        showErrorToast(xhr, message);
+      });
+  }
+
+  function handleRalphLoopMessage(type, data) {
+    // Only show messages for the selected project
+    if (data.projectId && data.projectId !== state.selectedProjectId) {
+      return;
+    }
+
+    var message;
+    var timestamp = new Date().toISOString();
+
+    switch (type) {
+      case 'ralph_loop_status':
+        // Store iteration info in state
+        if (data.currentIteration !== undefined && data.maxTurns !== undefined) {
+          state.ralphLoopCurrentIteration = data.currentIteration;
+          state.ralphLoopMaxTurns = data.maxTurns;
+        }
+
+        // Update the Ralph Loop controls
+        updateRalphLoopControls(data.status);
+
+        if (data.status === 'idle' || data.status === 'failed') {
+          state.currentRalphLoopId = null;
+          state.ralphLoopCurrentIteration = null;
+          state.ralphLoopMaxTurns = null;
+          // Mark project as stopped when Ralph Loop goes idle or fails
+          updateProjectStatusById(state.selectedProjectId, 'stopped');
+          return; // Don't show idle/failed status changes
+        }
+
+        // Track the current Ralph Loop
+        if (data.taskId) {
+          state.currentRalphLoopId = data.taskId;
+        }
+
+        message = {
+          type: 'system',
+          content: 'Ralph Loop: ' + formatRalphLoopStatus(data.status),
+          timestamp: timestamp
+        };
+        break;
+
+      case 'ralph_loop_iteration':
+        // Update current iteration in state
+        if (data.iteration !== undefined) {
+          state.ralphLoopCurrentIteration = data.iteration;
+          // Update the status display to show new iteration
+          updateRalphLoopControls(state.isRalphLoopRunning ? 'worker_running' : 'reviewer_running');
+        }
+
+        message = {
+          type: 'system',
+          content: '--- Ralph Loop Iteration ' + data.iteration + ' started ---',
+          timestamp: timestamp
+        };
+        break;
+
+      case 'ralph_loop_output':
+        message = {
+          type: 'assistant',
+          content: data.content,
+          timestamp: data.timestamp || timestamp,
+          ralphLoopPhase: data.phase // Add phase info for custom header
+        };
+        break;
+
+      case 'ralph_loop_worker_complete':
+        var workerMsg = 'Worker completed iteration ' + data.summary.iterationNumber;
+        if (data.summary.filesModified && data.summary.filesModified.length > 0) {
+          workerMsg += '\nFiles modified: ' + data.summary.filesModified.join(', ');
+        }
+        message = {
+          type: 'system',
+          content: workerMsg,
+          timestamp: timestamp
+        };
+        break;
+
+      case 'ralph_loop_reviewer_complete':
+        var reviewerMsg = 'Reviewer decision: ' + data.feedback.decision;
+        if (data.feedback.feedback) {
+          reviewerMsg += '\nFeedback: ' + data.feedback.feedback;
+        }
+        message = {
+          type: 'system',
+          content: reviewerMsg,
+          timestamp: timestamp
+        };
+        break;
+
+      case 'ralph_loop_complete':
+        message = {
+          type: 'system',
+          content: '=== Ralph Loop completed: ' + data.finalStatus + ' ===',
+          timestamp: timestamp
+        };
+        // Clean up Ralph Loop state
+        state.currentRalphLoopId = null;
+        state.ralphLoopCurrentIteration = null;
+        state.ralphLoopMaxTurns = null;
+        updateRalphLoopControls(null);
+        // Mark project as stopped
+        updateProjectStatusById(state.selectedProjectId, 'stopped');
+
+        // Clear the conversation history after completion
+        // Delay clearing to ensure the completion message is shown first
+        setTimeout(function() {
+          var projectId = state.selectedProjectId;
+          $.ajax({
+            url: '/api/projects/' + projectId + '/conversation/clear',
+            method: 'POST'
+          }).done(function() {
+            // Clear local state
+            state.currentConversationId = null;
+            state.currentConversationStats = null;
+            state.currentConversationMetadata = null;
+            state.conversations[projectId] = [];
+            renderConversation(projectId);
+            ConversationHistoryModule.updateStats();
+            showToast('Ralph Loop completed - history cleared', 'info');
+          }).fail(function() {
+            // Even if server fails, clear local state
+            state.conversations[projectId] = [];
+            renderConversation(projectId);
+            ConversationHistoryModule.updateStats();
+          });
+        }, 1000); // 1 second delay to show completion message
+        break;
+
+      case 'ralph_loop_error':
+        message = {
+          type: 'system',
+          content: 'Ralph Loop error: ' + data.error,
+          timestamp: timestamp
+        };
+        // Clean up on error
+        state.currentRalphLoopId = null;
+        state.ralphLoopCurrentIteration = null;
+        state.ralphLoopMaxTurns = null;
+        updateRalphLoopControls(null);
+        // Mark project as stopped
+        updateProjectStatusById(state.selectedProjectId, 'stopped');
+        break;
+
+      case 'ralph_loop_tool_use':
+        console.log('Frontend received ralph_loop_tool_use:', data);
+        message = {
+          type: 'tool_use',
+          toolInfo: {
+            name: data.tool_name,
+            id: data.tool_id,
+            input: data.parameters,
+            status: 'running'
+          },
+          timestamp: data.timestamp || timestamp,
+          ralphLoopPhase: data.phase
+        };
+        console.log('Created tool_use message:', message);
+        break;
+
+      default:
+        return;
+    }
+
+    // Append the message to the conversation
+    if (message) {
+      appendMessage(state.selectedProjectId, message);
+    }
+  }
+
+  function formatRalphLoopStatus(status) {
+    switch (status) {
+      case 'worker_running': return 'Worker running...';
+      case 'reviewer_running': return 'Reviewer evaluating...';
+      case 'paused': return 'Paused';
+      case 'completed': return 'Completed';
+      case 'failed': return 'Failed';
+      default: return status;
+    }
+  }
+
+  function formatRalphLoopStatusForLabel(status) {
+    var baseText;
+    switch (status) {
+      case 'worker_running': baseText = 'Worker running...'; break;
+      case 'reviewer_running': baseText = 'Reviewer running...'; break;
+      case 'paused': baseText = 'Ralph Loop paused'; break;
+      default: baseText = 'Ralph Loop: ' + status; break;
+    }
+
+    // Add iteration info if available
+    if (state.ralphLoopCurrentIteration !== null && state.ralphLoopCurrentIteration !== undefined &&
+        state.ralphLoopMaxTurns !== null && state.ralphLoopMaxTurns !== undefined) {
+      var remainingTurns = state.ralphLoopMaxTurns - state.ralphLoopCurrentIteration;
+      return baseText + ' (Iteration ' + state.ralphLoopCurrentIteration + '/' + state.ralphLoopMaxTurns +
+             ', ' + remainingTurns + ' left)';
+    }
+
+    return baseText;
+  }
+
+  function updateRalphLoopPauseButton(status) {
+    var $pauseBtn = $('#btn-ralph-loop-pause');
+
+    if (status === 'paused') {
+      $pauseBtn
+        .html('<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+              '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>' +
+              '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>' +
+              '</svg>Resume')
+        .off('click')
+        .on('click', function() {
+          resumeRalphLoop();
+        });
+    } else {
+      $pauseBtn
+        .html('<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+              '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/>' +
+              '</svg>Pause')
+        .off('click')
+        .on('click', function() {
+          pauseRalphLoop();
+        });
+    }
+  }
+
+  function pauseRalphLoop() {
+    if (!state.selectedProjectId || !state.currentRalphLoopId) {
+      return;
+    }
+
+    api.pauseRalphLoop(state.selectedProjectId, state.currentRalphLoopId)
+      .done(function() {
+        showToast('Ralph Loop paused', 'info');
+        updateRalphLoopControls('paused');
+      })
+      .fail(function(xhr) {
+        showErrorToast(xhr, 'Failed to pause Ralph Loop');
+      });
+  }
+
+  function stopRalphLoop() {
+    if (!state.selectedProjectId || !state.currentRalphLoopId) {
+      return;
+    }
+
+    var projectId = state.selectedProjectId;
+
+    api.stopRalphLoop(projectId, state.currentRalphLoopId)
+      .done(function() {
+        showToast('Ralph Loop stopped', 'info');
+        state.currentRalphLoopId = null;
+        updateRalphLoopControls(null);
+        // Mark project as stopped
+        updateProjectStatusById(projectId, 'stopped');
+
+        // Clear the conversation history
+        $.ajax({
+          url: '/api/projects/' + projectId + '/conversation/clear',
+          method: 'POST'
+        }).done(function() {
+          // Clear local state
+          state.currentConversationId = null;
+          state.currentConversationStats = null;
+          state.currentConversationMetadata = null;
+          state.conversations[projectId] = [];
+          renderConversation(projectId);
+          ConversationHistoryModule.updateStats();
+          showToast('Ralph Loop history cleared', 'info');
+        }).fail(function() {
+          // Even if server fails, clear local state
+          state.conversations[projectId] = [];
+          renderConversation(projectId);
+          ConversationHistoryModule.updateStats();
+        });
+      })
+      .fail(function(xhr) {
+        showErrorToast(xhr, 'Failed to stop Ralph Loop');
+      });
+  }
+
+  function updateRalphLoopControls(status) {
+    var isActive = status && status !== 'idle' && status !== 'completed' && status !== 'failed';
+
+    if (!isActive) {
+      // Hide Ralph Loop UI
+      showAgentRunningIndicator(false);
+      $('#btn-stop-agent').addClass('hidden');
+      $('#btn-ralph-loop-pause').addClass('hidden');
+      $('#btn-agent-mode').addClass('hidden');
+      $('#form-send-message').removeClass('opacity-50');
+      $('#input-message').prop('disabled', false);
+      $('#btn-send-message').prop('disabled', false);
+      state.isRalphLoopRunning = false;
+
+      // Mark project as stopped if no agent is running
+      var project = findProjectById(state.selectedProjectId);
+      var isAgentRunning = project && project.status === 'running' && !state.isRalphLoopRunning;
+      if (state.selectedProjectId && !isAgentRunning) {
+        updateProjectStatusById(state.selectedProjectId, 'stopped');
+      }
+    } else {
+      // Show Ralph Loop status in agent status label
+      var statusText = formatRalphLoopStatusForLabel(status);
+      showAgentRunningIndicator(true, statusText);
+
+      // Show appropriate buttons
+      $('#btn-stop-agent').removeClass('hidden');
+      $('#btn-agent-mode').removeClass('hidden');  // Show Agent Mode button
+
+      // Update pause button with appropriate state
+      updateRalphLoopPauseButton(status);
+      if (status === 'paused' || status === 'worker_running' || status === 'reviewer_running') {
+        $('#btn-ralph-loop-pause').removeClass('hidden');
+      } else {
+        $('#btn-ralph-loop-pause').addClass('hidden');
+      }
+
+      $('#form-send-message').addClass('opacity-50');
+      $('#input-message').prop('disabled', true);
+      $('#btn-send-message').prop('disabled', true);
+      state.isRalphLoopRunning = true;
+
+      // Mark project as running
+      updateProjectStatusById(state.selectedProjectId, 'running');
+    }
+  }
+
+  function resumeRalphLoop() {
+    if (!state.selectedProjectId || !state.currentRalphLoopId) {
+      return;
+    }
+
+    api.resumeRalphLoop(state.selectedProjectId, state.currentRalphLoopId)
+      .done(function() {
+        showToast('Ralph Loop resumed', 'success');
+        updateRalphLoopControls('worker_running');
+      })
+      .fail(function(xhr) {
+        showErrorToast(xhr, 'Failed to resume Ralph Loop');
+      });
+  }
+
   function removeQueuedMessage(index) {
     if (!state.selectedProjectId) {
       return;
@@ -3443,6 +4035,8 @@
       case 'ralph_loop_worker_complete':
       case 'ralph_loop_reviewer_complete':
       case 'ralph_loop_error':
+      case 'ralph_loop_tool_use':
+        handleRalphLoopMessage(message.type, message.data);
         if (RalphLoopModule) {
           RalphLoopModule.handleWebSocketMessage(message.type, message.data);
         }
@@ -3611,7 +4205,6 @@
     // Reset mode selector and waiting state when agent stops
     if (status !== 'running' && projectId === state.selectedProjectId) {
       state.currentAgentMode = null;
-      $('#mode-selector').removeClass('disabled');
       updateInputArea();
       updateWaitingIndicator(false);
 
@@ -3755,7 +4348,7 @@
     $('#tab-content-' + tabName).removeClass('hidden');
 
     // Show/hide input area based on tab
-    if (tabName === 'project-files' || tabName === 'git' || tabName === 'shell') {
+    if (tabName === 'project-files' || tabName === 'git' || tabName === 'shell' || tabName === 'ralph-loop') {
       $('#interactive-input-area').addClass('hidden');
     } else {
       $('#interactive-input-area').removeClass('hidden');
@@ -3780,10 +4373,14 @@
       ShellModule.onTabActivated();
     }
 
-    // If switching to ralph-loop tab, activate the module
-    if (tabName === 'ralph-loop' && RalphLoopModule) {
-      RalphLoopModule.onTabActivated();
+    // If switching to ralph-loop tab, activate it and load status
+    if (tabName === 'ralph-loop' && state.selectedProjectId) {
+      if (window.RalphLoopModule) {
+        window.RalphLoopModule.onTabActivated();
+      }
+      loadRalphLoopStatus(state.selectedProjectId);
     }
+
   }
 
   /**
@@ -3802,8 +4399,8 @@
       GitModule.loadGitStatus();
     } else if (state.activeTab === 'shell') {
       ShellModule.onTabActivated();
-    } else if (state.activeTab === 'ralph-loop' && RalphLoopModule) {
-      RalphLoopModule.onTabActivated();
+    } else if (state.activeTab === 'ralph-loop') {
+      loadRalphLoopStatus(state.selectedProjectId);
     }
   }
 
@@ -3829,6 +4426,7 @@
       }
       switchTab('shell');
     });
+
   }
 
   // Load settings on init to get sendWithCtrlEnter preference and notification settings
@@ -3842,7 +4440,56 @@
   }
 
   // Initialize application
+  /**
+   * Check authentication status and load app if authenticated
+   */
+  function checkAuthenticationOnLoad() {
+    ApiClient.getAuthStatus()
+      .done(function(response) {
+        if (response && response.authenticated) {
+          // User is authenticated, proceed with app initialization
+          loadProjects();
+          loadResourceStatus();
+          loadInitialSettings();
+          loadFontSize();
+          loadScrollLockPreference();
+          loadDevModeStatus();
+          loadAppVersion();
+          connectWebSocket();
+          setupResizeHandler();
+          setupVisibilityHandler();
+        } else {
+          // User is not authenticated, redirect to login
+          window.location.href = '/login';
+        }
+      })
+      .fail(function() {
+        // API call failed, redirect to login as fallback
+        window.location.href = '/login';
+      });
+  }
+
   function init() {
+    // Initialize Mermaid for diagram rendering
+    if (window.mermaid) {
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: 'dark',
+        themeVariables: {
+          primaryColor: '#6366f1',
+          primaryTextColor: '#e5e7eb',
+          primaryBorderColor: '#4f46e5',
+          lineColor: '#9ca3af',
+          secondaryColor: '#374151',
+          tertiaryColor: '#1f2937',
+          background: '#111827',
+          mainBkg: '#1f2937',
+          secondBkg: '#374151',
+          tertiaryBkg: '#111827'
+        }
+      });
+    }
+
     // Initialize ApiClient (sets up global 401 redirect handler)
     ApiClient.init();
 
@@ -3892,6 +4539,7 @@
       api: api,
       escapeHtml: escapeHtml,
       showToast: showToast,
+      showConfirm: showConfirm,
       openModal: openModal,
       formatDateTime: formatDateTime,
       formatLogTime: formatLogTime,
@@ -4004,6 +4652,23 @@
       escapeHtml: escapeHtml,
       showToast: showToast,
       openModal: openModal,
+      closeAllModals: closeAllModals,
+      sendMessage: sendMessage
+    });
+
+    QuickActionsModule.init({
+      state: state,
+      escapeHtml: escapeHtml,
+      showToast: showToast,
+      sendMessage: sendMessage,
+      PromptTemplatesModule: PromptTemplatesModule
+    });
+
+    McpSettingsModule.init({
+      state: state,
+      escapeHtml: escapeHtml,
+      showToast: showToast,
+      openModal: openModal,
       closeAllModals: closeAllModals
     });
 
@@ -4023,13 +4688,15 @@
       DiffEngine: DiffEngine,
       FileCache: FileCache,
       TaskDisplayModule: TaskDisplayModule,
-      hljs: window.hljs
+      hljs: window.hljs,
+      formatTimestamp: MessageRenderer.formatTimestamp
     });
 
     MessageRenderer.init({
       escapeHtml: escapeHtml,
       ToolRenderer: ToolRenderer,
-      marked: window.marked
+      marked: window.marked,
+      mermaid: window.mermaid
     });
 
     setupEventHandlers();
@@ -4046,16 +4713,9 @@
     TaskDisplayModule.setupHandlers();
     PermissionModeModule.setupHandlers();
     FolderBrowserModule.setupHandlers();
-    loadProjects();
-    loadResourceStatus();
-    loadInitialSettings();
-    loadFontSize();
-    loadScrollLockPreference();
-    loadDevModeStatus();
-    loadAppVersion();
-    connectWebSocket();
-    setupResizeHandler();
-    setupVisibilityHandler();
+
+    // Check authentication status first
+    checkAuthenticationOnLoad();
   }
 
   // Handle window resize for mobile/desktop hint updates
@@ -4092,7 +4752,7 @@
         state.devMode = data.devMode;
 
         if (state.devMode) {
-          $('#btn-toggle-dev').removeClass('hidden');
+          $('#btn-toggle-debug').removeClass('hidden');
         }
       });
   }

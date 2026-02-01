@@ -3,6 +3,7 @@ import { Server, IncomingMessage } from 'http';
 import { AgentManager, AgentMessage, QueuedProject, AgentResourceStatus, ContextUsage, WaitingStatus, FullAgentStatus } from '../agents';
 import { RoadmapGenerator, RoadmapMessage, AuthService, ShellService } from '../services';
 import { RalphLoopService, RalphLoopStatus, IterationSummary, ReviewerFeedback, RalphLoopFinalStatus } from '../services/ralph-loop/types';
+import { ConversationRepository, ProjectRepository } from '../repositories';
 import { getLogger, Logger } from '../utils/logger';
 import { parseCookie, COOKIE_NAME } from '../middleware/auth-middleware';
 
@@ -24,6 +25,8 @@ export interface ShellErrorData {
 export interface RalphLoopStatusData {
   taskId: string;
   status: RalphLoopStatus;
+  currentIteration?: number;
+  maxTurns?: number;
 }
 
 export interface RalphLoopIterationData {
@@ -35,6 +38,16 @@ export interface RalphLoopOutputData {
   taskId: string;
   phase: 'worker' | 'reviewer';
   content: string;
+  timestamp: string;
+}
+
+export interface RalphLoopToolUseData {
+  taskId: string;
+  phase: 'worker' | 'reviewer';
+  tool_name: string;
+  tool_id: string;
+  parameters: Record<string, unknown>;
+  timestamp: string;
 }
 
 export interface RalphLoopCompleteData {
@@ -77,6 +90,7 @@ export type WebSocketMessageData =
   | RalphLoopStatusData
   | RalphLoopIterationData
   | RalphLoopOutputData
+  | RalphLoopToolUseData
   | RalphLoopCompleteData
   | RalphLoopWorkerCompleteData
   | RalphLoopReviewerCompleteData
@@ -103,10 +117,12 @@ export interface WebSocketMessage {
     | 'shell_error'
     | 'ralph_loop_status'
     | 'ralph_loop_iteration'
+    | 'ralph_loop_output'
     | 'ralph_loop_worker_complete'
     | 'ralph_loop_reviewer_complete'
     | 'ralph_loop_complete'
     | 'ralph_loop_error'
+    | 'ralph_loop_tool_use'
 ;
   projectId?: string;
   data?: WebSocketMessageData | SessionRecoveryData;
@@ -125,6 +141,8 @@ export interface WebSocketServerDependencies {
   authService?: AuthService;
   shellService?: ShellService;
   ralphLoopService?: RalphLoopService;
+  conversationRepository?: ConversationRepository;
+  projectRepository?: ProjectRepository;
 }
 
 export class DefaultWebSocketServer implements ProjectWebSocketServer {
@@ -134,6 +152,8 @@ export class DefaultWebSocketServer implements ProjectWebSocketServer {
   private readonly authService?: AuthService;
   private readonly shellService?: ShellService;
   private readonly ralphLoopService?: RalphLoopService;
+  private readonly conversationRepository?: ConversationRepository;
+  private readonly projectRepository?: ProjectRepository;
   private readonly projectSubscriptions: Map<string, Set<WebSocket>> = new Map();
   private readonly logger: Logger;
 
@@ -143,6 +163,8 @@ export class DefaultWebSocketServer implements ProjectWebSocketServer {
     this.authService = deps.authService;
     this.shellService = deps.shellService;
     this.ralphLoopService = deps.ralphLoopService;
+    this.conversationRepository = deps.conversationRepository;
+    this.projectRepository = deps.projectRepository;
     this.logger = getLogger('websocket');
     this.setupAgentListeners();
     this.setupRoadmapListeners();
@@ -424,11 +446,11 @@ export class DefaultWebSocketServer implements ProjectWebSocketServer {
 
     this.logger.info('Setting up Ralph Loop service listeners');
 
-    this.ralphLoopService.on('status_change', (projectId, taskId, status) => {
+    this.ralphLoopService.on('status_change', (projectId, taskId, status, currentIteration, maxTurns) => {
       this.broadcastToProject(projectId, {
         type: 'ralph_loop_status',
         projectId,
-        data: { taskId, status },
+        data: { taskId, status, currentIteration, maxTurns },
       });
     });
 
@@ -438,6 +460,12 @@ export class DefaultWebSocketServer implements ProjectWebSocketServer {
         projectId,
         data: { taskId, iteration },
       });
+
+      // Save iteration start message
+      void this.saveRalphLoopMessage(projectId, 'ralph_loop_iteration', {
+        taskId,
+        iteration,
+      });
     });
 
     this.ralphLoopService.on('worker_complete', (projectId, taskId, summary) => {
@@ -445,6 +473,12 @@ export class DefaultWebSocketServer implements ProjectWebSocketServer {
         type: 'ralph_loop_worker_complete',
         projectId,
         data: { taskId, summary },
+      });
+
+      // Save worker complete message
+      void this.saveRalphLoopMessage(projectId, 'ralph_loop_worker_complete', {
+        taskId,
+        summary,
       });
     });
 
@@ -454,6 +488,12 @@ export class DefaultWebSocketServer implements ProjectWebSocketServer {
         projectId,
         data: { taskId, feedback },
       });
+
+      // Save reviewer complete message
+      void this.saveRalphLoopMessage(projectId, 'ralph_loop_reviewer_complete', {
+        taskId,
+        feedback,
+      });
     });
 
     this.ralphLoopService.on('loop_complete', (projectId, taskId, finalStatus) => {
@@ -461,6 +501,12 @@ export class DefaultWebSocketServer implements ProjectWebSocketServer {
         type: 'ralph_loop_complete',
         projectId,
         data: { taskId, finalStatus },
+      });
+
+      // Save completion message
+      void this.saveRalphLoopMessage(projectId, 'ralph_loop_complete', {
+        taskId,
+        finalStatus,
       });
     });
 
@@ -470,7 +516,177 @@ export class DefaultWebSocketServer implements ProjectWebSocketServer {
         projectId,
         data: { taskId, error },
       });
+
+      // Save error message
+      void this.saveRalphLoopMessage(projectId, 'ralph_loop_error', {
+        taskId,
+        error,
+      });
     });
+
+    this.ralphLoopService.on('output', (projectId, taskId, source, content) => {
+      const timestamp = new Date().toISOString();
+      this.broadcastToProject(projectId, {
+        type: 'ralph_loop_output',
+        projectId,
+        data: { taskId, phase: source, content, timestamp },
+      });
+
+      // Save Ralph Loop output to conversation
+      void this.saveRalphLoopMessage(projectId, 'ralph_loop_output', {
+        taskId,
+        phase: source,
+        content,
+        timestamp,
+      });
+    });
+
+    this.ralphLoopService.on('tool_use', (projectId, taskId, source, toolInfo) => {
+      this.logger.info('WebSocket broadcasting ralph_loop_tool_use', {
+        projectId,
+        taskId,
+        phase: source,
+        toolName: toolInfo.tool_name,
+      });
+
+      const data = {
+        taskId,
+        phase: source,
+        tool_name: toolInfo.tool_name,
+        tool_id: toolInfo.tool_id,
+        parameters: toolInfo.parameters,
+        timestamp: toolInfo.timestamp,
+      };
+
+      this.broadcastToProject(projectId, {
+        type: 'ralph_loop_tool_use',
+        projectId,
+        data,
+      });
+
+      // Save tool use message to conversation
+      void this.saveRalphLoopMessage(projectId, 'ralph_loop_tool_use', data);
+    });
+  }
+
+  private async saveRalphLoopMessage(
+    projectId: string,
+    type: string,
+    data: Record<string, unknown>
+  ): Promise<void> {
+    if (!this.conversationRepository || !this.projectRepository) {
+      return;
+    }
+
+    try {
+      // Get the current conversation for the project
+      const project = await this.projectRepository.findById(projectId);
+      if (!project?.currentConversationId) {
+        this.logger.debug('No current conversation for Ralph Loop message', { projectId, type });
+        return;
+      }
+
+      // Convert Ralph Loop message to agent message format
+      let content = '';
+      let messageType: AgentMessage['type'] = 'system';
+
+      switch (type) {
+        case 'ralph_loop_output': {
+          // Changed from 'stdout' to 'stdout' to match frontend expectation
+          // Frontend converts this to 'assistant' type when displaying
+          messageType = 'stdout';
+          const outputData = data as unknown as RalphLoopOutputData;
+          content = outputData.content;
+          // Phase will be added to the message object below
+          break;
+        }
+
+        case 'ralph_loop_iteration': {
+          const iterationData = data as { iteration: number };
+          content = `--- Ralph Loop Iteration ${iterationData.iteration} started ---`;
+          break;
+        }
+
+        case 'ralph_loop_worker_complete': {
+          const workerData = data as unknown as RalphLoopWorkerCompleteData;
+          content = `Worker completed iteration ${workerData.summary.iterationNumber}`;
+          if (workerData.summary.filesModified?.length) {
+            content += `\nFiles modified: ${workerData.summary.filesModified.join(', ')}`;
+          }
+          break;
+        }
+
+        case 'ralph_loop_reviewer_complete': {
+          const reviewerData = data as unknown as RalphLoopReviewerCompleteData;
+          content = `Reviewer decision: ${reviewerData.feedback.decision}`;
+          if (reviewerData.feedback.feedback) {
+            content += `\nFeedback: ${reviewerData.feedback.feedback}`;
+          }
+          break;
+        }
+
+        case 'ralph_loop_complete': {
+          const completeData = data as unknown as RalphLoopCompleteData;
+          content = `Ralph Loop completed: ${completeData.finalStatus}`;
+          break;
+        }
+
+        case 'ralph_loop_error': {
+          const errorData = data as { error: string };
+          content = `Ralph Loop error: ${errorData.error}`;
+          break;
+        }
+
+        case 'ralph_loop_tool_use': {
+          // Tool use messages are handled differently - they have tool info
+          const toolData = data as unknown as RalphLoopToolUseData;
+          const toolMessage: AgentMessage = {
+            type: 'tool_use',
+            content: `${toolData.tool_name}`,
+            timestamp: toolData.timestamp || new Date().toISOString(),
+            toolInfo: {
+              name: toolData.tool_name,
+              id: toolData.tool_id,
+              input: toolData.parameters,
+            },
+            ralphLoopPhase: toolData.phase,
+          };
+          await this.conversationRepository.addMessage(
+            projectId,
+            project.currentConversationId,
+            toolMessage
+          );
+          return;
+        }
+
+        default:
+          return;
+      }
+
+      const message: AgentMessage = {
+        type: messageType,
+        content,
+        timestamp: (data.timestamp as string) || new Date().toISOString(),
+      };
+
+      // Add ralphLoopPhase for ralph_loop_output messages
+      if (type === 'ralph_loop_output') {
+        const outputData = data as unknown as RalphLoopOutputData;
+        message.ralphLoopPhase = outputData.phase;
+      }
+
+      await this.conversationRepository.addMessage(
+        projectId,
+        project.currentConversationId,
+        message
+      );
+    } catch (error) {
+      this.logger.error('Failed to save Ralph Loop message', {
+        projectId,
+        type,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
   }
 }
 

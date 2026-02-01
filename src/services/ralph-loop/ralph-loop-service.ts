@@ -15,6 +15,7 @@ import { WorkerAgent, WorkerAgentConfig } from './worker-agent';
 import { ReviewerAgent, ReviewerAgentConfig } from './reviewer-agent';
 import { getLogger, Logger } from '../../utils';
 import { generateTaskId } from '../../repositories/ralph-loop';
+import { ProjectRepository } from '../../repositories/project';
 
 /**
  * Interface for resolving project paths
@@ -66,10 +67,12 @@ interface ActiveLoopState {
 
 export interface RalphLoopServiceDependencies {
   repository: RalphLoopRepository;
+  projectRepository: ProjectRepository;
   projectPathResolver: ProjectPathResolver;
   contextInitializer?: ContextInitializer;
   workerAgentFactory?: WorkerAgentFactory;
   reviewerAgentFactory?: ReviewerAgentFactory;
+  settingsRepository?: import('../../repositories/settings').SettingsRepository;
 }
 
 /**
@@ -79,20 +82,24 @@ export interface RalphLoopServiceDependencies {
  */
 export class DefaultRalphLoopService implements RalphLoopService {
   private readonly repository: RalphLoopRepository;
+  private readonly projectRepository: ProjectRepository;
   private readonly projectPathResolver: ProjectPathResolver;
   private readonly contextInitializer: ContextInitializer;
   private readonly workerAgentFactory: WorkerAgentFactory;
   private readonly reviewerAgentFactory: ReviewerAgentFactory;
+  private readonly settingsRepository?: import('../../repositories/settings').SettingsRepository;
   private readonly logger: Logger;
   private readonly emitter: EventEmitter;
   private readonly activeLoops: Map<string, ActiveLoopState> = new Map();
 
   constructor(deps: RalphLoopServiceDependencies) {
     this.repository = deps.repository;
+    this.projectRepository = deps.projectRepository;
     this.projectPathResolver = deps.projectPathResolver;
     this.contextInitializer = deps.contextInitializer || new DefaultContextInitializer();
     this.workerAgentFactory = deps.workerAgentFactory || defaultWorkerAgentFactory;
     this.reviewerAgentFactory = deps.reviewerAgentFactory || defaultReviewerAgentFactory;
+    this.settingsRepository = deps.settingsRepository;
     this.logger = getLogger('ralph-loop-service');
     this.emitter = new EventEmitter();
   }
@@ -121,6 +128,9 @@ export class DefaultRalphLoopService implements RalphLoopService {
 
     const state = await this.repository.create(initialState);
 
+    // Clean up old loops after creating the new one
+    void this.cleanupOldLoops(projectId);
+
     // Track active loop
     const activeState: ActiveLoopState = {
       taskId,
@@ -130,6 +140,9 @@ export class DefaultRalphLoopService implements RalphLoopService {
       startTime: Date.now(),
     };
     this.activeLoops.set(this.getLoopKey(projectId, taskId), activeState);
+
+    // Update project status to running
+    await this.projectRepository.updateStatus(projectId, 'running');
 
     // Start the first iteration
     void this.runNextIteration(projectId, taskId).catch((error) => {
@@ -167,6 +180,9 @@ export class DefaultRalphLoopService implements RalphLoopService {
       finalStatus: 'critical_failure',
       error: 'Loop stopped by user',
     });
+
+    // Update project status to stopped
+    await this.projectRepository.updateStatus(projectId, 'stopped');
 
     this.logger.info('Ralph Loop stopped', { projectId, taskId });
   }
@@ -251,7 +267,13 @@ export class DefaultRalphLoopService implements RalphLoopService {
     status: RalphLoopStatus
   ): Promise<void> {
     await this.repository.update(projectId, taskId, { status });
-    this.emitter.emit('status_change', projectId, taskId, status);
+
+    // Get the state to include iteration info
+    const state = await this.repository.findById(projectId, taskId);
+    const currentIteration = state?.currentIteration;
+    const maxTurns = state?.config.maxTurns;
+
+    this.emitter.emit('status_change', projectId, taskId, status, currentIteration, maxTurns);
   }
 
   /**
@@ -325,23 +347,45 @@ export class DefaultRalphLoopService implements RalphLoopService {
       iteration,
     });
 
+    // Get MCP servers from settings
+    let mcpServers;
+    if (this.settingsRepository) {
+      const settings = await this.settingsRepository.get();
+      mcpServers = settings.mcp.enabled ? settings.mcp.servers : undefined;
+    }
+
     // Create and run the worker agent
     const workerAgent = this.workerAgentFactory.create({
       projectPath,
       model: state.config.workerModel,
       contextInitializer: this.contextInitializer,
+      appendSystemPrompt: state.config.workerSystemPrompt,
+      mcpServers,
     });
 
     activeState.workerAgent = workerAgent;
 
     // Set up output forwarding
     workerAgent.on('output', (content) => {
+      this.emitter.emit('output', projectId, taskId, 'worker', content);
       this.logger.debug('Worker output', {
         projectId,
         taskId,
         iteration,
         contentLength: content.length,
       });
+    });
+
+    // Set up tool use forwarding
+    workerAgent.on('tool_use', (toolInfo) => {
+      this.logger.info('Ralph Loop service received tool_use from worker', {
+        projectId,
+        taskId,
+        iteration,
+        toolName: toolInfo.tool_name,
+        toolId: toolInfo.tool_id,
+      });
+      this.emitter.emit('tool_use', projectId, taskId, 'worker', toolInfo);
     });
 
     try {
@@ -403,22 +447,43 @@ export class DefaultRalphLoopService implements RalphLoopService {
       iteration,
     });
 
+    // Get MCP servers from settings
+    let mcpServers;
+    if (this.settingsRepository) {
+      const settings = await this.settingsRepository.get();
+      mcpServers = settings.mcp.enabled ? settings.mcp.servers : undefined;
+    }
+
     // Create and run the reviewer agent
     const reviewerAgent = this.reviewerAgentFactory.create({
       projectPath,
       model: state.config.reviewerModel,
       contextInitializer: this.contextInitializer,
+      appendSystemPrompt: state.config.reviewerSystemPrompt,
+      mcpServers,
     });
 
     activeState.reviewerAgent = reviewerAgent;
 
     // Set up output forwarding
     reviewerAgent.on('output', (content) => {
+      this.emitter.emit('output', projectId, taskId, 'reviewer', content);
       this.logger.debug('Reviewer output', {
         projectId,
         taskId,
         iteration,
         contentLength: content.length,
+      });
+    });
+
+    // Set up tool use forwarding
+    reviewerAgent.on('tool_use', (toolInfo) => {
+      this.emitter.emit('tool_use', projectId, taskId, 'reviewer', toolInfo);
+      this.logger.debug('Reviewer tool use', {
+        projectId,
+        taskId,
+        iteration,
+        toolName: toolInfo.tool_name,
       });
     });
 
@@ -491,6 +556,9 @@ export class DefaultRalphLoopService implements RalphLoopService {
       finalStatus,
     });
 
+    // Update project status to stopped
+    await this.projectRepository.updateStatus(projectId, 'stopped');
+
     this.emitter.emit('loop_complete', projectId, taskId, finalStatus);
 
     this.logger.info('Ralph Loop completed', {
@@ -526,5 +594,97 @@ export class DefaultRalphLoopService implements RalphLoopService {
       taskId,
       error: errorMessage,
     });
+  }
+
+  /**
+   * Delete a Ralph Loop and its associated data
+   */
+  async delete(projectId: string, taskId: string): Promise<boolean> {
+    try {
+      // 1. Stop the loop if it's currently running
+      await this.stop(projectId, taskId);
+
+      // 2. Remove from active loops map
+      const taskKey = `${projectId}-${taskId}`;
+      this.activeLoops.delete(taskKey);
+
+      // 3. Delete from repository (filesystem)
+      const deleted = await this.repository.delete(projectId, taskId);
+
+      if (deleted) {
+        // 4. Emit event for WebSocket clients (optional but good UX)
+        this.emitter.emit('loop_deleted', projectId, taskId);
+
+        this.logger.info('Ralph Loop deleted', {
+          projectId,
+          taskId,
+        });
+      }
+
+      return deleted;
+    } catch (error) {
+      this.logger.error('Failed to delete Ralph Loop', {
+        projectId,
+        taskId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return false;
+    }
+  }
+
+  /**
+   * Clean up old Ralph Loop directories based on history limit
+   */
+  private async cleanupOldLoops(projectId: string): Promise<void> {
+    try {
+      // Get history limit from settings
+      const historyLimit = this.settingsRepository
+        ? (await this.settingsRepository.get()).ralphLoop.historyLimit
+        : 5;
+
+      // Get all loops for the project, sorted by creation date (newest first)
+      const allLoops = await this.repository.findByProject(projectId);
+
+      // If we have more loops than the limit, delete the oldest ones
+      if (allLoops.length > historyLimit) {
+        const loopsToDelete = allLoops.slice(historyLimit);
+
+        this.logger.info('Cleaning up old Ralph Loops', {
+          projectId,
+          totalLoops: allLoops.length,
+          historyLimit,
+          toDelete: loopsToDelete.length,
+        });
+
+        for (const loop of loopsToDelete) {
+          // Don't delete running loops
+          if (loop.status === 'worker_running' ||
+              loop.status === 'reviewer_running' ||
+              loop.status === 'paused') {
+            this.logger.debug('Skipping cleanup of active loop', {
+              projectId,
+              taskId: loop.taskId,
+              status: loop.status,
+            });
+            continue;
+          }
+
+          const deleted = await this.repository.delete(projectId, loop.taskId);
+          if (deleted) {
+            this.logger.debug('Deleted old Ralph Loop', {
+              projectId,
+              taskId: loop.taskId,
+              createdAt: loop.createdAt,
+            });
+          }
+        }
+      }
+    } catch (error) {
+      // Don't fail the main operation if cleanup fails
+      this.logger.error('Failed to cleanup old Ralph Loops', {
+        projectId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 }

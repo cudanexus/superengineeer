@@ -207,6 +207,12 @@
       toggleConversationHistory();
     });
 
+    // Close button in history dropdown
+    $('#btn-close-history').on('click', function(e) {
+      e.stopPropagation();
+      closeConversationHistory();
+    });
+
     // Close dropdown when clicking outside
     $(document).on('click', function(e) {
       if (state.conversationHistoryOpen &&

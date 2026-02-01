@@ -246,16 +246,32 @@ describe('DebugModal', () => {
   });
 
   describe('setupHandlers', () => {
-    it('should register debug toggle button handler', () => {
+    it('should register debug refresh button handler', () => {
       const mockBtn = global.$();
 
       DebugModal.setupHandlers();
 
-      expect(global.$).toHaveBeenCalledWith('#btn-toggle-debug');
+      expect(global.$).toHaveBeenCalledWith('#btn-debug-refresh');
       expect(mockBtn.on).toHaveBeenCalledWith('click', expect.any(Function));
     });
 
-    it('should register refresh button handler', () => {
+    it('should register debug tab click handlers', () => {
+      const mockDocument = {
+        on: jest.fn()
+      };
+      global.$ = jest.fn((selector) => {
+        if (selector === document) {
+          return mockDocument;
+        }
+        return { on: jest.fn() };
+      });
+
+      DebugModal.setupHandlers();
+
+      expect(mockDocument.on).toHaveBeenCalledWith('click', '.debug-tab', expect.any(Function));
+    });
+
+    it('should register shutdown button handler', () => {
       const mockBtn = global.$();
 
       DebugModal.setupHandlers();

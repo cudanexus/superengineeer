@@ -660,6 +660,44 @@ body {
   margin: 1rem 0;
 }
 
+/* Mermaid diagram styling */
+.mermaid {
+  background-color: #1f2937;
+  border: 1px solid #374151;
+  border-radius: 0.375rem;
+  padding: 1rem;
+  margin: 0.75rem 0;
+  overflow-x: auto;
+  text-align: center;
+}
+
+.mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Override mermaid default styles for dark theme */
+.mermaid .node rect,
+.mermaid .node circle,
+.mermaid .node ellipse,
+.mermaid .node polygon {
+  fill: #374151 !important;
+  stroke: #6b7280 !important;
+}
+
+.mermaid .node text {
+  fill: #e5e7eb !important;
+}
+
+.mermaid .edgeLabel {
+  background-color: #1f2937 !important;
+  color: #e5e7eb !important;
+}
+
+.mermaid .edgePath .path {
+  stroke: #9ca3af !important;
+}
+
 .conversation-message.tool-use {
   background-color: #1a1a2e;
   border-left: 3px solid #a855f7;
@@ -686,6 +724,9 @@ body {
 .tool-name {
   font-weight: 600;
   color: #e9d5ff;
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 /* Diff preview styles */
@@ -1400,6 +1441,29 @@ body {
   color: #c4b5fd;
 }
 
+/* Quick Actions dropdown */
+#quick-actions-dropdown {
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+}
+
+.quick-action-item {
+  padding: 0.75rem 1rem;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: background-color 0.15s;
+  margin-bottom: 0.25rem;
+  border-left: 2px solid transparent;
+}
+
+.quick-action-item:hover {
+  background-color: #374151;
+  border-left-color: #a78bfa;
+}
+
+.quick-action-item:active {
+  background-color: #4b5563;
+}
+
 /* Conversation toolbar */
 #conversation-toolbar {
   background-color: #1f2937;
@@ -1856,6 +1920,43 @@ body {
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* File search results */
+.file-search-result {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  transition: background-color 0.15s;
+  border-radius: 0.25rem;
+  margin-bottom: 0.125rem;
+}
+
+.file-search-result:hover {
+  background-color: #374151;
+}
+
+.file-search-result .tree-icon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  color: #9ca3af;
+}
+
+.file-search-result[data-is-dir="true"] .tree-icon {
+  color: #fbbf24;
+}
+
+.file-search-result .tree-name {
+  font-size: 0.75rem;
+  color: #e5e7eb;
+}
+
+.file-search-result mark {
+  border-radius: 2px;
+  padding: 0 1px;
 }
 
 #file-browser-tree .tree-children {

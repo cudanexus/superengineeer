@@ -23,6 +23,7 @@ test/
   unit/             # Unit tests
 doc/
   ROADMAP.md        # Project milestones
+  MERMAID_EXAMPLES.md # Mermaid.js diagram examples and reference
 ```
 
 ## Data Storage Structure
@@ -56,7 +57,7 @@ conversations/
 - `GitService` - Git operations via simple-git library
 - `EventManager` - In-memory event bus for decoupled component communication
 - `ClaudeAgent` - Claude Code CLI process management
-- `AgentManager` - Multi-agent lifecycle + autonomous loop
+- `AgentManager` - Multi-agent lifecycle management
 - `ProjectWebSocketServer` - Real-time updates via WebSocket
 - `Logger` - Configurable logging with project context + circular buffer
 
@@ -85,7 +86,7 @@ conversations/
 - `DELETE /api/projects/:id/roadmap/milestone` - Delete a milestone (body: {phaseId, milestoneId})
 - `DELETE /api/projects/:id/roadmap/phase` - Delete a phase (body: {phaseId})
 - `PUT /api/projects/:id/roadmap/next-item` - Set next item to work on
-- `POST /api/projects/:id/agent/start` - Start autonomous loop
+- `POST /api/projects/:id/agent/interactive` - Start interactive agent session
 - `POST /api/projects/:id/agent/interactive` - Start interactive agent session (body: {message?, images?, sessionId?, permissionMode?})
 - `POST /api/projects/:id/agent/send` - Send message to interactive agent
 - `POST /api/projects/:id/agent/stop` - Stop agent
@@ -141,16 +142,6 @@ Ralph Loop implements Geoffrey Huntley's "Ralph Wiggum technique" - an iterative
 4. **Configurable**: Max iterations, worker/reviewer models, custom prompts
 5. **Real-time**: Live output streaming and progress tracking
 
-### Roadmap-Based Automation
-Traditional autonomous loop for sequential milestone processing:
-1. Validates ROADMAP.md exists (required)
-2. Uses nextItem from status.json OR finds first incomplete
-3. Creates new conversation for each item
-4. Generates instructions from agentPromptTemplate
-5. Starts agent with instructions
-6. Parses JSON response `{ status: "COMPLETE"|"FAILED", reason }`
-7. On COMPLETE: continues to next item
-8. On FAILED: pauses loop, emits itemFailed event
 
 ## Configuration (Environment Variables)
 
@@ -170,8 +161,7 @@ Traditional autonomous loop for sequential milestone processing:
 
 ## Agent Execution Modes
 
-- **Interactive Mode** (default): Direct chat with Claude, send messages, see tool usage in real-time. Agent auto-starts when first message is sent.
-- **Autonomous Mode**: Basic sequential processing of roadmap milestones. Manual start required.
+- **Interactive Mode**: Direct chat with Claude, send messages, see tool usage in real-time. Agent auto-starts when first message is sent.
 - **Ralph Loop Mode**: Advanced iterative development with worker/reviewer cycle. Dedicated UI in Ralph Loop tab provides comprehensive controls, progress tracking, and history.
 
 ## Permission Modes (Runtime Toggle)
@@ -242,7 +232,7 @@ Conversations use UUID v4 IDs that also serve as Claude session IDs:
 
 - **Debug Modal**:
   - View current agent process info (PID, working directory, start time)
-  - Monitor autonomous loop state
+  - Monitor Ralph Loop state
   - See last executed command with copy button
   - Browse recent logs with color-coded levels
   - View all tracked processes across projects
@@ -264,7 +254,7 @@ Conversations use UUID v4 IDs that also serve as Claude session IDs:
 ## Settings
 
 - `maxConcurrentAgents` - Maximum concurrent agents (1-10)
-- `agentPromptTemplate` - Template for autonomous agent instructions
+- `agentPromptTemplate` - Template for agent instructions
 - `appendSystemPrompt` - Custom text appended to Claude's system prompt via `--append-system-prompt` flag. Changing this setting restarts all running agents.
 - `sendWithCtrlEnter` - Input keybinding preference (true=Ctrl+Enter sends, false=Enter sends)
 - `historyLimit` - Maximum conversations in history dropdown (5-100, default: 25)
@@ -301,3 +291,23 @@ Per-project overrides in `permissionOverrides` (stored in project status.json):
 - `defaultMode` - Override default mode for this project
 
 Permission rules follow Claude Code CLI format: `Tool` or `Tool(specifier)`
+
+## Mermaid.js Support
+
+Claudito supports rendering Mermaid.js diagrams in Claude's output. Simply use code blocks with the `mermaid` language:
+
+```markdown
+\`\`\`mermaid
+graph TD
+    A[Start] --> B{Decision}
+    B -->|Yes| C[Do this]
+    B -->|No| D[Do that]
+\`\`\`
+```
+
+- **Automatic rendering**: Mermaid diagrams render automatically in messages and plan content
+- **Dark theme**: Diagrams are styled to match Claudito's dark UI
+- **Claude skill**: Use `/mermaid` command or the mermaid skill via the bundled plugin
+- **Plugin**: The `claudito-plugin` directory contains a Claude Code plugin with a Mermaid diagram generation skill
+  - Load with: `claude --plugin-dir ./claudito-plugin`
+- **Supported types**: Flowcharts, sequence diagrams, class diagrams, state diagrams, ER diagrams, Gantt charts, and more

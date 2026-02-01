@@ -1,6 +1,6 @@
 # Claudito Roadmap
 
-## Phase 1: Ralph Loop Implementation
+## Phase 1: Ralph Loop Implementation (Completed)
 
 Implement the Ralph Loop pattern based on Geoffrey Huntley's Ralph Wiggum technique - an iterative development pattern that solves context accumulation by starting each iteration with fresh context and using cross-model review.
 
@@ -56,7 +56,7 @@ Implement the Ralph Loop pattern based on Geoffrey Huntley's Ralph Wiggum techni
 - [x] Create Ralph Loop history view with delete functionality
 - [x] Add comprehensive frontend tests
 
-## Phase 2: Model Selection
+## Phase 2: Model Selection (Completed)
 
 Allow users to choose which Claude model to use for agents, with proper session management.
 
@@ -75,62 +75,3 @@ Allow users to choose which Claude model to use for agents, with proper session 
 - [x] Display current model in agent status area (tooltip shows effective model)
 - [x] Add model indicator in project header
 - [x] Show toast notification when model changes
-
-## Phase 3: Conversation Management
-
-Enhanced conversation features for better workflow management.
-
-### Milestone 3.1: Export/Import Conversations
-
-- [ ] Export conversation to Markdown format
-- [ ] Export conversation to JSON format (full metadata)
-- [ ] Import conversation from JSON
-- [ ] Export all project conversations as archive
-- [ ] Add selective export (filter by date range, tags)
-
-### Milestone 3.2: Conversation Organization
-
-- [ ] Add conversation tagging system
-- [ ] Implement conversation search with filters
-- [ ] Add conversation favorites/pinning
-- [ ] Create conversation templates from existing conversations
-- [ ] Add bulk conversation management (delete, archive, export)
-
-## Phase 4: Agent Configuration Presets
-
-Quick-start configurations for common development tasks.
-
-### Milestone 4.1: Preset System
-
-- [ ] Design preset schema (name, model, permission mode, system prompt, rules)
-- [ ] Create PresetRepository for persistence
-- [ ] Add built-in presets (Code Review, Bug Fix, Refactoring, Testing)
-- [ ] Implement preset selection when starting agent
-- [ ] Add preset indicator in agent status
-
-### Milestone 4.2: Custom Presets
-
-- [ ] Create preset editor UI
-- [ ] Implement "Save current settings as preset" functionality
-- [ ] Add preset import/export (JSON format)
-- [ ] Create per-project default preset setting
-- [ ] Add preset quick-switch keyboard shortcut
-
-## Phase 5: Multi-Project Dashboard
-
-Centralized view for managing multiple projects.
-
-### Milestone 5.1: Dashboard View
-
-- [ ] Create dashboard showing all projects with status
-- [ ] Display agent status indicator for each project
-- [ ] Show recent activity summary per project
-- [ ] Add quick actions (start/stop agent, open project)
-- [ ] Implement project filtering and sorting
-
-### Milestone 5.2: Cross-Project Features
-
-- [ ] Search conversations across all projects
-- [ ] Global agent management (stop all, status overview)
-- [ ] Project grouping/folders for organization
-- [ ] Cross-project analytics (total usage, activity trends)

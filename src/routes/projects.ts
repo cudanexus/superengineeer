@@ -8,7 +8,7 @@ import { GitService } from '../services/git-service';
 import { AgentManager } from '../agents';
 import { getLogger } from '../utils';
 import { RalphLoopService, RalphLoopConfig } from '../services/ralph-loop/types';
-import { SUPPORTED_MODELS, isValidModel, getModelDisplayName } from '../config/models';
+import { SUPPORTED_MODELS, isValidModel, getModelDisplayName, DEFAULT_MODEL } from '../config/models';
 
 // Request body types
 interface CreateProjectBody {
@@ -233,6 +233,7 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
     conversationRepository,
     settingsRepository,
     gitService,
+    ralphLoopService,
   } = deps;
 
   router.get('/', asyncHandler(async (_req: Request, res: Response) => {
@@ -953,8 +954,15 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
       throw new ValidationError('File path must be within the project or be the global CLAUDE.md');
     }
 
-    fs.writeFileSync(filePath, content, 'utf-8');
-    res.json({ success: true });
+    try {
+      fs.writeFileSync(filePath, content, 'utf-8');
+      res.json({ success: true });
+    } catch (error) {
+      const logger = getLogger('projects');
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error('Failed to write Claude file', { filePath, error: errorMessage });
+      throw new Error(`Failed to write file: ${errorMessage}`);
+    }
   }));
 
   // GET /api/projects/:id/permissions - Get project permission overrides
@@ -999,13 +1007,12 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
       throw new NotFoundError('Project');
     }
 
-    const settings = await settingsRepository.get();
-    const effectiveModel = project.modelOverride || settings.defaultModel;
+    const effectiveModel = project.modelOverride || DEFAULT_MODEL;
 
     res.json({
       projectModel: project.modelOverride,
       effectiveModel,
-      globalDefault: settings.defaultModel,
+      globalDefault: DEFAULT_MODEL,
       effectiveModelDisplayName: getModelDisplayName(effectiveModel),
     });
   }));
@@ -1028,13 +1035,12 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
     }
 
     const updated = await projectRepository.updateModelOverride(projectId, model || null);
-    const settings = await settingsRepository.get();
-    const effectiveModel = updated?.modelOverride || settings.defaultModel;
+    const effectiveModel = updated?.modelOverride || DEFAULT_MODEL;
 
     res.json({
       projectModel: updated?.modelOverride || null,
       effectiveModel,
-      globalDefault: settings.defaultModel,
+      globalDefault: DEFAULT_MODEL,
       effectiveModelDisplayName: getModelDisplayName(effectiveModel),
     });
   }));
@@ -1559,7 +1565,7 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
     const settings = await settingsRepository.get();
     const ralphLoopSettings = settings.ralphLoop || {
       defaultMaxTurns: 5,
-      defaultWorkerModel: 'claude-sonnet-4-20250514',
+      defaultWorkerModel: 'claude-opus-4-20250514',
       defaultReviewerModel: 'claude-sonnet-4-20250514',
     };
 
@@ -1715,8 +1721,6 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
 
   // Delete a Ralph Loop
   router.delete('/:id/ralph-loop/:taskId', asyncHandler(async (req: Request, res: Response) => {
-    const { ralphLoopService } = deps;
-
     if (!ralphLoopService) {
       res.status(503).json({ error: ralphLoopDisabledMessage });
       return;
@@ -1730,20 +1734,14 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
       throw new NotFoundError('Project');
     }
 
-    const state = await ralphLoopService.getState(id, taskId);
+    // Delete the Ralph Loop (this will also stop it if running)
+    const deleted = await ralphLoopService.delete(id, taskId);
 
-    if (!state) {
+    if (!deleted) {
       throw new NotFoundError('Ralph Loop');
     }
 
-    // Stop if running before deleting
-    if (state.status === 'worker_running' || state.status === 'reviewer_running') {
-      await ralphLoopService.stop(id, taskId);
-    }
-
-    // Note: RalphLoopService doesn't have a delete method,
-    // we just stop it and let the repository handle cleanup
-    res.json({ success: true });
+    res.status(204).send(); // 204 No Content (standard for successful deletion)
   }));
 
   return router;

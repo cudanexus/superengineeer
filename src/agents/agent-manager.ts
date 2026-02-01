@@ -18,6 +18,7 @@ import {
   MilestoneItemRef,
   ConversationRepository,
   SettingsRepository,
+  McpServerConfig,
 } from '../repositories';
 import {
   InstructionGenerator,
@@ -26,6 +27,7 @@ import {
   MilestoneWithContext,
 } from '../services';
 import { getLogger, Logger, getPidTracker, PidTracker, isValidUUID } from '../utils';
+import { DEFAULT_MODEL } from '../config/models';
 
 export interface AgentManagerEvents {
   message: (projectId: string, message: AgentMessage) => void;
@@ -156,6 +158,7 @@ export interface AgentFactoryOptions {
   isNewSession?: boolean;
   /** Claude model to use (e.g., 'claude-sonnet-4-20250514') */
   model?: string;
+  mcpServers?: McpServerConfig[];
 }
 
 export interface AgentFactory {
@@ -761,6 +764,9 @@ export class DefaultAgentManager implements AgentManager {
     // Get model for this project (project override or global default)
     const model = await this.getModelForProject(projectId);
 
+    // Get MCP servers configuration
+    const mcpServers = settings.mcp.enabled ? settings.mcp.servers : [];
+
     const agent = this.agentFactory.create({
       projectId,
       projectPath,
@@ -771,6 +777,7 @@ export class DefaultAgentManager implements AgentManager {
       sessionId,
       isNewSession,
       model,
+      mcpServers,
     });
     this.setupAgentListeners(agent);
     this.agents.set(projectId, agent);
@@ -854,8 +861,7 @@ export class DefaultAgentManager implements AgentManager {
       return project.modelOverride;
     }
 
-    const settings = await this.settingsRepository.get();
-    return settings.defaultModel;
+    return DEFAULT_MODEL;
   }
 
   private async addToQueue(projectId: string, instructions: string): Promise<void> {

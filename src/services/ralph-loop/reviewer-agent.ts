@@ -1,5 +1,6 @@
 import { ChildProcess, spawn, exec } from 'child_process';
 import { EventEmitter } from 'events';
+import * as path from 'path';
 
 import { getLogger, Logger } from '../../utils/logger';
 import {
@@ -7,6 +8,7 @@ import {
   ReviewerFeedback,
   ContextInitializer,
 } from './types';
+import { McpServerConfig } from '../../repositories';
 
 const isWindows = process.platform === 'win32';
 
@@ -23,6 +25,12 @@ export interface ReviewerAgentEvents {
   status: (status: ReviewerStatus) => void;
   complete: (feedback: ReviewerFeedback) => void;
   error: (error: string) => void;
+  tool_use: (toolInfo: {
+    tool_name: string;
+    tool_id: string;
+    parameters: Record<string, unknown>;
+    timestamp: string;
+  }) => void;
 }
 
 /**
@@ -32,6 +40,8 @@ export interface ReviewerAgentConfig {
   projectPath: string;
   model: string;
   contextInitializer: ContextInitializer;
+  appendSystemPrompt?: string;
+  mcpServers?: McpServerConfig[];
 }
 
 /**
@@ -89,7 +99,13 @@ interface StreamEvent {
   type: string;
   subtype?: string;
   message?: {
-    content: Array<{ type: string; text?: string; name?: string }>;
+    content: Array<{
+      type: string;
+      text?: string;
+      name?: string;
+      id?: string;
+      input?: Record<string, unknown>;
+    }>;
     usage?: {
       input_tokens?: number;
       output_tokens?: number;
@@ -97,6 +113,12 @@ interface StreamEvent {
   };
   delta?: {
     text?: string;
+  };
+  content_block?: {
+    type: string;
+    name?: string;
+    id?: string;
+    input?: Record<string, unknown>;
   };
   usage?: {
     input_tokens?: number;
@@ -114,6 +136,8 @@ export class ReviewerAgent {
   private readonly projectPath: string;
   private readonly model: string;
   private readonly contextInitializer: ContextInitializer;
+  private readonly appendSystemPrompt?: string;
+  private readonly mcpServers?: McpServerConfig[];
   private readonly processSpawner: ProcessSpawner;
   private readonly emitter: EventEmitter;
   private readonly logger: Logger;
@@ -129,6 +153,8 @@ export class ReviewerAgent {
     this.projectPath = config.projectPath;
     this.model = config.model;
     this.contextInitializer = config.contextInitializer;
+    this.appendSystemPrompt = config.appendSystemPrompt;
+    this.mcpServers = config.mcpServers;
     this.processSpawner = processSpawner || defaultSpawner;
     this.emitter = new EventEmitter();
     this.logger = getLogger('ReviewerAgent');
@@ -262,12 +288,59 @@ export class ReviewerAgent {
     // Skip permissions for autonomous operation
     args.push('--dangerously-skip-permissions');
 
+    // Add append system prompt if configured
+    if (this.appendSystemPrompt) {
+      args.push('--append-system-prompt', this.appendSystemPrompt);
+    }
+
+    // Add MCP servers
+    this.addMcpServerArgs(args);
+
+    // Add plugin directory
+    const pluginPath = path.join(this.projectPath, 'claudito-plugin');
+    args.push('--plugin-dir', pluginPath);
+
     // Use stream-json for structured output
     args.push('--input-format', 'stream-json');
     args.push('--output-format', 'stream-json');
     args.push('--verbose');
 
     return args;
+  }
+
+  private addMcpServerArgs(args: string[]): void {
+    if (!this.mcpServers || this.mcpServers.length === 0) {
+      return;
+    }
+
+    for (const server of this.mcpServers) {
+      if (!server.enabled) continue;
+
+      if (server.type === 'stdio') {
+        const serverSpec = `${server.name}=stdio://${server.command}`;
+        if (server.args && server.args.length > 0) {
+          args.push('--mcp-server', `${serverSpec} ${server.args.join(' ')}`);
+        } else {
+          args.push('--mcp-server', serverSpec);
+        }
+
+        // Add environment variables
+        if (server.env) {
+          for (const [key, value] of Object.entries(server.env)) {
+            args.push('--mcp-server-env', `${server.name}:${key}=${value}`);
+          }
+        }
+      } else if (server.type === 'http') {
+        args.push('--mcp-server', `${server.name}=http://${server.url}`);
+
+        // Add headers
+        if (server.headers) {
+          for (const [key, value] of Object.entries(server.headers)) {
+            args.push('--mcp-server-header', `${server.name}:${key}=${value}`);
+          }
+        }
+      }
+    }
   }
 
   private sendContext(context: string): void {
@@ -397,6 +470,15 @@ export class ReviewerAgent {
           if (block.type === 'text' && block.text) {
             this.collectedOutput += block.text;
             this.emitter.emit('output', block.text);
+          } else if (block.type === 'tool_use' && block.name) {
+            // Emit tool use event
+            const toolInfo = {
+              tool_name: block.name,
+              tool_id: block.id || '',
+              parameters: block.input || {},
+              timestamp: new Date().toISOString(),
+            };
+            this.emitter.emit('tool_use', toolInfo);
           }
         }
         break;
@@ -414,6 +496,20 @@ export class ReviewerAgent {
         this.logger.debug('Reviewer received result event', {
           subtype: event.subtype,
         });
+        break;
+      }
+
+      case 'content_block_start': {
+        if (event.content_block?.type === 'tool_use' && event.content_block.name) {
+          // Emit tool use event
+          const toolInfo = {
+            tool_name: event.content_block.name,
+            tool_id: event.content_block.id || '',
+            parameters: event.content_block.input || {},
+            timestamp: new Date().toISOString(),
+          };
+          this.emitter.emit('tool_use', toolInfo);
+        }
         break;
       }
     }

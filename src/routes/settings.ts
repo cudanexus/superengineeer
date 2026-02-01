@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
-import { SettingsRepository, ClaudePermissions, PromptTemplate } from '../repositories';
+import { SettingsRepository, ClaudePermissions, PromptTemplate, McpServerConfig } from '../repositories';
 import { asyncHandler, ValidationError } from '../utils';
-import { SUPPORTED_MODELS, MODEL_DISPLAY_NAMES, isValidModel } from '../config/models';
+import { SUPPORTED_MODELS, MODEL_DISPLAY_NAMES } from '../config/models';
 
 interface UpdateSettingsBody {
   maxConcurrentAgents?: number;
@@ -12,17 +12,55 @@ interface UpdateSettingsBody {
   enableDesktopNotifications?: boolean;
   appendSystemPrompt?: string;
   promptTemplates?: PromptTemplate[];
-  defaultModel?: string;
+  mcp?: {
+    enabled?: boolean;
+    servers?: McpServerConfig[];
+  };
 }
 
 export interface SettingsChangeEvent {
   maxConcurrentAgents?: number;
   appendSystemPromptChanged?: boolean;
+  mcpChanged?: boolean;
 }
 
 export interface SettingsRouterDependencies {
   settingsRepository: SettingsRepository;
   onSettingsChange?: (event: SettingsChangeEvent) => void;
+}
+
+function validateMcpServers(servers: McpServerConfig[]): void {
+  const ids = new Set<string>();
+
+  for (const server of servers) {
+    // Check unique IDs
+    if (ids.has(server.id)) {
+      throw new ValidationError('Duplicate server ID: ' + server.id);
+    }
+    ids.add(server.id);
+
+    // Validate required fields
+    if (!server.name || server.name.trim() === '') {
+      throw new ValidationError('Server name is required');
+    }
+
+    // Type-specific validation
+    if (server.type === 'stdio') {
+      if (!server.command || server.command.trim() === '') {
+        throw new ValidationError('Command is required for stdio servers');
+      }
+    } else if (server.type === 'http') {
+      if (!server.url || server.url.trim() === '') {
+        throw new ValidationError('URL is required for http servers');
+      }
+      // Validate URL format
+      try {
+        new URL(server.url);
+      } catch {
+        throw new ValidationError('Invalid URL: ' + server.url);
+      }
+    }
+  }
 }
 
 export function createSettingsRouter(deps: SettingsRouterDependencies): Router {
@@ -45,7 +83,7 @@ export function createSettingsRouter(deps: SettingsRouterDependencies): Router {
 
   router.put('/', asyncHandler(async (req: Request, res: Response) => {
     const body = req.body as UpdateSettingsBody;
-    const { maxConcurrentAgents, claudePermissions, agentPromptTemplate, sendWithCtrlEnter, historyLimit, enableDesktopNotifications, appendSystemPrompt, promptTemplates, defaultModel } = body;
+    const { maxConcurrentAgents, claudePermissions, agentPromptTemplate, sendWithCtrlEnter, historyLimit, enableDesktopNotifications, appendSystemPrompt, promptTemplates, mcp } = body;
 
     if (maxConcurrentAgents !== undefined && (typeof maxConcurrentAgents !== 'number' || maxConcurrentAgents < 1)) {
       throw new ValidationError('maxConcurrentAgents must be a positive number');
@@ -61,14 +99,17 @@ export function createSettingsRouter(deps: SettingsRouterDependencies): Router {
       validatePromptTemplates(promptTemplates);
     }
 
-    if (defaultModel !== undefined && !isValidModel(defaultModel)) {
-      throw new ValidationError(`Invalid model: ${defaultModel}. Supported models: ${SUPPORTED_MODELS.join(', ')}`);
+    if (mcp?.servers) {
+      validateMcpServers(mcp.servers);
     }
 
     // Get current settings to detect changes
     const currentSettings = await settingsRepository.get();
     const appendSystemPromptChanged = appendSystemPrompt !== undefined &&
       appendSystemPrompt !== currentSettings.appendSystemPrompt;
+
+    const mcpChanged = mcp !== undefined &&
+      JSON.stringify(mcp) !== JSON.stringify(currentSettings.mcp);
 
     const updated = await settingsRepository.update({
       maxConcurrentAgents,
@@ -79,7 +120,7 @@ export function createSettingsRouter(deps: SettingsRouterDependencies): Router {
       enableDesktopNotifications,
       appendSystemPrompt,
       promptTemplates,
-      defaultModel,
+      mcp,
     });
 
     // Notify about settings changes
@@ -92,6 +133,10 @@ export function createSettingsRouter(deps: SettingsRouterDependencies): Router {
 
       if (appendSystemPromptChanged) {
         changeEvent.appendSystemPromptChanged = true;
+      }
+
+      if (mcpChanged) {
+        changeEvent.mcpChanged = true;
       }
 
       if (Object.keys(changeEvent).length > 0) {

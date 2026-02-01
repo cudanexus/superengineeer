@@ -187,8 +187,9 @@
   /**
    * Open modal to fill template variables
    */
-  function openFillModal(template, variables) {
+  function openFillModal(template, variables, autoSend) {
     currentTemplate = template;
+    state.templateAutoSend = autoSend || false;
 
     $('#template-fill-title').text('Fill Template: ' + template.name);
 
@@ -283,6 +284,18 @@
 
     closeAllModals();
     insertTemplateText(renderedText);
+
+    // Check if we should auto-send
+    if (state.templateAutoSend) {
+      state.templateAutoSend = false; // Reset flag
+      // Use setTimeout to ensure the text is properly inserted first
+      setTimeout(function() {
+        if (dependencies.sendMessage) {
+          dependencies.sendMessage();
+        }
+      }, 100);
+    }
+
     currentTemplate = null;
   }
 
@@ -308,7 +321,10 @@
 
       html += '<div class="template-list-item flex items-center justify-between p-2 bg-gray-700 rounded" data-id="' + escapeHtml(template.id) + '">' +
         '<div class="flex-1 min-w-0">' +
-        '<div class="text-sm text-white truncate">' + escapeHtml(template.name) + '</div>' +
+        '<div class="flex items-center gap-2">' +
+        '<span class="text-sm text-white truncate">' + escapeHtml(template.name) + '</span>' +
+        (template.isQuickAction ? '<span class="text-xs bg-purple-600/20 text-purple-400 px-2 py-0.5 rounded">Quick Action</span>' : '') +
+        '</div>' +
         (template.description ? '<div class="text-xs text-gray-400 truncate">' + escapeHtml(template.description) + '</div>' : '') +
         '</div>' +
         '<div class="flex items-center gap-1 ml-2">' +
@@ -336,6 +352,7 @@
     $('#input-template-name').val(isNew ? '' : template.name);
     $('#input-template-description').val(isNew ? '' : (template.description || ''));
     $('#input-template-content').val(isNew ? '' : template.content);
+    $('#input-template-is-quick-action').prop('checked', isNew ? false : (template.isQuickAction || false));
 
     openModal('modal-template-editor');
     $('#input-template-name').focus();
@@ -374,7 +391,8 @@
       id: id,
       name: name,
       description: description,
-      content: content
+      content: content,
+      isQuickAction: $('#input-template-is-quick-action').is(':checked')
     };
 
     if (existingIndex >= 0) {
@@ -506,6 +524,8 @@
     closeSelector: closeSelector,
     renderSettingsTab: renderSettingsTab,
     parseTemplateVariables: parseTemplateVariables,
-    renderTemplate: renderTemplate
+    renderTemplate: renderTemplate,
+    openFillModal: openFillModal,
+    insertTemplateText: insertTemplateText
   };
 }));

@@ -232,25 +232,6 @@ describe('FileSettingsRepository', () => {
       expect(result.historyLimit).toBe(75); // Should be updated
     });
 
-    it('should validate and reject invalid model', async () => {
-      try {
-        await repository.update({
-          defaultModel: 'invalid-model',
-        });
-        // If it doesn't throw, then validation might not be implemented yet
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        expect(errorMessage).toContain('Invalid model');
-      }
-    });
-
-    it('should accept valid model', async () => {
-      const result = await repository.update({
-        defaultModel: 'claude-opus-4-20250514',
-      });
-
-      expect(result.defaultModel).toBe('claude-opus-4-20250514');
-    });
 
     it('should accept valid concurrent agents values', async () => {
       const result = await repository.update({
@@ -325,11 +306,10 @@ describe('FileSettingsRepository', () => {
         expect(settings.agentStreaming.noSessionPersistence).toBe(false);
 
         expect(settings.ralphLoop.defaultMaxTurns).toBe(5);
-        expect(settings.ralphLoop.defaultWorkerModel).toBe('claude-sonnet-4-20250514');
+        expect(settings.ralphLoop.defaultWorkerModel).toBe('claude-opus-4-20250514');
         expect(settings.ralphLoop.defaultReviewerModel).toBe('claude-sonnet-4-20250514');
 
         expect(settings.promptTemplates).toEqual(DEFAULT_PROMPT_TEMPLATES);
-        expect(settings.defaultModel).toBe('claude-sonnet-4-20250514');
       });
     });
   });

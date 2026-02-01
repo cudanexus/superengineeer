@@ -346,39 +346,6 @@ describe('SettingsRouter', () => {
       expect(onSettingsChange).not.toHaveBeenCalled();
     });
 
-    describe('defaultModel validation', () => {
-      it('should accept valid model', async () => {
-        const response = await request(app)
-          .put('/settings')
-          .send({ defaultModel: 'claude-sonnet-4-20250514' });
-
-        expect(response.status).toBe(200);
-        expect(mockRepository.update).toHaveBeenCalledWith(
-          expect.objectContaining({ defaultModel: 'claude-sonnet-4-20250514' })
-        );
-      });
-
-      it('should accept opus model', async () => {
-        const response = await request(app)
-          .put('/settings')
-          .send({ defaultModel: 'claude-opus-4-20250514' });
-
-        expect(response.status).toBe(200);
-        expect(mockRepository.update).toHaveBeenCalledWith(
-          expect.objectContaining({ defaultModel: 'claude-opus-4-20250514' })
-        );
-      });
-
-      it('should reject invalid model', async () => {
-        const response = await request(app)
-          .put('/settings')
-          .send({ defaultModel: 'invalid-model' });
-
-        expect(response.status).toBe(400);
-        const body = response.body as ErrorResponse;
-        expect(body.error).toContain('Invalid model');
-      });
-    });
 
     describe('promptTemplates validation', () => {
       it('should accept valid promptTemplates', async () => {
@@ -532,6 +499,136 @@ describe('SettingsRouter', () => {
           });
 
         expect(response.status).toBe(200);
+      });
+    });
+
+    describe('MCP validation', () => {
+      it('should accept valid MCP configuration', async () => {
+        const response = await request(app)
+          .put('/settings')
+          .send({
+            mcp: {
+              enabled: true,
+              servers: [
+                {
+                  id: 'mcp-1',
+                  name: 'Test Server',
+                  enabled: true,
+                  type: 'stdio',
+                  command: 'npx @modelcontextprotocol/test',
+                  args: ['--verbose'],
+                  env: { API_KEY: 'test' },
+                },
+              ],
+            },
+          });
+
+        expect(response.status).toBe(200);
+        expect(mockRepository.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            mcp: expect.objectContaining({
+              enabled: true,
+              servers: expect.arrayContaining([
+                expect.objectContaining({ id: 'mcp-1', name: 'Test Server' }),
+              ]),
+            }),
+          })
+        );
+      });
+
+      it('should notify when MCP configuration changes', async () => {
+        const response = await request(app)
+          .put('/settings')
+          .send({
+            mcp: {
+              enabled: false,
+              servers: [],
+            },
+          });
+
+        expect(response.status).toBe(200);
+        expect(onSettingsChange).toHaveBeenCalledWith({ mcpChanged: true });
+      });
+
+      it('should reject duplicate server IDs', async () => {
+        const response = await request(app)
+          .put('/settings')
+          .send({
+            mcp: {
+              servers: [
+                { id: 'dup-id', name: 'Server 1', type: 'stdio', command: 'cmd1', enabled: true },
+                { id: 'dup-id', name: 'Server 2', type: 'stdio', command: 'cmd2', enabled: true },
+              ],
+            },
+          });
+
+        expect(response.status).toBe(400);
+        const body = response.body as ErrorResponse;
+        expect(body.error).toContain('Duplicate server ID');
+      });
+
+      it('should reject servers without name', async () => {
+        const response = await request(app)
+          .put('/settings')
+          .send({
+            mcp: {
+              servers: [
+                { id: 'test-id', name: '', type: 'stdio', command: 'cmd', enabled: true },
+              ],
+            },
+          });
+
+        expect(response.status).toBe(400);
+        const body = response.body as ErrorResponse;
+        expect(body.error).toContain('Server name is required');
+      });
+
+      it('should reject stdio servers without command', async () => {
+        const response = await request(app)
+          .put('/settings')
+          .send({
+            mcp: {
+              servers: [
+                { id: 'test-id', name: 'Test', type: 'stdio', command: '', enabled: true },
+              ],
+            },
+          });
+
+        expect(response.status).toBe(400);
+        const body = response.body as ErrorResponse;
+        expect(body.error).toContain('Command is required for stdio servers');
+      });
+
+      it('should reject http servers without URL', async () => {
+        const response = await request(app)
+          .put('/settings')
+          .send({
+            mcp: {
+              servers: [
+                { id: 'test-id', name: 'Test', type: 'http', url: '', enabled: true },
+              ],
+            },
+          });
+
+        expect(response.status).toBe(400);
+        const body = response.body as ErrorResponse;
+        expect(body.error).toContain('URL is required for http servers');
+      });
+
+      it('should reject http servers with invalid URL', async () => {
+        const response = await request(app)
+          .put('/settings')
+          .send({
+            mcp: {
+              servers: [
+                { id: 'test-id', name: 'Test', type: 'http', url: 'not-a-url', enabled: true },
+              ],
+            },
+          });
+
+        expect(response.status).toBe(400);
+        const body = response.body as ErrorResponse;
+        expect(body.error).toContain('Invalid URL');
       });
     });
   });

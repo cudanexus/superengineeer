@@ -17,6 +17,9 @@ import {
 import { createGitService } from '../services/git-service';
 import { createShellService, ShellService } from '../services/shell-service';
 import { DefaultAgentManager, AgentManager } from '../agents';
+import { DefaultRalphLoopService } from '../services/ralph-loop/ralph-loop-service';
+import { RalphLoopService } from '../services/ralph-loop/types';
+import { FileRalphLoopRepository } from '../repositories/ralph-loop';
 import { getDataDirectory, getLogger, getGlobalLogs } from '../utils';
 import { RoadmapGenerator } from '../services';
 import packageJson from '../../package.json';
@@ -26,6 +29,9 @@ const frontendLogger = getLogger('frontend');
 let sharedAgentManager: AgentManager | null = null;
 let sharedRoadmapGenerator: RoadmapGenerator | null = null;
 let sharedShellService: ShellService | null = null;
+let sharedRalphLoopService: RalphLoopService | null = null;
+let sharedConversationRepository: FileConversationRepository | null = null;
+let sharedProjectRepository: FileProjectRepository | null = null;
 
 export interface ApiRouterDependencies {
   agentManager?: AgentManager;
@@ -40,11 +46,17 @@ export function createApiRouter(deps: ApiRouterDependencies = {}): Router {
   const dataDir = getDataDirectory();
 
   // Repositories
-  const projectRepository = new FileProjectRepository(dataDir);
+  const projectRepository = sharedProjectRepository || new FileProjectRepository(dataDir);
+  if (!sharedProjectRepository) {
+    sharedProjectRepository = projectRepository;
+  }
   // Conversation repository uses project repository to resolve project paths
-  const conversationRepository = new FileConversationRepository({
+  const conversationRepository = sharedConversationRepository || new FileConversationRepository({
     projectPathResolver: projectRepository,
   });
+  if (!sharedConversationRepository) {
+    sharedConversationRepository = conversationRepository;
+  }
   const settingsRepository = new FileSettingsRepository(dataDir);
 
   // Services
@@ -119,7 +131,15 @@ export function createApiRouter(deps: ApiRouterDependencies = {}): Router {
     res.json({ message: 'Shutting down...' });
 
     if (deps.onShutdown) {
-      setTimeout(() => deps.onShutdown!(), 100);
+      // Give response time to be sent, then trigger shutdown
+      setTimeout(() => {
+        deps.onShutdown!();
+        // Force exit if graceful shutdown takes too long
+        setTimeout(() => {
+          console.log('Force exiting process...');
+          process.exit(0);
+        }, 5000);
+      }, 100);
     }
   });
 
@@ -178,6 +198,7 @@ export function createApiRouter(deps: ApiRouterDependencies = {}): Router {
     gitService,
     shellService,
     shellEnabled,
+    ralphLoopService: getOrCreateRalphLoopService(projectRepository, settingsRepository),
   }));
 
   return router;
@@ -233,4 +254,31 @@ function getOrCreateShellService(): ShellService {
 
 export function getShellService(): ShellService | null {
   return sharedShellService;
+}
+
+function getOrCreateRalphLoopService(projectRepository: FileProjectRepository, settingsRepository?: FileSettingsRepository): RalphLoopService {
+  if (!sharedRalphLoopService) {
+    const ralphLoopRepository = new FileRalphLoopRepository({
+      projectPathResolver: projectRepository,
+    });
+    sharedRalphLoopService = new DefaultRalphLoopService({
+      repository: ralphLoopRepository,
+      projectRepository,
+      projectPathResolver: projectRepository,
+      settingsRepository,
+    });
+  }
+  return sharedRalphLoopService;
+}
+
+export function getRalphLoopService(): RalphLoopService | null {
+  return sharedRalphLoopService;
+}
+
+export function getConversationRepository(): FileConversationRepository | null {
+  return sharedConversationRepository;
+}
+
+export function getProjectRepository(): FileProjectRepository | null {
+  return sharedProjectRepository;
 }

@@ -22,6 +22,10 @@ export interface RalphLoopConfig {
   workerPromptTemplate?: string;
   /** Optional: Custom reviewer prompt template */
   reviewerPromptTemplate?: string;
+  /** Optional: Additional system prompt appended to worker agent */
+  workerSystemPrompt?: string;
+  /** Optional: Additional system prompt appended to reviewer agent */
+  reviewerSystemPrompt?: string;
 }
 
 /**
@@ -93,7 +97,15 @@ export interface RalphLoopEvents {
   reviewer_complete: (projectId: string, taskId: string, feedback: ReviewerFeedback) => void;
   loop_complete: (projectId: string, taskId: string, finalStatus: RalphLoopFinalStatus) => void;
   loop_error: (projectId: string, taskId: string, error: string) => void;
-  status_change: (projectId: string, taskId: string, status: RalphLoopStatus) => void;
+  status_change: (projectId: string, taskId: string, status: RalphLoopStatus, currentIteration?: number, maxTurns?: number) => void;
+  output: (projectId: string, taskId: string, source: 'worker' | 'reviewer', content: string) => void;
+  tool_use: (
+    projectId: string,
+    taskId: string,
+    source: 'worker' | 'reviewer',
+    toolInfo: { tool_name: string; tool_id: string; parameters: Record<string, unknown>; timestamp: string }
+  ) => void;
+  loop_deleted: (projectId: string, taskId: string) => void;
 }
 
 /**
@@ -117,6 +129,9 @@ export interface RalphLoopService {
 
   /** List all Ralph Loops for a project */
   listByProject(projectId: string): Promise<RalphLoopState[]>;
+
+  /** Delete a Ralph Loop and its associated data */
+  delete(projectId: string, taskId: string): Promise<boolean>;
 
   /** Event subscription */
   on<K extends keyof RalphLoopEvents>(event: K, listener: RalphLoopEvents[K]): void;
@@ -237,7 +252,7 @@ Be specific and actionable in your feedback. If approving, explain why the work 
  */
 export const DEFAULT_RALPH_LOOP_SETTINGS: RalphLoopSettings = {
   defaultMaxTurns: 5,
-  defaultWorkerModel: 'claude-sonnet-4-20250514',
+  defaultWorkerModel: 'claude-opus-4-20250514',
   defaultReviewerModel: 'claude-sonnet-4-20250514',
   workerPromptTemplate: DEFAULT_WORKER_PROMPT_TEMPLATE,
   reviewerPromptTemplate: DEFAULT_REVIEWER_PROMPT_TEMPLATE,

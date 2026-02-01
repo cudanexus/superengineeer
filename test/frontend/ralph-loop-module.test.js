@@ -575,7 +575,7 @@ describe('RalphLoopModule', () => {
   });
 
   describe('onProjectChanged', () => {
-    it('should clear current loop state', () => {
+    it('should clear output buffer but not current loop state', () => {
       RalphLoopModule._setCurrentLoop({
         taskId: 'task-123',
         status: 'worker_running',
@@ -585,7 +585,8 @@ describe('RalphLoopModule', () => {
       RalphLoopModule.onProjectChanged();
 
       const internalState = RalphLoopModule._getState();
-      expect(internalState.currentLoop).toBeNull();
+      // Current loop is intentionally NOT cleared - waits for server status
+      expect(internalState.currentLoop).not.toBeNull();
       expect(internalState.outputBuffer).toEqual([]);
     });
   });

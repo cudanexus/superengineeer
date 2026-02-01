@@ -18,6 +18,7 @@
   var FileCache;
   var TaskDisplayModule;
   var hljs;
+  var formatTimestamp;
 
   // Tool data store for modal access
   var toolDataStore = {};
@@ -33,6 +34,9 @@
     FileCache = deps.FileCache;
     TaskDisplayModule = deps.TaskDisplayModule;
     hljs = deps.hljs || (typeof window !== 'undefined' ? window.hljs : null);
+    formatTimestamp = deps.formatTimestamp || function(ts) {
+      return ts ? '<span class="text-xs text-gray-500 ml-2">' + new Date(ts).toLocaleTimeString() + '</span>' : '';
+    };
   }
 
   /**
@@ -493,17 +497,26 @@
     var status = toolInfo.status || 'running';
     var iconHtml = getToolIcon(toolName);
 
+    // Handle Ralph Loop phase
+    var senderPrefix = '';
+    if (msg.ralphLoopPhase) {
+      senderPrefix = (msg.ralphLoopPhase === 'worker' ? 'Worker' : 'Reviewer') + ' - ';
+    }
+
     toolDataStore[toolId] = {
       name: toolName,
       input: toolInput,
       status: status
     };
 
+    var timestampHtml = formatTimestamp(msg.timestamp);
+
     var html = '<div class="conversation-message tool-use" data-tool-id="' + escapeHtml(toolId) + '" data-msg-type="tool">' +
       '<div class="tool-header">' +
         iconHtml +
-        '<span class="tool-name">' + escapeHtml(toolName) + '</span>' +
+        '<span class="tool-name">' + escapeHtml(senderPrefix + toolName) + '</span>' +
         '<span class="tool-status ' + status + '"></span>' +
+        timestampHtml +
         '<span class="ml-auto text-xs text-gray-500">Click for details</span>' +
       '</div>';
 

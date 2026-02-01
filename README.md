@@ -6,7 +6,7 @@
 
 > **Warning**: This project is under active development. Features may change, and bugs are expected. Use at your own risk.
 
-A web-based manager for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) agents. Run and monitor multiple Claude agents across different projects with a modern UI.
+A web-based manager for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) agents. Run and monitor multiple Claude agents across different projects with a modern UI. Features include Ralph Loop iterative development, Mermaid.js diagram rendering, MCP server configuration, and more.
 
 ![Claudito Screenshot](doc/images/preview-01.png)
 
@@ -185,15 +185,21 @@ Chat with Claude in real-time. The agent auto-starts when you send your first me
 - Send follow-up messages naturally
 - Toggle permission mode (Plan/Accept Edits) at runtime
 - Plan mode with approve/reject/request changes options
+- Per-project model selection (Claude Sonnet 4/Opus 4/Opus 4.5/Haiku)
 
-#### Autonomous Mode
-Runs through ROADMAP.md milestones automatically.
+#### Ralph Loop Mode (Advanced)
+Implements Geoffrey Huntley's "Ralph Wiggum technique" - an iterative worker/reviewer pattern for complex tasks:
 
-- Parse and display ROADMAP.md structure
-- Generate roadmaps via Claude
-- Execute tasks sequentially
-- Track completion status
-- Select specific milestones or tasks to run
+- **Worker Phase**: Fresh Claude instance executes the task
+- **Reviewer Phase**: Another Claude instance reviews the work and provides structured feedback
+- **Iteration**: Worker addresses feedback, reviewer re-evaluates
+- **Completion**: Reviewer approves work, max iterations reached, or critical failure
+- **Configuration**: Set max iterations, worker/reviewer models, custom prompts
+- **Real-time Progress**: Live streaming output from both worker and reviewer
+- **History**: View past Ralph Loop executions
+
+Access via the Ralph Loop tab when an agent is running.
+
 
 ### Project Management
 
@@ -216,7 +222,7 @@ Claudito includes built-in authentication to protect your agent manager:
 
 | Feature | Description |
 |---------|-------------|
-| **Tabbed Interface** | Switch between Agent Output, Project Files, Shell, and Git |
+| **Tabbed Interface** | Switch between Agent Output, Project Files, Shell, Git, and Ralph Loop |
 | **Shell Terminal** | Full PTY terminal with directory restriction to project folder |
 | **File Browser** | Browse, view, edit, create, delete files and folders |
 | **Syntax Highlighting** | 30+ languages supported via highlight.js |
@@ -232,6 +238,8 @@ Claudito includes built-in authentication to protect your agent manager:
 | **Permission Mode Toggle** | Switch between Plan and Accept Edits modes at runtime |
 | **Desktop Notifications** | Get notified when agent needs input (optional) |
 | **Hidden Files Toggle** | Show/hide dotfiles and hidden folders in file browser |
+| **Quick Actions** | Keyboard shortcut buttons for common actions (New Project, Ralph Loop) |
+| **Prompt Templates** | Reusable message templates with interpolation variables |
 
 ### Git Integration
 
@@ -288,6 +296,9 @@ A full PTY-based terminal integrated into the UI:
 - **Offline Ready**: All assets served locally (no CDN dependencies)
 - **Graceful Shutdown**: Properly stops agents and saves state on exit
 - **PID Tracking**: Tracks agent processes and cleans up orphans on startup
+- **Mermaid.js Support**: Render Mermaid diagrams directly in Claude's output
+- **MCP Server Configuration**: Configure Model Context Protocol servers for Claude
+- **Plugin Support**: Load Claude Code plugins (e.g., bundled mermaid skill)
 
 ## Configuration
 
@@ -300,7 +311,9 @@ Access settings via the gear icon in the UI sidebar.
 | `maxConcurrentAgents` | Maximum simultaneous agents (1-10) | `3` |
 | `sendWithCtrlEnter` | Ctrl+Enter sends (true) or Enter sends (false) | `true` |
 | `historyLimit` | Max conversations in history | `25` |
-| `agentPromptTemplate` | Template for autonomous mode instructions | (see below) |
+| `agentPromptTemplate` | Template for agent instructions | (see below) |
+| `defaultModel` | Default Claude model for agents | `claude-sonnet-4-20250514` |
+| `appendSystemPrompt` | Custom text appended to Claude's system prompt | `""` |
 
 ### Permission Configuration
 
@@ -363,9 +376,47 @@ The "Skip ALL permission prompts" toggle uses `--dangerously-skip-permissions` w
 
 Each project can have its own permission overrides that extend the global rules. Access via the project's settings menu.
 
+### Prompt Templates
+
+Create reusable message templates with dynamic fields. Access via Settings > Templates.
+
+**Variable syntax**: `${type:name}` or `${type:name:options}`
+
+- `${text:varname}` - Single-line text input
+- `${textarea:varname}` - Multi-line textarea
+- `${select:varname:opt1,opt2,opt3}` - Dropdown select
+- `${checkbox:varname}` - Boolean checkbox
+
+**Usage**: Click template button near input → select template → fill variables → insert
+
+**Default templates**: Code Review, Bug Fix Request, Feature Implementation, Refactoring Request, Documentation Request
+
+### MCP (Model Context Protocol) Servers
+
+Configure MCP servers to extend Claude's capabilities. Access via Settings > MCP Servers.
+
+**MCP Server Configuration**:
+- **Name**: Display name for the server
+- **Type**: `stdio` (local command) or `http` (remote API)
+- **Command/URL**: Server executable or API endpoint
+- **Arguments**: Command-line arguments (stdio only)
+- **Environment**: Environment variables
+- **Enabled**: Toggle server on/off
+
+**Example stdio server**:
+```json
+{
+  "name": "GitHub MCP",
+  "type": "stdio",
+  "command": "npx",
+  "args": ["-y", "@modelcontextprotocol/server-github"],
+  "env": { "GITHUB_TOKEN": "your-token" }
+}
+```
+
 ### Agent Prompt Template
 
-Customize how instructions are given to agents in autonomous mode. Available variables:
+Customize how instructions are given to agents. Available variables:
 
 - `${var:project-name}` - Project name
 - `${var:phase-title}` - Current phase from ROADMAP.md
@@ -427,6 +478,18 @@ DELETE /api/projects/:id/roadmap/milestone # Delete a milestone
 DELETE /api/projects/:id/roadmap/phase     # Delete a phase
 ```
 
+### Ralph Loop
+
+```
+POST   /api/projects/:id/ralph-loop/start  # Start Ralph Loop
+POST   /api/projects/:id/ralph-loop/:taskId/stop   # Stop Ralph Loop
+POST   /api/projects/:id/ralph-loop/:taskId/pause  # Pause Ralph Loop
+POST   /api/projects/:id/ralph-loop/:taskId/resume # Resume Ralph Loop
+GET    /api/projects/:id/ralph-loop        # List all Ralph Loops
+GET    /api/projects/:id/ralph-loop/:taskId # Get Ralph Loop state
+DELETE /api/projects/:id/ralph-loop/:taskId # Delete Ralph Loop
+```
+
 ### Git Operations
 
 ```
@@ -482,6 +545,28 @@ GET    /api/auth/check                     # Check session validity
 ```
 GET    /api/settings              # Get settings
 PUT    /api/settings              # Update settings
+GET    /api/settings/models       # Get available Claude models
+```
+
+### Claude Files
+
+```
+GET    /api/projects/:id/claude-files      # Get CLAUDE.md files
+PUT    /api/projects/:id/claude-files      # Save CLAUDE.md file
+```
+
+### Permission Management
+
+```
+GET    /api/projects/:id/permissions       # Get project permission overrides
+PUT    /api/projects/:id/permissions       # Update project permissions
+```
+
+### Model Configuration
+
+```
+GET    /api/projects/:id/model             # Get project model configuration
+PUT    /api/projects/:id/model             # Update project model override
 ```
 
 ### WebSocket
@@ -504,6 +589,11 @@ ws.send(JSON.stringify({ type: 'subscribe', projectId: 'your-project-id' }));
 // - shell_output: Shell terminal output
 // - shell_exit: Shell session exited
 // - shell_error: Shell error occurred
+// - ralph_loop_status: Ralph Loop status changes
+// - ralph_loop_iteration: Ralph Loop iteration started
+// - ralph_loop_output: Ralph Loop real-time worker/reviewer output
+// - ralph_loop_complete: Ralph Loop finished
+// - ralph_loop_error: Ralph Loop error occurred
 ```
 
 ## Development
@@ -546,7 +636,11 @@ claudito/
 │   └── utils/            # Utilities
 ├── public/               # Static frontend assets
 ├── test/                 # Test files
-└── doc/                  # Documentation
+├── doc/                  # Documentation
+└── claudito-plugin/      # Bundled Claude Code plugin
+    ├── plugin.json       # Plugin manifest
+    └── skills/           # Plugin skills
+        └── mermaid.md    # Mermaid diagram generation skill
 ```
 
 ## Testing the Package Locally
@@ -733,6 +827,21 @@ Check the Debug panel (gear icon > Debug) to view:
 - Process status and PID
 - Recent logs
 - Last executed command
+
+### Mermaid diagrams not rendering
+
+Ensure that:
+1. You're using the `mermaid` language identifier in code blocks
+2. The diagram syntax is valid (check browser console for errors)
+3. Try refreshing the page if diagrams appear as "[object Object]"
+
+### Ralph Loop not working
+
+Verify that:
+1. An agent is running for the project
+2. You've provided a clear task description
+3. Worker and reviewer models are selected
+4. Check the Ralph Loop output for specific errors
 
 ## Contributing
 

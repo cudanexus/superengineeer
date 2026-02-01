@@ -15,6 +15,12 @@
   var escapeHtml;
   var ToolRenderer;
   var marked;
+  var mermaid;
+
+  // Context for tracking previous timestamps
+  var renderingContext = {
+    previousTimestamp: null
+  };
 
   /**
    * Initialize the module with dependencies
@@ -23,6 +29,52 @@
     escapeHtml = deps.escapeHtml;
     ToolRenderer = deps.ToolRenderer;
     marked = deps.marked;
+    mermaid = deps.mermaid;
+  }
+
+  /**
+   * Create custom marked renderer for mermaid support
+   */
+  function createMarkedRenderer() {
+    if (!marked || !marked.Renderer) {
+      return undefined;
+    }
+    var renderer = new marked.Renderer();
+
+    // Override code block rendering
+    renderer.code = function(token, language) {
+      // Handle new marked API (token object) and old API (code, language)
+      var code, lang;
+
+      if (typeof token === 'object' && token !== null) {
+        // New marked API - token is an object
+        code = token.text || '';
+        lang = token.lang || '';
+      } else {
+        // Old marked API - token is the code string
+        code = token;
+        lang = language || '';
+      }
+
+      if (lang === 'mermaid' && mermaid) {
+        // Generate unique ID for the diagram
+        var id = 'mermaid-' + Math.random().toString(36).substr(2, 9);
+        // Return a div that mermaid will process
+        return '<div class="mermaid" id="' + id + '">' + escapeHtml(code) + '</div>';
+      }
+
+      // Default code block rendering - use ToolRenderer if available for syntax highlighting
+      if (ToolRenderer && ToolRenderer.highlightCode) {
+        return '<pre><code class="language-' + (lang || '') + '">' +
+               ToolRenderer.highlightCode(code, lang) +
+               '</code></pre>';
+      }
+      return '<pre><code class="language-' + (lang || '') + '">' +
+             escapeHtml(code) +
+             '</code></pre>';
+    };
+
+    return renderer;
   }
 
   /**
@@ -34,11 +86,28 @@
     }
 
     try {
-      marked.setOptions({
+      var renderer = createMarkedRenderer();
+      var options = {
         breaks: true,
         gfm: true
-      });
-      return marked.parse(content);
+      };
+
+      if (renderer) {
+        options.renderer = renderer;
+      }
+
+      marked.setOptions(options);
+
+      var html = marked.parse(content);
+
+      // Schedule mermaid rendering after DOM update
+      if (mermaid && html.includes('class="mermaid"')) {
+        setTimeout(function() {
+          mermaid.run();
+        }, 0);
+      }
+
+      return html;
     } catch (e) {
       return '<pre class="whitespace-pre-wrap">' + escapeHtml(content) + '</pre>';
     }
@@ -61,6 +130,57 @@
     return '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">' +
       '<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>' +
       '</svg>';
+  }
+
+  /**
+   * Format timestamp for display with time difference
+   */
+  function formatTimestamp(timestamp) {
+    if (!timestamp) return '';
+    try {
+      var date = new Date(timestamp);
+      var timeStr = date.toLocaleTimeString();
+
+      // Calculate time difference if previous timestamp is available
+      var diffStr = '';
+      if (renderingContext.previousTimestamp) {
+        try {
+          var prevDate = new Date(renderingContext.previousTimestamp);
+          var diffMs = date.getTime() - prevDate.getTime();
+          if (diffMs > 0) {
+            diffStr = ' <span class="text-xs text-gray-400 ml-1">+' + formatTimeDifference(diffMs) + '</span>';
+          }
+        } catch (e) {
+          // Ignore error calculating difference
+        }
+      }
+
+      // Update context for next message
+      renderingContext.previousTimestamp = timestamp;
+
+      return '<span class="text-xs text-gray-500 ml-2">' + timeStr + diffStr + '</span>';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  /**
+   * Format time difference in a human readable way
+   */
+  function formatTimeDifference(diffMs) {
+    if (diffMs < 1000) {
+      return diffMs + 'ms';
+    } else if (diffMs < 60000) {
+      return Math.round(diffMs / 1000) + 's';
+    } else if (diffMs < 3600000) {
+      var minutes = Math.floor(diffMs / 60000);
+      var seconds = Math.round((diffMs % 60000) / 1000);
+      return minutes + 'm' + (seconds > 0 ? ' ' + seconds + 's' : '');
+    } else {
+      var hours = Math.floor(diffMs / 3600000);
+      var minutes = Math.round((diffMs % 3600000) / 60000);
+      return hours + 'h' + (minutes > 0 ? ' ' + minutes + 'm' : '');
+    }
   }
 
   /**
@@ -101,6 +221,7 @@
       '<div class="message-header">' +
       getUserIcon() +
       '<span class="message-sender">You</span>' +
+      formatTimestamp(msg.timestamp) +
       '</div>';
 
     if (msg.images && msg.images.length > 0) {
@@ -128,11 +249,18 @@
    */
   function renderAssistantMessage(msg, typeClass) {
     var renderedContent = renderMarkdown(msg.content);
+    var senderName = 'Claude';
+
+    // Check if this is a Ralph Loop message
+    if (msg.ralphLoopPhase) {
+      senderName = msg.ralphLoopPhase === 'worker' ? 'Worker' : 'Reviewer';
+    }
 
     return '<div class="conversation-message ' + typeClass + ' markdown-content" data-msg-type="assistant">' +
       '<div class="message-header claude-header">' +
       getClaudeIcon() +
-      '<span class="message-sender">Claude</span>' +
+      '<span class="message-sender">' + senderName + '</span>' +
+      formatTimestamp(msg.timestamp) +
       '</div>' +
       '<div class="message-content">' + renderedContent + '</div>' +
       '</div>';
@@ -151,6 +279,7 @@
       '<div class="question-header">' +
       getQuestionIcon() +
       '<span class="question-label">' + escapeHtml(header) + '</span>' +
+      formatTimestamp(msg.timestamp) +
       '</div>' +
       '<div class="question-text">' + escapeHtml(question) + '</div>';
 
@@ -195,6 +324,7 @@
       getPermissionIcon() +
       '<span class="permission-label">Permission Request</span>' +
       '<span class="permission-tool">' + escapeHtml(tool) + '</span>' +
+      formatTimestamp(msg.timestamp) +
       '</div>' +
       '<div class="permission-action">' + escapeHtml(action) + '</div>';
 
@@ -241,6 +371,7 @@
       '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="' + iconPath + '"/>' +
       '</svg>' +
       '<span class="font-medium text-white">' + label + '</span>' +
+      formatTimestamp(msg.timestamp) +
       '</div>' +
       '<div class="text-gray-300 text-sm">' + escapeHtml(msg.content) + '</div>';
 
@@ -272,6 +403,7 @@
       '<div class="flex items-center gap-2 mb-2">' +
       getCompactionIcon() +
       '<span class="font-medium text-amber-300">Context Compacted</span>' +
+      formatTimestamp(msg.timestamp) +
       '</div>' +
       '<div class="text-gray-300 text-sm">' +
       'The conversation history was summarized to reduce token usage. Previous context has been condensed.' +
@@ -338,10 +470,12 @@
     // Handle "Unknown skill: X" messages specially
     if (unknownCommand) {
       return '<div class="conversation-message result bg-amber-900/20 border-l-2 border-amber-500 p-3 rounded" data-msg-type="result">' +
-        '<div class="flex items-start gap-2">' +
+        '<div class="flex items-center gap-2 mb-2">' +
         getWarningIcon() +
+        '<span class="font-medium text-amber-300">Built-in Command Not Available</span>' +
+        formatTimestamp(msg.timestamp) +
+        '</div>' +
         '<div class="flex-1 min-w-0">' +
-        '<div class="font-medium text-amber-300 text-sm mb-1">Built-in Command Not Available</div>' +
         '<div class="text-gray-300 text-sm">' +
         '<p>The <code class="bg-gray-700 px-1 rounded">/' + escapeHtml(unknownCommand) + '</code> command is a built-in Claude Code command that only works in interactive terminal mode.</p>' +
         '<p class="mt-2 text-gray-400 text-xs">Built-in commands like /usage, /help, /compact, /context, /config, /clear, and /model are UI commands that cannot be used via the API.</p>' +
@@ -357,10 +491,12 @@
     var title = isError ? 'Command Error' : 'Command Result';
 
     var html = '<div class="conversation-message result ' + bgColor + ' border-l-2 ' + borderColor + ' p-3 rounded" data-msg-type="result">' +
-      '<div class="flex items-start gap-2">' +
+      '<div class="flex items-center gap-2 mb-2">' +
       getResultIcon(isError) +
+      '<span class="font-medium ' + titleColor + '">' + title + '</span>' +
+      formatTimestamp(msg.timestamp) +
+      '</div>' +
       '<div class="flex-1 min-w-0">' +
-      '<div class="font-medium ' + titleColor + ' text-sm mb-1">' + title + '</div>' +
       '<div class="text-gray-300 text-sm">' +
       '<pre class="whitespace-pre-wrap break-words">' + escapeHtml(msg.content) + '</pre>' +
       '</div>' +
@@ -386,6 +522,7 @@
         '<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>' +
         '</svg>' +
         '<span class="text-purple-300 font-medium">Compacting Context</span>' +
+        formatTimestamp(msg.timestamp) +
         '</div>' +
         '<div class="text-gray-400 text-sm mt-1">Summarizing conversation to reduce token usage...</div>' +
         '</div>';
@@ -393,6 +530,10 @@
 
     // Generic status message
     return '<div class="conversation-message status-change bg-gray-800/50 border-l-2 border-gray-500 p-3 rounded" data-msg-type="status_change" data-status="' + escapeHtml(status) + '">' +
+      '<div class="flex items-center gap-2 mb-1">' +
+      '<span class="text-gray-300 font-medium">Status Change</span>' +
+      formatTimestamp(msg.timestamp) +
+      '</div>' +
       '<div class="text-gray-400 text-sm">' + escapeHtml(msg.content) + '</div>' +
       '</div>';
   }
@@ -401,7 +542,13 @@
    * Render a system/fallback message
    */
   function renderSystemMessage(msg, typeClass) {
+    var timestampHtml = formatTimestamp(msg.timestamp);
+
     return '<div class="conversation-message ' + typeClass + '" data-msg-type="system">' +
+      '<div class="message-header">' +
+      '<span class="message-sender text-gray-400">System</span>' +
+      timestampHtml +
+      '</div>' +
       '<pre class="whitespace-pre-wrap">' + escapeHtml(msg.content) + '</pre>' +
       '</div>';
   }
@@ -451,6 +598,20 @@
     return renderSystemMessage(msg, typeClass);
   }
 
+  /**
+   * Reset the rendering context (clears previous timestamp)
+   */
+  function resetRenderingContext() {
+    renderingContext.previousTimestamp = null;
+  }
+
+  /**
+   * Set the starting timestamp for difference calculations
+   */
+  function setStartingTimestamp(timestamp) {
+    renderingContext.previousTimestamp = timestamp;
+  }
+
   // Public API
   return {
     init: init,
@@ -465,12 +626,17 @@
     renderUserMessage: renderUserMessage,
     renderAssistantMessage: renderAssistantMessage,
     renderSystemMessage: renderSystemMessage,
+    // Context management for timestamp differences
+    resetRenderingContext: resetRenderingContext,
+    setStartingTimestamp: setStartingTimestamp,
     // Expose icon helpers for testing
     getUserIcon: getUserIcon,
     getClaudeIcon: getClaudeIcon,
     getQuestionIcon: getQuestionIcon,
     getPermissionIcon: getPermissionIcon,
     getCompactionIcon: getCompactionIcon,
-    getResultIcon: getResultIcon
+    getResultIcon: getResultIcon,
+    // Expose formatTimestamp for tool renderer
+    formatTimestamp: formatTimestamp
   };
 }));

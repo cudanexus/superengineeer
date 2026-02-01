@@ -1,7 +1,9 @@
 import { ChildProcess, spawn, exec } from 'child_process';
 import { EventEmitter } from 'events';
+import * as path from 'path';
 
 import { getLogger, Logger } from '../utils/logger';
+import { McpServerConfig } from '../repositories/settings';
 
 export type AgentStatus = 'stopped' | 'running' | 'error';
 export type AgentMode = 'autonomous' | 'interactive';
@@ -57,6 +59,7 @@ export interface AgentMessage {
   planModeInfo?: PlanModeInfo;
   resultInfo?: ResultInfo;
   statusChangeInfo?: StatusChangeInfo;
+  ralphLoopPhase?: 'worker' | 'reviewer';
 }
 
 export interface WaitingStatus {
@@ -237,6 +240,8 @@ export interface ClaudeAgentConfig {
   isNewSession?: boolean;
   /** Claude model to use (e.g., 'claude-sonnet-4-20250514') */
   model?: string;
+  /** MCP (Model Context Protocol) servers to connect */
+  mcpServers?: McpServerConfig[];
 }
 
 export class DefaultClaudeAgent implements ClaudeAgent {
@@ -264,6 +269,7 @@ export class DefaultClaudeAgent implements ClaudeAgent {
   private readonly _configuredSessionId: string | null = null;
   private readonly _isNewSession: boolean = true;
   private readonly _model: string | undefined;
+  private readonly _mcpServers: McpServerConfig[];
   private _sessionError: string | null = null;
   private awaitingCompactionSummary = false;
   private lastInputWasCommand = false;
@@ -286,6 +292,7 @@ export class DefaultClaudeAgent implements ClaudeAgent {
     this._configuredSessionId = config.sessionId || null;
     this._isNewSession = config.isNewSession ?? true;
     this._model = config.model;
+    this._mcpServers = config.mcpServers || [];
   }
 
   get status(): AgentStatus {
@@ -720,6 +727,13 @@ export class DefaultClaudeAgent implements ClaudeAgent {
     // Add streaming options
     this.addStreamingArgs(args);
 
+    // Add MCP server configurations
+    this.addMcpServerArgs(args);
+
+    // Add plugin directory
+    const pluginPath = path.join(this.projectPath, 'claudito-plugin');
+    args.push('--plugin-dir', pluginPath);
+
     // Handle session ID: use --session-id for new sessions, --resume for existing
     if (this._configuredSessionId) {
       if (this._isNewSession) {
@@ -780,6 +794,43 @@ export class DefaultClaudeAgent implements ClaudeAgent {
 
     if (this._streaming.noSessionPersistence) {
       args.push('--no-session-persistence');
+    }
+  }
+
+  private addMcpServerArgs(args: string[]): void {
+    if (!this._mcpServers || this._mcpServers.length === 0) {
+      return;
+    }
+
+    for (const server of this._mcpServers) {
+      if (!server.enabled) continue;
+
+      if (server.type === 'stdio') {
+        // Format: --mcp-server name=stdio://command args...
+        const serverSpec = `${server.name}=stdio://${server.command}`;
+        if (server.args && server.args.length > 0) {
+          args.push('--mcp-server', `${serverSpec} ${server.args.join(' ')}`);
+        } else {
+          args.push('--mcp-server', serverSpec);
+        }
+
+        // Add environment variables
+        if (server.env) {
+          for (const [key, value] of Object.entries(server.env)) {
+            args.push('--mcp-server-env', `${server.name}:${key}=${value}`);
+          }
+        }
+      } else if (server.type === 'http') {
+        // Format: --mcp-server name=http://url
+        args.push('--mcp-server', `${server.name}=http://${server.url}`);
+
+        // Add headers
+        if (server.headers) {
+          for (const [key, value] of Object.entries(server.headers)) {
+            args.push('--mcp-server-header', `${server.name}:${key}=${value}`);
+          }
+        }
+      }
     }
   }
 

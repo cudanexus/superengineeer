@@ -73,10 +73,16 @@ export const DEFAULT_TEST_SETTINGS: GlobalSettings = {
   promptTemplates: [],
   ralphLoop: {
     defaultMaxTurns: 5,
-    defaultWorkerModel: 'claude-sonnet-4-20250514',
+    defaultWorkerModel: 'claude-opus-4-20250514',
     defaultReviewerModel: 'claude-sonnet-4-20250514',
+    defaultWorkerSystemPrompt: 'Worker prompt',
+    defaultReviewerSystemPrompt: 'Reviewer prompt',
+    historyLimit: 5,
   },
-  defaultModel: 'claude-sonnet-4-20250514',
+  mcp: {
+    enabled: true,
+    servers: [],
+  },
 };
 
 export const DEFAULT_CLAUDE_PERMISSIONS: ClaudePermissions = {
@@ -1308,6 +1314,12 @@ export function createMockRalphLoopService(): jest.Mocked<RalphLoopService> {
       }
 
       return Promise.resolve(projectStates);
+    }),
+    delete: jest.fn().mockImplementation((projectId: string, taskId: string) => {
+      const key = getCacheKey(projectId, taskId);
+      const existed = activeLoops.has(key);
+      activeLoops.delete(key);
+      return Promise.resolve(existed);
     }),
     on: jest.fn().mockImplementation(<K extends keyof RalphLoopEvents>(
       event: K,

@@ -87,7 +87,7 @@ describe('Ralph Loop Routes', () => {
         expect.objectContaining({
           taskDescription: 'Implement feature Y',
           maxTurns: 5, // default from settings
-          workerModel: 'claude-sonnet-4-20250514',
+          workerModel: 'claude-opus-4-20250514',
           reviewerModel: 'claude-sonnet-4-20250514',
         })
       );
@@ -375,59 +375,25 @@ describe('Ralph Loop Routes', () => {
   });
 
   describe('DELETE /:id/ralph-loop/:taskId', () => {
-    it('should delete an idle Ralph Loop', async () => {
-      const idleState: RalphLoopState = {
-        ...sampleRalphLoopState,
-        status: 'idle',
-      };
-      mockRalphLoopService.getState.mockResolvedValue(idleState);
+    it('should delete a Ralph Loop successfully', async () => {
+      mockRalphLoopService.delete.mockResolvedValue(true);
 
       const response = await request(app)
         .delete(`/api/projects/${sampleProject.id}/ralph-loop/task-123`);
 
-      expect(response.status).toBe(200);
-      expect(response.body.success).toBe(true);
-      // Should not call stop for idle loop
-      expect(mockRalphLoopService.stop).not.toHaveBeenCalled();
-    });
-
-    it('should stop and delete a running Ralph Loop', async () => {
-      const runningState: RalphLoopState = {
-        ...sampleRalphLoopState,
-        status: 'worker_running',
-      };
-      mockRalphLoopService.getState.mockResolvedValue(runningState);
-
-      const response = await request(app)
-        .delete(`/api/projects/${sampleProject.id}/ralph-loop/task-123`);
-
-      expect(response.status).toBe(200);
-      expect(response.body.success).toBe(true);
-      expect(mockRalphLoopService.stop).toHaveBeenCalledWith(sampleProject.id, 'task-123');
-    });
-
-    it('should stop and delete a reviewer running loop', async () => {
-      const runningState: RalphLoopState = {
-        ...sampleRalphLoopState,
-        status: 'reviewer_running',
-      };
-      mockRalphLoopService.getState.mockResolvedValue(runningState);
-
-      const response = await request(app)
-        .delete(`/api/projects/${sampleProject.id}/ralph-loop/task-123`);
-
-      expect(response.status).toBe(200);
-      expect(mockRalphLoopService.stop).toHaveBeenCalled();
+      expect(response.status).toBe(204);
+      expect(mockRalphLoopService.delete).toHaveBeenCalledWith(sampleProject.id, 'task-123');
     });
 
     it('should return 404 when Ralph Loop not found', async () => {
-      mockRalphLoopService.getState.mockResolvedValue(null);
+      mockRalphLoopService.delete.mockResolvedValue(false);
 
       const response = await request(app)
         .delete(`/api/projects/${sampleProject.id}/ralph-loop/nonexistent`);
 
       expect(response.status).toBe(404);
       expect(response.body.error).toBe('Ralph Loop not found');
+      expect(mockRalphLoopService.delete).toHaveBeenCalledWith(sampleProject.id, 'nonexistent');
     });
 
     it('should return 404 when project not found', async () => {

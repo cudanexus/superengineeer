@@ -12,7 +12,7 @@
   'use strict';
 
   // Dependencies injected via init()
-  var state, api, escapeHtml, showToast, openModal;
+  var state, api, escapeHtml, showToast, showConfirm, openModal;
   var formatDateTime, formatLogTime, formatBytes;
 
   // Full-screen log viewer state
@@ -73,6 +73,7 @@
     api = deps.api;
     escapeHtml = deps.escapeHtml;
     showToast = deps.showToast;
+    showConfirm = deps.showConfirm;
     openModal = deps.openModal;
     formatDateTime = deps.formatDateTime;
     formatLogTime = deps.formatLogTime;
@@ -189,6 +190,16 @@
       html += '</div>';
       html += '</div>';
     }
+
+    // Completion message
+    html += '<div class="bg-gray-800 rounded-lg p-4 mt-4 border border-gray-600">';
+    html += '<div class="flex items-center justify-center gap-2 text-gray-400">';
+    html += '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">';
+    html += '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>';
+    html += '</svg>';
+    html += '<span class="text-sm font-medium">Log Entry Complete</span>';
+    html += '</div>';
+    html += '</div>';
 
     html += '</div>';
 
@@ -751,8 +762,23 @@
   }
 
   function setupHandlers() {
-    $('#btn-toggle-debug').on('click', function() {
-      open();
+    // Shutdown button handler
+    $(document).on('click', '#btn-debug-shutdown', function() {
+      showConfirm('Shutdown Server', 'Are you sure you want to shutdown the server?', { danger: true, confirmText: 'Shutdown' })
+        .then(function(confirmed) {
+          if (confirmed) {
+            api.shutdownServer()
+              .done(function() {
+                showToast('Server shutdown initiated', 'success');
+              })
+              .fail(function(xhr) {
+                var errorMsg = xhr.responseJSON && xhr.responseJSON.error
+                  ? xhr.responseJSON.error
+                  : 'Failed to shutdown server';
+                showToast(errorMsg, 'error');
+              });
+          }
+        });
     });
 
     $('#btn-debug-refresh').on('click', function() {

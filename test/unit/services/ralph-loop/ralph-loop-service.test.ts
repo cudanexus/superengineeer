@@ -10,6 +10,7 @@ import {
   createMockContextInitializer,
   createTestRalphLoopConfig,
   createTestRalphLoopState,
+  createMockProjectRepository,
 } from '../../helpers/mock-factories';
 import {
   RalphLoopRepository,
@@ -163,6 +164,7 @@ function createMockReviewerAgentFactory(): jest.Mocked<ReviewerAgentFactory> {
 describe('DefaultRalphLoopService', () => {
   let service: DefaultRalphLoopService;
   let mockRepository: jest.Mocked<RalphLoopRepository>;
+  let mockProjectRepository: ReturnType<typeof createMockProjectRepository>;
   let mockContextInitializer: jest.Mocked<ContextInitializer>;
   let mockProjectPathResolver: jest.Mocked<ProjectPathResolver>;
   let mockWorkerAgentFactory: jest.Mocked<WorkerAgentFactory>;
@@ -170,6 +172,7 @@ describe('DefaultRalphLoopService', () => {
 
   beforeEach(() => {
     mockRepository = createMockRalphLoopRepository();
+    mockProjectRepository = createMockProjectRepository();
     mockContextInitializer = createMockContextInitializer();
     mockProjectPathResolver = createMockProjectPathResolver({
       'test-project': '/test/project',
@@ -179,11 +182,26 @@ describe('DefaultRalphLoopService', () => {
 
     service = new DefaultRalphLoopService({
       repository: mockRepository,
+      projectRepository: mockProjectRepository,
       projectPathResolver: mockProjectPathResolver,
       contextInitializer: mockContextInitializer,
       workerAgentFactory: mockWorkerAgentFactory,
       reviewerAgentFactory: mockReviewerAgentFactory,
     });
+  });
+
+  afterEach(async () => {
+    // Stop all running loops to prevent async operations after test completion
+    const allLoops = await service.listByProject('test-project');
+    for (const loop of allLoops) {
+      if (loop.status === 'worker_running' || loop.status === 'reviewer_running') {
+        try {
+          await service.stop('test-project', loop.taskId);
+        } catch (err) {
+          // Ignore errors during cleanup
+        }
+      }
+    }
   });
 
   describe('start', () => {
@@ -290,7 +308,9 @@ describe('DefaultRalphLoopService', () => {
       expect(listener).toHaveBeenCalledWith(
         'test-project',
         state.taskId,
-        'paused'
+        'paused',
+        expect.any(Number),  // iteration
+        expect.any(Number)   // maxTurns
       );
     });
   });
