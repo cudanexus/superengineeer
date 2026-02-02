@@ -2829,3 +2829,88 @@ body {
     margin-top: -32px;
   }
 }
+
+/* Resizable sidebar */
+.resize-handle {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  background-color: transparent;
+  transition: background-color 0.2s ease;
+  z-index: 10;
+}
+
+.resize-handle:hover {
+  background-color: rgba(59, 130, 246, 0.5);
+}
+
+.resize-handle:active {
+  background-color: rgba(59, 130, 246, 0.8);
+}
+
+#file-browser-sidebar {
+  position: relative;
+  min-width: 200px;
+  max-width: 600px;
+  resize: horizontal;
+  overflow: auto;
+}
+
+/* Prevent text selection during resize */
+.resizing {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+/* Collapse/Expand button for mobile */
+.sidebar-collapse-btn {
+  position: absolute;
+  top: 50%;
+  right: -12px;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 48px;
+  background-color: #1f2937;
+  border: 1px solid #374151;
+  border-radius: 0 4px 4px 0;
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 11;
+  transition: background-color 0.2s ease;
+}
+
+.sidebar-collapse-btn:hover {
+  background-color: #374151;
+}
+
+.sidebar-collapse-btn svg {
+  width: 16px;
+  height: 16px;
+  color: #9ca3af;
+  transition: transform 0.3s ease;
+}
+
+.sidebar-collapsed .sidebar-collapse-btn svg {
+  transform: rotate(180deg);
+}
+
+@media (max-width: 768px) {
+  .sidebar-collapse-btn {
+    display: flex;
+  }
+
+  #file-browser-sidebar {
+    transition: margin-left 0.3s ease;
+  }
+
+  #file-browser-sidebar.sidebar-collapsed {
+    margin-left: -256px;
+  }
+}

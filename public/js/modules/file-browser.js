@@ -24,6 +24,13 @@
   var getLanguageFromPath = null;
   var Validators = null;
 
+  // Resize functionality variables
+  var isResizing = false;
+  var startX = 0;
+  var startWidth = 0;
+  var MIN_WIDTH = 200;
+  var MAX_WIDTH = 600;
+
   function init(deps) {
     state = deps.state;
     api = deps.api;
@@ -36,6 +43,9 @@
     highlightCode = deps.highlightCode;
     getLanguageFromPath = deps.getLanguageFromPath;
     Validators = deps.Validators;
+
+    // Initialize resize functionality
+    initializeResize();
   }
 
   function loadFileTree(rootPath) {
@@ -1097,6 +1107,100 @@
 
   // Make toggleMarkdownPreview globally available for onclick
   window.toggleMarkdownPreview = toggleMarkdownPreview;
+
+  function initializeResize() {
+    var $sidebar = $('#file-browser-sidebar');
+    var $resizeHandle = $('<div class="resize-handle"></div>');
+    var $collapseBtn = $('<button class="sidebar-collapse-btn"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg></button>');
+
+    // Add resize handle and collapse button
+    $sidebar.append($resizeHandle);
+    $sidebar.append($collapseBtn);
+
+    // Get saved width from localStorage
+    var savedWidth = localStorage.getItem('file-browser-width');
+    if (savedWidth) {
+      var width = parseInt(savedWidth, 10);
+      if (width >= MIN_WIDTH && width <= MAX_WIDTH) {
+        $sidebar.css('width', width + 'px');
+      }
+    }
+
+    // Handle mouse down on resize handle
+    $resizeHandle.on('mousedown', function(e) {
+      isResizing = true;
+      startX = e.clientX;
+      startWidth = parseInt($sidebar.width(), 10);
+      $('body').addClass('resizing');
+      e.preventDefault();
+    });
+
+    // Handle mouse move
+    $(document).on('mousemove', function(e) {
+      if (!isResizing) return;
+
+      var width = startWidth + (e.clientX - startX);
+      width = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, width));
+      $sidebar.css('width', width + 'px');
+    });
+
+    // Handle mouse up
+    $(document).on('mouseup', function() {
+      if (!isResizing) return;
+
+      isResizing = false;
+      $('body').removeClass('resizing');
+
+      // Save width to localStorage
+      var width = $('#file-browser-sidebar').width();
+      localStorage.setItem('file-browser-width', width);
+    });
+
+    // Handle collapse button click
+    $collapseBtn.on('click', function() {
+      $sidebar.toggleClass('sidebar-collapsed');
+      var isCollapsed = $sidebar.hasClass('sidebar-collapsed');
+      localStorage.setItem('file-browser-collapsed', isCollapsed ? 'true' : 'false');
+    });
+
+    // Restore collapsed state
+    var isCollapsed = localStorage.getItem('file-browser-collapsed') === 'true';
+    if (isCollapsed && isMobileView()) {
+      $sidebar.addClass('sidebar-collapsed');
+    }
+
+    // Touch support for resize
+    var touchStartX = 0;
+    var touchStartWidth = 0;
+
+    $resizeHandle.on('touchstart', function(e) {
+      var touch = e.originalEvent.touches[0];
+      touchStartX = touch.clientX;
+      touchStartWidth = parseInt($sidebar.width(), 10);
+      $('body').addClass('resizing');
+      e.preventDefault();
+    });
+
+    $(document).on('touchmove', function(e) {
+      if (touchStartX === 0) return;
+
+      var touch = e.originalEvent.touches[0];
+      var width = touchStartWidth + (touch.clientX - touchStartX);
+      width = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, width));
+      $sidebar.css('width', width + 'px');
+    });
+
+    $(document).on('touchend touchcancel', function() {
+      if (touchStartX === 0) return;
+
+      touchStartX = 0;
+      $('body').removeClass('resizing');
+
+      // Save width to localStorage
+      var width = $('#file-browser-sidebar').width();
+      localStorage.setItem('file-browser-width', width);
+    });
+  }
 
   return {
     init: init,

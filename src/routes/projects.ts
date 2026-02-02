@@ -908,9 +908,14 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
     }
 
     const mem = process.memoryUsage();
+    const processInfo = agentManager.getProcessInfo(id);
     const debugInfo: DebugInfo = {
       lastCommand: agentManager.getLastCommand(id),
-      processInfo: agentManager.getProcessInfo(id),
+      processInfo: processInfo ? {
+        pid: processInfo.pid,
+        cwd: processInfo.cwd || processInfo.workingDirectory || '',
+        startedAt: processInfo.startedAt || (processInfo.startTime ? processInfo.startTime.toISOString() : new Date().toISOString()),
+      } : null,
       loopState: agentManager.getLoopState(id),
       recentLogs: getProjectLogs(id, limit),
       trackedProcesses: agentManager.getTrackedProcesses(),
