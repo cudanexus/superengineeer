@@ -11,6 +11,7 @@ import {
   PermissionConfig,
   AgentLimits,
   AgentStreamingOptions,
+  WaitingStatus,
 } from './claude-agent';
 import { DefaultPermissionGenerator, PermissionGenerator } from '../services/permission-generator';
 import {
@@ -19,15 +20,22 @@ import {
   ConversationRepository,
   SettingsRepository,
   McpServerConfig,
+  ProjectStatus,
 } from '../repositories';
-import {
-  InstructionGenerator,
-  RoadmapParser,
-  ParsedRoadmap,
-  MilestoneWithContext,
-} from '../services';
-import { getLogger, Logger, getPidTracker, PidTracker, isValidUUID } from '../utils';
+import { InstructionGenerator, RoadmapParser } from '../services';
+import { getLogger, Logger } from '../utils';
 import { DEFAULT_MODEL } from '../config/models';
+
+// Import new modules
+import { AgentQueue, QueuedProject } from './agent-queue';
+import { SessionManager, SessionRecoveryResult } from './session-manager';
+import {
+  AutonomousLoopOrchestrator,
+  MilestoneRef,
+  LoopState as AgentLoopState,
+  AgentCompletionResponse
+} from './autonomous-loop-orchestrator';
+import { ProcessTracker, TrackedProcessInfo, OrphanCleanupResult } from './process-tracker';
 
 export interface AgentManagerEvents {
   message: (projectId: string, message: AgentMessage) => void;
@@ -41,51 +49,11 @@ export interface AgentManagerEvents {
   sessionRecovery: (projectId: string, oldConversationId: string, newConversationId: string, reason: string) => void;
 }
 
-export interface QueuedProject {
-  projectId: string;
-  instructions: string;
-  queuedAt: string;
-}
-
 export interface AgentResourceStatus {
   runningCount: number;
   maxConcurrent: number;
   queuedCount: number;
   queuedProjects: QueuedProject[];
-}
-
-
-export interface AgentLoopState {
-  isLooping: boolean;
-  currentMilestone: MilestoneRef | null;
-  currentConversationId: string | null;
-}
-
-export interface MilestoneRef {
-  phaseId: string;
-  phaseTitle: string;
-  milestoneId: string;
-  milestoneTitle: string;
-  pendingTasks: string[];
-}
-
-export interface AgentCompletionResponse {
-  status: 'COMPLETE' | 'FAILED';
-  reason: string;
-}
-
-export interface TrackedProcessInfo {
-  pid: number;
-  projectId: string;
-  startedAt: string;
-}
-
-export interface OrphanCleanupResult {
-  foundCount: number;
-  killedCount: number;
-  killedPids: number[];
-  failedPids: number[];
-  skippedPids: number[];
 }
 
 export interface ImageData {
@@ -184,17 +152,17 @@ type EventListeners = {
   [K in keyof AgentManagerEvents]: Set<AgentManagerEvents[K]>;
 };
 
-interface LoopStateInternal {
-  isLooping: boolean;
-  shouldContinue: boolean;
-  currentMilestone: MilestoneRef | null;
-  currentConversationId: string | null;
-}
-
+/**
+ * Manages Claude agents across multiple projects.
+ * Refactored to use focused modules for queue, session, loop, and process management.
+ */
 export class DefaultAgentManager implements AgentManager {
   private readonly agents: Map<string, ClaudeAgent> = new Map();
-  private readonly queue: QueuedProject[] = [];
-  private readonly loopStates: Map<string, LoopStateInternal> = new Map();
+  private readonly agentQueue: AgentQueue;
+  private readonly sessionManager: SessionManager;
+  private readonly loopOrchestrator: AutonomousLoopOrchestrator;
+  private readonly processTracker: ProcessTracker;
+
   private readonly projectRepository: ProjectRepository;
   private readonly conversationRepository: ConversationRepository;
   private readonly settingsRepository: SettingsRepository;
@@ -202,9 +170,7 @@ export class DefaultAgentManager implements AgentManager {
   private readonly roadmapParser: RoadmapParser;
   private readonly agentFactory: AgentFactory;
   private readonly permissionGenerator: PermissionGenerator;
-  private _maxConcurrentAgents: number;
   private readonly logger: Logger;
-  private readonly pidTracker: PidTracker;
   private readonly pendingMessageSaves: Set<Promise<unknown>> = new Set();
   private readonly listeners: EventListeners = {
     message: new Set(),
@@ -217,23 +183,69 @@ export class DefaultAgentManager implements AgentManager {
     loopCompleted: new Set(),
     sessionRecovery: new Set(),
   };
+  private waitingVersions: Map<string, number> = new Map();
+  private queuedMessages: Map<string, string[]> = new Map();
+  private _maxConcurrentAgents: number;
 
-  constructor(deps: AgentManagerDependencies) {
-    this.projectRepository = deps.projectRepository;
-    this.conversationRepository = deps.conversationRepository;
-    this.settingsRepository = deps.settingsRepository;
-    this.instructionGenerator = deps.instructionGenerator;
-    this.roadmapParser = deps.roadmapParser;
-    this.agentFactory = deps.agentFactory || defaultAgentFactory;
-    this.permissionGenerator = deps.permissionGenerator || new DefaultPermissionGenerator();
-    this._maxConcurrentAgents = deps.maxConcurrentAgents ?? 3;
+  constructor({
+    projectRepository,
+    conversationRepository,
+    settingsRepository,
+    instructionGenerator,
+    roadmapParser,
+    agentFactory = defaultAgentFactory,
+    permissionGenerator,
+    maxConcurrentAgents = 3,
+  }: AgentManagerDependencies) {
+    this.projectRepository = projectRepository;
+    this.conversationRepository = conversationRepository;
+    this.settingsRepository = settingsRepository;
+    this.instructionGenerator = instructionGenerator;
+    this.roadmapParser = roadmapParser;
+    this.agentFactory = agentFactory;
+    this.permissionGenerator = permissionGenerator || new DefaultPermissionGenerator();
+    this._maxConcurrentAgents = maxConcurrentAgents;
     this.logger = getLogger('agent-manager');
-    this.pidTracker = getPidTracker();
+
+    // Initialize modules
+    this.agentQueue = new AgentQueue();
+    this.sessionManager = new SessionManager(projectRepository, conversationRepository);
+    this.loopOrchestrator = new AutonomousLoopOrchestrator(
+      projectRepository,
+      conversationRepository,
+      instructionGenerator,
+      roadmapParser
+    );
+    this.processTracker = new ProcessTracker();
+
+    // Forward events from modules
+    this.setupModuleEventForwarding();
   }
 
-  setMaxConcurrentAgents(max: number): void {
-    this._maxConcurrentAgents = Math.max(1, max);
-    void this.processQueue();
+  private setupModuleEventForwarding(): void {
+    // Forward queue events
+    this.agentQueue.on('queueChange', (queue) => {
+      this.emit('queueChange', queue);
+    });
+
+    // Forward session events
+    this.sessionManager.on('sessionRecovery', (projectId, oldId, newId, reason) => {
+      this.emit('sessionRecovery', projectId, oldId, newId, reason);
+    });
+
+    // Forward loop events
+    this.loopOrchestrator.on('milestoneStarted', (projectId, milestone) => {
+      this.emit('milestoneStarted', projectId, milestone);
+    });
+    this.loopOrchestrator.on('milestoneCompleted', (projectId, milestone, reason) => {
+      this.emit('milestoneCompleted', projectId, milestone, reason);
+    });
+    this.loopOrchestrator.on('milestoneFailed', (projectId, milestone, reason) => {
+      this.emit('milestoneFailed', projectId, milestone, reason);
+    });
+    this.loopOrchestrator.on('loopCompleted', (projectId) => {
+      this.emit('loopCompleted', projectId);
+    });
   }
 
   private get maxConcurrentAgents(): number {
@@ -245,22 +257,12 @@ export class DefaultAgentManager implements AgentManager {
       throw new Error('Agent is already running for this project');
     }
 
-    if (this.isQueued(projectId)) {
-      throw new Error('Agent is already queued for this project');
-    }
-
-    const project = await this.projectRepository.findById(projectId);
-
-    if (!project) {
-      throw new Error('Project not found');
-    }
-
     if (this.agents.size >= this.maxConcurrentAgents) {
       await this.addToQueue(projectId, instructions);
       return;
     }
 
-    await this.startAgentImmediately(projectId, project.path, instructions);
+    await this.startAgentImmediately(projectId, instructions, 'autonomous');
   }
 
   async startInteractiveAgent(projectId: string, options?: StartInteractiveAgentOptions): Promise<void> {
@@ -268,657 +270,126 @@ export class DefaultAgentManager implements AgentManager {
       throw new Error('Agent is already running for this project');
     }
 
-    if (this.isQueued(projectId)) {
+    if (this.agentQueue.isQueued(projectId)) {
       throw new Error('Agent is already queued for this project');
     }
 
     const project = await this.projectRepository.findById(projectId);
-
     if (!project) {
-      throw new Error('Project not found');
+      throw new Error(`Project not found: ${projectId}`);
     }
 
-    const { initialMessage, images, sessionId, permissionMode, isNewSession: forceNewSession } = options || {};
+    // Handle session management
+    const sessionResult = await this.sessionManager.getOrCreateSession(
+      projectId,
+      options?.sessionId,
+      options?.isNewSession
+    );
 
-    this.logger.withProject(projectId).info('Starting interactive agent', {
-      hasMessage: !!initialMessage,
-      imageCount: images?.length || 0,
-      resumingSession: !!sessionId && !forceNewSession,
-      permissionMode,
-      forceNewSession,
-    });
-
-    // Determine the session ID to use and whether it's a new session
-    let effectiveSessionId = sessionId;
-    let isNewSession = forceNewSession ?? false;
-    let oldConversationId: string | null = null;
-
-    // Create a new conversation if none exists (for storing messages and sessionId)
-    if (!project.currentConversationId) {
-      const conversation = await this.conversationRepository.create(projectId, null);
-      await this.projectRepository.setCurrentConversation(projectId, conversation.id);
-      // Use the new conversation's UUID as the session ID for Claude
-      effectiveSessionId = conversation.id;
-      isNewSession = true; // New conversation = new session
-
-      this.logger.withProject(projectId).debug('Created new conversation for interactive session', {
-        conversationId: conversation.id,
-        sessionId: effectiveSessionId,
-        isNewSession,
-      });
-    } else if (!sessionId) {
-      // If we have an existing conversation but no session ID provided, use the conversation ID to resume
-      const candidateSessionId = project.currentConversationId;
-
-      // Validate that the session ID is a valid UUID (old conversations may have non-UUID IDs)
-      if (!isValidUUID(candidateSessionId)) {
-        this.logger.withProject(projectId).warn('Existing conversation has invalid session ID, creating new conversation', {
-          invalidSessionId: candidateSessionId,
-        });
-
-        // Store old conversation ID for the recovery event
-        oldConversationId = candidateSessionId;
-
-        // Delete the old conversation with invalid session ID
-        await this.conversationRepository.deleteConversation(projectId, candidateSessionId);
-
-        // Create a new conversation with a valid UUID
-        const conversation = await this.conversationRepository.create(projectId, null);
-        await this.projectRepository.setCurrentConversation(projectId, conversation.id);
-        effectiveSessionId = conversation.id;
-        isNewSession = true;
-
-        // Emit session recovery event to notify frontend
-        const reason = 'This conversation is from an older application version and cannot be resumed. Started a new conversation.';
-        this.emit('sessionRecovery', projectId, oldConversationId, conversation.id, reason);
+    // Prepare initial instructions if provided
+    let initialInstructions: string | undefined;
+    if (options?.initialMessage) {
+      if (options.images && options.images.length > 0) {
+        initialInstructions = this.buildMultimodalContent(options.initialMessage, options.images);
       } else {
-        effectiveSessionId = candidateSessionId;
-        isNewSession = false; // Existing conversation = resume session
-
-        this.logger.withProject(projectId).debug('Using existing conversation ID as session ID', {
-          conversationId: project.currentConversationId,
-          isNewSession,
-        });
+        initialInstructions = options.initialMessage;
       }
-    } else {
-      // Session ID was provided - validate it before attempting to resume
-      if (!isValidUUID(sessionId)) {
-        this.logger.withProject(projectId).warn('Provided session ID is not a valid UUID, creating new conversation', {
-          invalidSessionId: sessionId,
-        });
-
-        // Store old session ID for the recovery event
-        oldConversationId = sessionId;
-
-        // Delete the old conversation if it exists
-        await this.conversationRepository.deleteConversation(projectId, sessionId);
-
-        // Create a new conversation with a valid UUID
-        const conversation = await this.conversationRepository.create(projectId, null);
-        await this.projectRepository.setCurrentConversation(projectId, conversation.id);
-        effectiveSessionId = conversation.id;
-        isNewSession = true;
-
-        // Emit session recovery event to notify frontend
-        const reason = 'This conversation is from an older application version and cannot be resumed. Started a new conversation.';
-        this.emit('sessionRecovery', projectId, oldConversationId, conversation.id, reason);
-      } else if (!forceNewSession) {
-        // Valid UUID and not forcing new session - it's a resume operation
-        isNewSession = false;
-      }
-      // If forceNewSession is true, keep isNewSession as true (set earlier)
     }
 
-    // Build multimodal instructions if images are provided
-    const instructions = this.buildMultimodalContent(initialMessage || '', images);
-    await this.startAgentImmediately(projectId, project.path, instructions, 'interactive', effectiveSessionId, permissionMode, isNewSession);
-  }
+    // Get permission config
+    const settings = await this.settingsRepository.get();
+    const projectOverrides = project.permissionOverrides ?? null;
+    const permArgs = this.permissionGenerator.generateArgs(settings.claudePermissions, projectOverrides);
 
-  sendInput(projectId: string, input: string, images?: ImageData[]): void {
-    const agent = this.agents.get(projectId);
-
-    if (!agent) {
-      throw new Error('No agent running for this project');
-    }
-
-    if (agent.mode !== 'interactive') {
-      throw new Error('Agent is not in interactive mode');
-    }
-
-    // Store user message in conversation (type 'user' for proper display)
-    const message: AgentMessage = {
-      type: 'user',
-      content: input,
-      timestamp: new Date().toISOString(),
+    const permissionConfig: PermissionConfig = {
+      skipPermissions: permArgs.skipPermissions,
+      allowedTools: permArgs.allowedTools,
+      disallowedTools: permArgs.disallowedTools,
+      permissionMode: options?.permissionMode || permArgs.permissionMode,
     };
 
-    // Save to conversation history (but don't emit - frontend already shows it)
-    const savePromise = this.projectRepository.findById(projectId).then((project) => {
-      if (project?.currentConversationId) {
-        return this.conversationRepository
-          .addMessage(projectId, project.currentConversationId, message)
-          .catch((err) => {
-            this.logger.error('Failed to save user message to conversation', {
-              projectId,
-              conversationId: project.currentConversationId,
-              error: err instanceof Error ? err.message : String(err),
-            });
-          });
-      } else {
-        this.logger.warn('No currentConversationId for project, user message not saved', {
-          projectId,
-        });
-      }
-      return Promise.resolve();
-    });
-    void this.trackMessageSave(savePromise);
+    // Get model
+    const model = await this.getModelForProject(projectId);
 
-    // Build multimodal content if images are provided
-    const content = this.buildMultimodalContent(input, images);
-    agent.sendInput(content);
+    // Create agent
+    const agent = this.agentFactory.create({
+      projectId,
+      projectPath: project.path,
+      mode: 'interactive',
+      permissions: permissionConfig,
+      sessionId: sessionResult.sessionId,
+      isNewSession: sessionResult.isNewSession,
+      model,
+      mcpServers: settings.mcp.servers,
+    });
+
+    // Store agent
+    this.agents.set(projectId, agent);
+    this.setupAgentListeners(agent);
+
+    // Track process when it starts
+    const statusHandler = (status: AgentStatus) => {
+      if (status === 'running' && agent.processInfo) {
+        const processInfo = agent.processInfo;
+        this.processTracker.trackProcess(projectId, processInfo.pid);
+        // Remove listener after first call
+        agent.off('status', statusHandler);
+      }
+    };
+    agent.on('status', statusHandler);
+
+    // Start agent
+    await agent.start(initialInstructions || '');
   }
 
   private buildMultimodalContent(text: string, images?: ImageData[]): string {
-    // If no images, return plain text
     if (!images || images.length === 0) {
       return text;
     }
 
-    // Build multimodal content array for Claude
-    // Claude Code CLI accepts messages with content as an array of content blocks
-    const contentBlocks: Array<{ type: string; text?: string; source?: { type: string; media_type: string; data: string } }> = [];
-
-    // Add images first
-    for (const img of images) {
-      contentBlocks.push({
-        type: 'image',
-        source: {
-          type: 'base64',
-          media_type: img.type,
-          data: img.data,
-        },
-      });
+    let content = text;
+    for (const image of images) {
+      content += `\n\n![Image](data:${image.type};base64,${image.data})`;
     }
-
-    // Add text if present
-    if (text) {
-      contentBlocks.push({
-        type: 'text',
-        text: text,
-      });
-    }
-
-    // Return as JSON string that will be parsed by the agent
-    // The agent's stdin expects a specific format - we need to encode this specially
-    return JSON.stringify(contentBlocks);
+    return content;
   }
 
-  getAgentMode(projectId: string): AgentMode | null {
+  sendInput(projectId: string, input: string, images?: ImageData[]): void {
     const agent = this.agents.get(projectId);
-    return agent?.mode || null;
-  }
-
-  async startAutonomousLoop(projectId: string): Promise<void> {
-    const projectLogger = this.logger.withProject(projectId);
-
-    if (this.loopStates.has(projectId)) {
-      throw new Error('Autonomous loop is already running for this project');
-    }
-
-    const project = await this.projectRepository.findById(projectId);
-
-    if (!project) {
-      throw new Error('Project not found');
-    }
-
-    const roadmap = await this.loadRoadmap(project.path);
-
-    if (!roadmap) {
-      throw new Error('Roadmap not found. A ROADMAP.md file is required to start the autonomous loop.');
-    }
-
-    projectLogger.info('Starting autonomous loop');
-
-    this.loopStates.set(projectId, {
-      isLooping: true,
-      shouldContinue: true,
-      currentMilestone: null,
-      currentConversationId: null,
-    });
-
-    await this.runNextMilestone(projectId);
-  }
-
-  stopAutonomousLoop(projectId: string): void {
-    const loopState = this.loopStates.get(projectId);
-
-    if (loopState) {
-      loopState.shouldContinue = false;
-      this.logger.withProject(projectId).info('Stopping autonomous loop');
-    }
-  }
-
-  getLoopState(projectId: string): AgentLoopState | null {
-    const state = this.loopStates.get(projectId);
-
-    if (!state) {
-      return null;
-    }
-
-    return {
-      isLooping: state.isLooping,
-      currentMilestone: state.currentMilestone,
-      currentConversationId: state.currentConversationId,
-    };
-  }
-
-
-
-  getLastCommand(projectId: string): string | null {
-    const agent = this.agents.get(projectId);
-    return agent?.lastCommand || null;
-  }
-
-  getProcessInfo(projectId: string): ProcessInfo | null {
-    const agent = this.agents.get(projectId);
-    return agent?.processInfo || null;
-  }
-
-  getContextUsage(projectId: string): ContextUsage | null {
-    const agent = this.agents.get(projectId);
-    return agent?.contextUsage || null;
-  }
-
-  getQueuedMessageCount(projectId: string): number {
-    const agent = this.agents.get(projectId);
-    return agent?.queuedMessageCount || 0;
-  }
-
-  getQueuedMessages(projectId: string): string[] {
-    const agent = this.agents.get(projectId);
-    return agent?.queuedMessages || [];
-  }
-
-  removeQueuedMessage(projectId: string, index: number): boolean {
-    const agent = this.agents.get(projectId);
-
     if (!agent) {
-      return false;
+      throw new Error('No agent running for this project');
     }
 
-    return agent.removeQueuedMessage(index);
-  }
-
-  getSessionId(projectId: string): string | null {
-    const agent = this.agents.get(projectId);
-    return agent?.sessionId || null;
-  }
-
-  getFullStatus(projectId: string): FullAgentStatus {
-    const agent = this.agents.get(projectId);
-
-    return {
-      status: agent?.status || 'stopped',
-      mode: agent?.mode || null,
-      queued: this.isQueued(projectId),
-      queuedMessageCount: agent?.queuedMessageCount || 0,
-      isWaitingForInput: agent?.isWaitingForInput || false,
-      waitingVersion: agent?.waitingVersion || 0,
-      sessionId: agent?.sessionId || null,
-      permissionMode: agent?.permissionMode || null,
-    };
-  }
-
-  private async runNextMilestone(projectId: string): Promise<void> {
-    const loopState = this.loopStates.get(projectId);
-    const projectLogger = this.logger.withProject(projectId);
-
-    if (!loopState || !loopState.shouldContinue) {
-      this.cleanupLoop(projectId);
-      return;
-    }
-
-
-    const project = await this.projectRepository.findById(projectId);
-
-    if (!project) {
-      this.cleanupLoop(projectId);
-      return;
-    }
-
-    const roadmap = await this.loadRoadmap(project.path);
-
-    if (!roadmap) {
-      projectLogger.error('Roadmap not found during loop');
-      this.emit('milestoneFailed', projectId, null, 'Roadmap not found');
-      this.cleanupLoop(projectId);
-      return;
-    }
-
-    // Find the next milestone with pending tasks
-    const milestoneContext = this.instructionGenerator.findFirstIncompleteMilestone(roadmap);
-
-    if (!milestoneContext) {
-      projectLogger.info('All milestones complete, loop finished');
-      this.emit('loopCompleted', projectId);
-      this.cleanupLoop(projectId);
-      return;
-    }
-
-    const milestoneRef = this.createMilestoneRef(milestoneContext);
-    loopState.currentMilestone = milestoneRef;
-
-
-    // Clear nextItem since we're working on milestone now
-    await this.projectRepository.updateNextItem(projectId, null);
-
-    // Create a new conversation for this milestone
-    const milestoneItemRef: MilestoneItemRef = {
-      phaseId: milestoneContext.phase.id,
-      milestoneId: milestoneContext.milestone.id,
-      itemIndex: 0,
-      taskTitle: `Milestone: ${milestoneContext.milestone.title}`,
-    };
-
-    const conversation = await this.conversationRepository.create(projectId, milestoneItemRef);
-    loopState.currentConversationId = conversation.id;
-    await this.projectRepository.setCurrentConversation(projectId, conversation.id);
-
-    projectLogger.info('Starting milestone', {
-      phase: milestoneContext.phase.title,
-      milestone: milestoneContext.milestone.title,
-      pendingTasks: milestoneContext.pendingTasks.length,
-    });
-
-    this.emit('milestoneStarted', projectId, milestoneRef);
-
-    // Generate instructions for all pending tasks in the milestone
-    const settings = await this.settingsRepository.get();
-    const instructions = this.instructionGenerator.generateForMilestone(settings.agentPromptTemplate, {
-      projectName: project.name,
-      phaseTitle: milestoneContext.phase.title,
-      milestoneTitle: milestoneContext.milestone.title,
-      pendingTasks: milestoneContext.pendingTasks.map((t) => t.title),
-    });
-
-    // Start the agent
-    await this.startMilestoneAgent(projectId, project.path, instructions, milestoneRef);
-  }
-
-  private async startMilestoneAgent(projectId: string, projectPath: string, instructions: string, milestoneRef: MilestoneRef): Promise<void> {
-    const projectLogger = this.logger.withProject(projectId);
-
-    try {
-      if (this.agents.size >= this.maxConcurrentAgents) {
-        await this.addToQueue(projectId, instructions);
-      } else {
-        await this.startAgentImmediately(projectId, projectPath, instructions);
-      }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      projectLogger.error('Failed to start agent', { error: errorMessage });
-      this.emit('milestoneFailed', projectId, milestoneRef, errorMessage);
-      this.cleanupLoop(projectId);
-    }
-  }
-
-  private createMilestoneRef(context: MilestoneWithContext): MilestoneRef {
-    return {
-      phaseId: context.phase.id,
-      phaseTitle: context.phase.title,
-      milestoneId: context.milestone.id,
-      milestoneTitle: context.milestone.title,
-      pendingTasks: context.pendingTasks.map((t) => t.title),
-    };
-  }
-
-  private cleanupLoop(projectId: string): void {
-    const loopState = this.loopStates.get(projectId);
-
-    if (loopState) {
-      loopState.isLooping = false;
-    }
-
-    this.loopStates.delete(projectId);
-  }
-
-  private async loadRoadmap(projectPath: string): Promise<ParsedRoadmap | null> {
-    const roadmapPath = path.join(projectPath, 'doc', 'ROADMAP.md');
-
-    try {
-      const content = await fs.promises.readFile(roadmapPath, 'utf-8');
-      return this.roadmapParser.parse(content);
-    } catch {
-      return null;
-    }
-  }
-
-  private parseAgentResponse(output: string): AgentCompletionResponse | null {
-    // Find the last JSON object in the output
-    const jsonPattern = /\{[\s\S]*?"status"\s*:\s*"(?:COMPLETE|FAILED)"[\s\S]*?"reason"\s*:\s*"[^"]*"[\s\S]*?\}/g;
-    const matches = output.match(jsonPattern);
-
-    if (!matches || matches.length === 0) {
-      return null;
-    }
-
-    // Take the last match
-    const lastMatch = matches[matches.length - 1]!;
-
-    try {
-      const parsed: unknown = JSON.parse(lastMatch);
-
-      if (
-        typeof parsed === 'object' &&
-        parsed !== null &&
-        'status' in parsed &&
-        'reason' in parsed &&
-        ((parsed as { status: string }).status === 'COMPLETE' || (parsed as { status: string }).status === 'FAILED')
-      ) {
-        const typedParsed = parsed as { status: 'COMPLETE' | 'FAILED'; reason?: string };
-        return {
-          status: typedParsed.status,
-          reason: typedParsed.reason || 'No reason provided',
-        };
-      }
-    } catch {
-      return null;
-    }
-
-    return null;
-  }
-
-  private async startAgentImmediately(
-    projectId: string,
-    projectPath: string,
-    instructions: string,
-    mode: AgentMode = 'autonomous',
-    sessionId?: string,
-    permissionModeOverride?: 'acceptEdits' | 'plan',
-    isNewSession: boolean = true
-  ): Promise<void> {
-    const settings = await this.settingsRepository.get();
-    const project = await this.projectRepository.findById(projectId);
-    const projectOverrides = project?.permissionOverrides ?? null;
-    const permArgs = this.permissionGenerator.generateArgs(settings.claudePermissions, projectOverrides);
-
-    const permissions: PermissionConfig = {
-      skipPermissions: permArgs.skipPermissions,
-      allowedTools: permArgs.allowedTools,
-      disallowedTools: permArgs.disallowedTools,
-      // Use override if provided, otherwise use settings
-      permissionMode: permissionModeOverride || permArgs.permissionMode,
-      appendSystemPrompt: settings.appendSystemPrompt,
-    };
-
-    // Convert settings limits/streaming to agent config
-    const limits: AgentLimits = {
-      maxTurns: settings.agentLimits.maxTurns > 0 ? settings.agentLimits.maxTurns : undefined,
-    };
-
-    const streaming: AgentStreamingOptions = {
-      includePartialMessages: settings.agentStreaming.includePartialMessages,
-      noSessionPersistence: settings.agentStreaming.noSessionPersistence,
-    };
-
-    // Get model for this project (project override or global default)
-    const model = await this.getModelForProject(projectId);
-
-    // Get MCP servers configuration
-    const mcpServers = settings.mcp.enabled ? settings.mcp.servers : [];
-
-    const agent = this.agentFactory.create({
-      projectId,
-      projectPath,
-      mode,
-      permissions,
-      limits,
-      streaming,
-      sessionId,
-      isNewSession,
-      model,
-      mcpServers,
-    });
-    this.setupAgentListeners(agent);
-    this.agents.set(projectId, agent);
-
-    await this.projectRepository.updateStatus(projectId, 'running');
-    agent.start(instructions);
-
-    // Track the PID for orphan cleanup on restart
-    if (agent.processInfo?.pid) {
-      this.pidTracker.addProcess(agent.processInfo.pid, projectId);
-    }
-
-    // Wait briefly for potential session errors
-    await this.delay(150);
-
-    // Check if session ID was rejected (session not found or already in use)
-    if (agent.sessionError && sessionId) {
-      const oldConversationId = sessionId;
-      this.logger.warn('Session error detected, creating fresh conversation', {
-        projectId,
-        oldConversationId,
-        error: agent.sessionError,
-      });
-
-      // Stop the failed agent
-      if (agent.processInfo?.pid) {
-        this.pidTracker.removeProcess(agent.processInfo.pid);
-      }
-      await agent.stop();
-      this.agents.delete(projectId);
-
-      // Delete the old conversation that had the invalid session
-      await this.conversationRepository.deleteConversation(projectId, oldConversationId);
-
-      // Create a new conversation with a fresh UUID
-      const newConversation = await this.conversationRepository.create(projectId, null);
-      await this.projectRepository.setCurrentConversation(projectId, newConversation.id);
-
-      this.logger.info('Created fresh conversation after session error', {
-        projectId,
-        oldConversationId,
-        newConversationId: newConversation.id,
-      });
-
-      // Emit session recovery event to notify frontend
-      const reason = agent.sessionError.includes('already in use')
-        ? 'Session was already in use. Started a new conversation.'
-        : 'Could not resume the previous conversation. It may have been deleted by Claude or this is from an old version. Started a new conversation.';
-      this.emit('sessionRecovery', projectId, oldConversationId, newConversation.id, reason);
-
-      // Restart with the new conversation's UUID as the session ID (new session)
-      const freshAgent = this.agentFactory.create({
-        projectId,
-        projectPath,
-        mode,
-        permissions,
-        limits,
-        streaming,
-        sessionId: newConversation.id,
-        isNewSession: true,
-        model,
-      });
-      this.setupAgentListeners(freshAgent);
-      this.agents.set(projectId, freshAgent);
-      freshAgent.start(instructions);
-
-      if (freshAgent.processInfo?.pid) {
-        this.pidTracker.addProcess(freshAgent.processInfo.pid, projectId);
-      }
-    }
-  }
-
-  private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  private async getModelForProject(projectId: string): Promise<string> {
-    const project = await this.projectRepository.findById(projectId);
-
-    if (project?.modelOverride) {
-      return project.modelOverride;
-    }
-
-    return DEFAULT_MODEL;
-  }
-
-  private async addToQueue(projectId: string, instructions: string): Promise<void> {
-    this.queue.push({
-      projectId,
-      instructions,
-      queuedAt: new Date().toISOString(),
-    });
-
-    await this.projectRepository.updateStatus(projectId, 'queued');
-    this.emitQueueChange();
-  }
-
-  private emitQueueChange(): void {
-    this.emit('queueChange', [...this.queue]);
+    const contentToSend = images ? this.buildMultimodalContent(input, images) : input;
+    agent.sendInput(contentToSend);
   }
 
   async stopAgent(projectId: string): Promise<void> {
     const agent = this.agents.get(projectId);
-
     if (!agent) {
       return;
     }
 
-    // Remove PID from tracking before stopping
-    if (agent.processInfo?.pid) {
-      this.pidTracker.removeProcess(agent.processInfo.pid);
-    }
-
-    // Also stop the autonomous loop if running
-    this.stopAutonomousLoop(projectId);
-
     await agent.stop();
     this.agents.delete(projectId);
-    await this.projectRepository.updateStatus(projectId, 'stopped');
+    this.processTracker.untrackProcess(projectId);
+    this.waitingVersions.delete(projectId);
+    this.queuedMessages.delete(projectId);
   }
 
   async stopAllAgents(): Promise<void> {
-    const projectIds = Array.from(this.agents.keys());
-    this.logger.info('Stopping all agents', { count: projectIds.length });
-
-    const stopPromises = projectIds.map((projectId) => this.stopAgent(projectId));
-    await Promise.all(stopPromises);
-
-    // Clear the queue as well
-    this.queue.length = 0;
-    this.emit('queueChange', []);
-
-    // Ensure all pending message saves complete (including findById lookups)
-    this.logger.info('Flushing pending message saves...');
     await this.flushPendingMessageSaves();
 
-    // Ensure all pending conversation writes complete before returning
-    this.logger.info('Flushing pending conversation writes...');
-    await this.conversationRepository.flush();
+    const stopPromises = Array.from(this.agents.keys()).map((projectId) =>
+      this.stopAgent(projectId)
+    );
 
-    this.logger.info('All agents stopped');
+    await Promise.all(stopPromises);
+
+    this.agentQueue.clear();
+    this.loopOrchestrator.getRunningProjectIds().forEach((projectId) => {
+      this.loopOrchestrator.stopLoop(projectId);
+    });
   }
 
   getAgentStatus(projectId: string): AgentStatus {
@@ -926,94 +397,205 @@ export class DefaultAgentManager implements AgentManager {
     return agent ? agent.status : 'stopped';
   }
 
+  getAgentMode(projectId: string): AgentMode | null {
+    const agent = this.agents.get(projectId);
+    return agent ? agent.mode : null;
+  }
+
   isRunning(projectId: string): boolean {
-    return this.agents.has(projectId) && this.agents.get(projectId)!.status === 'running';
+    return this.agents.has(projectId);
   }
 
   isQueued(projectId: string): boolean {
-    return this.queue.some((q) => q.projectId === projectId);
+    return this.agentQueue.isQueued(projectId);
   }
 
   isWaitingForInput(projectId: string): boolean {
     const agent = this.agents.get(projectId);
-    return agent?.isWaitingForInput ?? false;
+    return agent ? agent.isWaitingForInput : false;
   }
 
   getWaitingVersion(projectId: string): number {
-    const agent = this.agents.get(projectId);
-    return agent?.waitingVersion ?? 0;
+    return this.waitingVersions.get(projectId) || 0;
   }
 
   getResourceStatus(): AgentResourceStatus {
     return {
       runningCount: this.agents.size,
       maxConcurrent: this.maxConcurrentAgents,
-      queuedCount: this.queue.length,
-      queuedProjects: [...this.queue],
+      queuedCount: this.agentQueue.getQueueLength(),
+      queuedProjects: this.agentQueue.getQueue(),
     };
   }
 
   removeFromQueue(projectId: string): void {
-    const index = this.queue.findIndex((q) => q.projectId === projectId);
+    this.agentQueue.removeFromQueue(projectId);
+  }
 
-    if (index !== -1) {
-      this.queue.splice(index, 1);
-      this.projectRepository.updateStatus(projectId, 'stopped').catch(() => {});
-      this.emitQueueChange();
+  setMaxConcurrentAgents(max: number): void {
+    this._maxConcurrentAgents = max;
+    void this.processQueue();
+  }
+
+  async startAutonomousLoop(projectId: string): Promise<void> {
+    const project = await this.projectRepository.findById(projectId);
+    if (!project) {
+      throw new Error(`Project not found: ${projectId}`);
     }
+
+    const milestone = await this.loopOrchestrator.startLoop({
+      projectId,
+      projectPath: project.path,
+    });
+
+    if (milestone) {
+      await this.runMilestone(projectId, project.path, milestone);
+    }
+  }
+
+  stopAutonomousLoop(projectId: string): void {
+    this.loopOrchestrator.stopLoop(projectId);
+  }
+
+  getLoopState(projectId: string): AgentLoopState | null {
+    return this.loopOrchestrator.getLoopState(projectId);
+  }
+
+  getLastCommand(projectId: string): string | null {
+    const agent = this.agents.get(projectId);
+    return agent ? agent.lastCommand : null;
+  }
+
+  getProcessInfo(projectId: string): ProcessInfo | null {
+    const agent = this.agents.get(projectId);
+    return agent ? agent.processInfo : null;
+  }
+
+  getContextUsage(projectId: string): ContextUsage | null {
+    const agent = this.agents.get(projectId);
+    return agent ? agent.contextUsage : null;
+  }
+
+  getQueuedMessageCount(projectId: string): number {
+    const queuedMsg = this.queuedMessages.get(projectId);
+    return (queuedMsg?.length || 0) + this.agentQueue.getQueuedMessageCount(projectId);
+  }
+
+  getQueuedMessages(projectId: string): string[] {
+    const inMemory = this.queuedMessages.get(projectId) || [];
+    const inQueue = this.agentQueue.getQueuedMessages(projectId);
+    return [...inMemory, ...inQueue];
+  }
+
+  removeQueuedMessage(projectId: string, index: number): boolean {
+    const queuedMsg = this.queuedMessages.get(projectId);
+    if (queuedMsg && index < queuedMsg.length) {
+      queuedMsg.splice(index, 1);
+      if (queuedMsg.length === 0) {
+        this.queuedMessages.delete(projectId);
+      }
+      return true;
+    }
+
+    const adjustedIndex = index - (queuedMsg?.length || 0);
+    return this.agentQueue.removeQueuedMessage(projectId, adjustedIndex);
+  }
+
+  getSessionId(projectId: string): string | null {
+    const agent = this.agents.get(projectId);
+    return agent ? agent.sessionId : null;
+  }
+
+  getFullStatus(projectId: string): FullAgentStatus {
+    const agent = this.agents.get(projectId);
+
+    return {
+      status: this.getAgentStatus(projectId),
+      mode: this.getAgentMode(projectId),
+      queued: this.isQueued(projectId),
+      queuedMessageCount: this.getQueuedMessageCount(projectId),
+      isWaitingForInput: this.isWaitingForInput(projectId),
+      waitingVersion: this.getWaitingVersion(projectId),
+      sessionId: this.getSessionId(projectId),
+      permissionMode: agent?.permissionMode || null,
+    };
   }
 
   getTrackedProcesses(): TrackedProcessInfo[] {
-    return this.pidTracker.getTrackedProcesses();
+    return this.processTracker.getTrackedProcesses();
   }
 
   async cleanupOrphanProcesses(): Promise<OrphanCleanupResult> {
-    return this.pidTracker.cleanupOrphanProcesses();
-  }
-
-  getRunningProjectIds(): string[] {
-    return Array.from(this.agents.keys());
+    return await this.processTracker.cleanupOrphanProcesses();
   }
 
   async restartAllRunningAgents(): Promise<void> {
-    const runningProjectIds = this.getRunningProjectIds();
+    const runningAgents = Array.from(this.agents.entries()).map(([projectId, agent]) => ({
+      projectId,
+      mode: agent.mode,
+      sessionId: agent.sessionId,
+      isNewSession: false,
+      permissionMode: agent.permissionMode,
+    }));
 
-    if (runningProjectIds.length === 0) {
-      return;
-    }
-
-    this.logger.info('Restarting all running agents due to settings change', {
-      count: runningProjectIds.length,
-      projectIds: runningProjectIds,
+    this.logger.info('Restarting all running agents', {
+      count: runningAgents.length,
+      agents: runningAgents.map((a) => a.projectId),
     });
 
-    // Stop and restart each agent, preserving its session
-    for (const projectId of runningProjectIds) {
-      const agent = this.agents.get(projectId);
+    // Stop all agents without clearing the loop states
+    const stopPromises = runningAgents.map(({ projectId }) => this.stopAgent(projectId));
+    await Promise.all(stopPromises);
 
-      if (!agent) {
-        continue;
-      }
+    // Small delay to ensure clean shutdown
+    await this.delay(1000);
 
-      const sessionId = agent.sessionId;
-      const mode = agent.mode;
-
-      // Stop the agent
-      await this.stopAgent(projectId);
-
-      // Restart with the same session ID
+    // Restart each agent
+    for (const agent of runningAgents) {
       try {
-        if (mode === 'interactive') {
-          await this.startInteractiveAgent(projectId, { sessionId: sessionId || undefined });
+        if (agent.mode === 'interactive') {
+          await this.startInteractiveAgent(agent.projectId, {
+            sessionId: agent.sessionId || undefined,
+            isNewSession: agent.isNewSession,
+            permissionMode: agent.permissionMode || undefined,
+          });
+        } else {
+          // For autonomous agents, regenerate instructions from roadmap
+          const project = await this.projectRepository.findById(agent.projectId);
+          if (!project) {
+            throw new Error(`Project not found: ${agent.projectId}`);
+          }
+
+          const roadmapPath = path.join(project.path, 'doc', 'ROADMAP.md');
+          const roadmapExists = await fs.promises
+            .access(roadmapPath)
+            .then(() => true)
+            .catch(() => false);
+
+          if (!roadmapExists) {
+            this.logger.warn('Cannot restart autonomous agent without roadmap', { projectId: agent.projectId });
+            continue;
+          }
+
+          const roadmapContent = await fs.promises.readFile(roadmapPath, 'utf-8');
+          const parsedRoadmap = this.roadmapParser.parse(roadmapContent);
+          const instructions = this.instructionGenerator.generate(parsedRoadmap, project.name);
+
+          await this.startAgent(agent.projectId, instructions);
         }
-        // Autonomous agents don't need to be restarted as they run from roadmap
+
+        this.logger.info('Successfully restarted agent', { projectId: agent.projectId });
       } catch (error) {
         this.logger.error('Failed to restart agent', {
-          projectId,
+          projectId: agent.projectId,
           error: error instanceof Error ? error.message : 'Unknown error',
         });
       }
     }
+  }
+
+  getRunningProjectIds(): string[] {
+    return Array.from(this.agents.keys());
   }
 
   on<K extends keyof AgentManagerEvents>(event: K, listener: AgentManagerEvents[K]): void {
@@ -1024,80 +606,227 @@ export class DefaultAgentManager implements AgentManager {
     this.listeners[event].delete(listener);
   }
 
+  // Private helper methods
+
+  private async runMilestone(
+    projectId: string,
+    projectPath: string,
+    milestone: MilestoneRef
+  ): Promise<void> {
+    const project = await this.projectRepository.findById(projectId);
+    if (!project) {
+      this.logger.error('Project not found during milestone run', { projectId });
+      return;
+    }
+
+    const instructions = await this.loopOrchestrator.generateMilestoneInstructions(
+      projectId,
+      project.name,
+      milestone
+    );
+
+    // Create new conversation for this milestone
+    const conversation = await this.conversationRepository.create(projectId, null);
+
+    await this.projectRepository.setCurrentConversation(projectId, conversation.id);
+    this.loopOrchestrator.setCurrentMilestone(projectId, milestone, conversation.id);
+
+    await this.startMilestoneAgent(projectId, projectPath, instructions, milestone);
+  }
+
+  private async startMilestoneAgent(
+    projectId: string,
+    projectPath: string,
+    instructions: string,
+    milestoneRef: MilestoneRef
+  ): Promise<void> {
+    this.logger.info('Starting milestone agent', {
+      projectId,
+      milestone: milestoneRef.milestoneId,
+    });
+
+    await this.startAgentImmediately(projectId, instructions, 'autonomous', milestoneRef);
+  }
+
+  private async startAgentImmediately(
+    projectId: string,
+    instructions: string,
+    mode: AgentMode,
+    milestoneRef?: MilestoneRef
+  ): Promise<void> {
+    const project = await this.projectRepository.findById(projectId);
+    if (!project) {
+      throw new Error(`Project not found: ${projectId}`);
+    }
+
+    this.logger.info('Starting agent immediately', {
+      projectId,
+      mode,
+      milestone: milestoneRef?.milestoneId,
+    });
+
+    const conversationId = project.currentConversationId;
+    if (!conversationId) {
+      throw new Error('No current conversation for project');
+    }
+
+    const settings = await this.settingsRepository.get();
+    const projectOverrides = project.permissionOverrides ?? null;
+    const permArgs = this.permissionGenerator.generateArgs(settings.claudePermissions, projectOverrides);
+
+    const permissionConfig: PermissionConfig = {
+      skipPermissions: permArgs.skipPermissions,
+      allowedTools: permArgs.allowedTools,
+      disallowedTools: permArgs.disallowedTools,
+      permissionMode: permArgs.permissionMode,
+    };
+
+    const model = await this.getModelForProject(projectId);
+
+    const agent = this.agentFactory.create({
+      projectId,
+      projectPath: project.path,
+      mode,
+      permissions: permissionConfig,
+      sessionId: conversationId,
+      isNewSession: false,
+      model,
+      mcpServers: settings.mcp.servers,
+    });
+
+    this.agents.set(projectId, agent);
+    this.setupAgentListeners(agent);
+
+    // Track process when it starts
+    const statusHandler = (status: AgentStatus) => {
+      if (status === 'running' && agent.processInfo) {
+        const processInfo = agent.processInfo;
+        this.processTracker.trackProcess(projectId, processInfo.pid);
+        // Remove listener after first call
+        agent.off('status', statusHandler);
+      }
+    };
+    agent.on('status', statusHandler);
+
+    await agent.start(instructions);
+  }
+
+  private async addToQueue(projectId: string, instructions: string): Promise<void> {
+    this.logger.info('Adding project to queue', {
+      projectId,
+      queuePosition: this.agentQueue.getQueueLength() + 1,
+    });
+
+    this.agentQueue.enqueue(projectId, instructions);
+  }
+
+  private async processQueue(): Promise<void> {
+    if (this.agents.size >= this.maxConcurrentAgents) {
+      return;
+    }
+
+    const queued = this.agentQueue.dequeue();
+    if (!queued) {
+      return;
+    }
+
+    try {
+      await this.startAgentImmediately(queued.projectId, queued.instructions, 'autonomous');
+    } catch (error) {
+      this.logger.error('Failed to start queued agent', {
+        projectId: queued.projectId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+
+    // Process next in queue
+    void this.processQueue();
+  }
+
+  private async getModelForProject(projectId: string): Promise<string> {
+    const project = await this.projectRepository.findById(projectId);
+    if (!project || !project.modelOverride) {
+      return DEFAULT_MODEL;
+    }
+    return project.modelOverride;
+  }
+
   private trackMessageSave<T>(promise: Promise<T>): Promise<T> {
     this.pendingMessageSaves.add(promise);
-    void promise.finally(() => this.pendingMessageSaves.delete(promise));
+    promise.finally(() => this.pendingMessageSaves.delete(promise));
     return promise;
   }
 
   private async flushPendingMessageSaves(): Promise<void> {
-    while (this.pendingMessageSaves.size > 0) {
-      await Promise.all(Array.from(this.pendingMessageSaves));
+    if (this.pendingMessageSaves.size > 0) {
+      this.logger.info('Waiting for pending message saves', { count: this.pendingMessageSaves.size });
+      await Promise.allSettled(this.pendingMessageSaves);
     }
   }
 
   private setupAgentListeners(agent: ClaudeAgent): void {
+    const projectId = agent.projectId;
+
     const messageListener = (message: AgentMessage): void => {
-      this.emit('message', agent.projectId, message);
+      this.emit('message', projectId, message);
 
-      // Store message in conversation
-      const loopState = this.loopStates.get(agent.projectId);
-
-      if (loopState?.currentConversationId) {
-        // Autonomous mode - use loop state conversation
-        const savePromise = this.conversationRepository
-          .addMessage(agent.projectId, loopState.currentConversationId, message)
-          .catch(() => {});
-        void this.trackMessageSave(savePromise);
-
-        // Save context usage if available
-        this.saveContextUsageIfNeeded(agent, loopState.currentConversationId);
-      } else if (agent.mode === 'interactive') {
-        // Interactive mode - use project's current conversation
-        const savePromise = this.projectRepository.findById(agent.projectId).then((project) => {
-          if (project?.currentConversationId) {
-            const conversationId = project.currentConversationId;
-            return this.conversationRepository
-              .addMessage(agent.projectId, conversationId, message)
-              .then(() => {
-                // Save context usage if available
-                this.saveContextUsageIfNeeded(agent, conversationId);
-              })
-              .catch((err) => {
-                this.logger.error('Failed to save message to conversation', {
-                  projectId: agent.projectId,
-                  conversationId,
-                  messageType: message.type,
-                  error: err instanceof Error ? err.message : String(err),
-                });
-              });
-          } else {
-            this.logger.warn('No currentConversationId for project, message not saved', {
-              projectId: agent.projectId,
-              messageType: message.type,
+      // Get conversation ID - it should equal session ID
+      const conversationId = agent.sessionId;
+      if (conversationId) {
+        // Save messages to conversation based on type
+        // User messages come in as 'user' type, assistant messages as various types
+        if (message.type === 'user') {
+          this.trackMessageSave(
+            this.conversationRepository.addMessage(projectId, conversationId, message)
+          ).catch((err) => {
+            this.logger.error('Failed to save user message to conversation', {
+              projectId,
+              conversationId,
+              error: err.message,
             });
-          }
-          return Promise.resolve();
-        });
-        void this.trackMessageSave(savePromise);
+          });
+        } else if (message.type === 'stdout' || message.type === 'tool_use' || message.type === 'tool_result') {
+          // These are assistant messages
+          this.trackMessageSave(
+            this.conversationRepository.addMessage(projectId, conversationId, message)
+          ).catch((err) => {
+            this.logger.error('Failed to save assistant message to conversation', {
+              projectId,
+              conversationId,
+              error: err.message,
+            });
+          });
+        }
+      }
+
+      // For autonomous mode, check for completion
+      if (agent.mode === 'autonomous' && (message.type === 'stdout' || message.type === 'result')) {
+        const response = this.loopOrchestrator.parseAgentResponse(message.content);
+        if (response) {
+          void this.handleAgentCompletionResponse(projectId, response);
+        }
       }
     };
 
     const statusListener = (status: AgentStatus): void => {
-      this.emit('status', agent.projectId, status);
-      void this.handleStatusChange(agent.projectId, status);
+      void this.handleStatusChange(projectId, status);
     };
 
-    const waitingListener = ({ isWaiting, version }: { isWaiting: boolean; version: number }): void => {
-      this.emit('waitingForInput', agent.projectId, isWaiting, version);
+    const waitingListener = (status: WaitingStatus): void => {
+      // Store the waiting version
+      if (status.isWaiting) {
+        this.waitingVersions.set(projectId, status.version);
+      }
+
+      this.emit('waitingForInput', projectId, status.isWaiting, status.version);
     };
 
     const exitListener = (code: number | null): void => {
       void this.handleAgentExit(agent, code);
     };
 
-    const sessionNotFoundListener = (missingSessionId: string): void => {
-      void this.handleSessionNotFound(agent, missingSessionId);
+    const sessionNotFoundListener = (sessionId: string): void => {
+      void this.handleSessionNotFound(agent, sessionId);
     };
 
     agent.on('message', messageListener);
@@ -1109,198 +838,133 @@ export class DefaultAgentManager implements AgentManager {
 
   private async handleAgentExit(agent: ClaudeAgent, _code: number | null): Promise<void> {
     const projectId = agent.projectId;
-    const projectLogger = this.logger.withProject(projectId);
-    const loopState = this.loopStates.get(projectId);
 
-    // Check if this agent is still the current one (a new agent may have been started during session recovery)
-    const currentAgent = this.agents.get(projectId);
-    const isCurrentAgent = currentAgent === agent;
+    // Clean up agent
+    this.agents.delete(projectId);
+    this.processTracker.untrackProcess(projectId);
+    this.waitingVersions.delete(projectId);
 
-    // Save final context usage before cleaning up
-    const finalContextUsage = agent.contextUsage;
+    // Save context usage if available
+    const conversationId = agent.sessionId;
+    if (conversationId && agent.contextUsage) {
+      await this.sessionManager.saveContextUsage(projectId, conversationId, agent.contextUsage);
+      await this.projectRepository.updateContextUsage(projectId, agent.contextUsage);
+    }
 
-    if (finalContextUsage && isCurrentAgent) {
-      projectLogger.debug('Saving final context usage on exit', {
-        totalTokens: finalContextUsage.totalTokens,
-        inputTokens: finalContextUsage.inputTokens,
-        outputTokens: finalContextUsage.outputTokens,
-      });
-
-      // Save to project status for persistence
-      await this.projectRepository.updateContextUsage(projectId, finalContextUsage);
-
-      // Save to conversation if available
-      const project = await this.projectRepository.findById(projectId);
-
-      if (project?.currentConversationId) {
-        await this.conversationRepository
-          .updateMetadata(projectId, project.currentConversationId, { contextUsage: finalContextUsage })
-          .catch(() => {});
+    // For autonomous mode with loop, continue to next milestone
+    if (agent.mode === 'autonomous' && this.loopOrchestrator.isLooping(projectId)) {
+      const loopState = this.loopOrchestrator.getLoopState(projectId);
+      if (loopState?.currentMilestone) {
+        // Agent exited without clear completion status
+        this.logger.warn('Autonomous agent exited without completion status', {
+          projectId,
+          milestone: loopState.currentMilestone.milestoneId,
+        });
+        this.loopOrchestrator.handleMilestoneFailed(
+          projectId,
+          loopState.currentMilestone,
+          'Agent exited unexpectedly'
+        );
       }
     }
 
-    // Only delete from agents map if this is still the current agent
-    // (a new agent may have been started during session recovery)
-    if (isCurrentAgent) {
-      this.agents.delete(projectId);
-    } else {
-      projectLogger.debug('Skipping agent cleanup - a new agent was already started', {
-        exitingAgent: agent.sessionId,
-        currentAgent: currentAgent?.sessionId,
-      });
-    }
-
-    // Skip further processing if this agent was replaced (session recovery)
-    if (!isCurrentAgent) {
-      return;
-    }
-
-    // If we're in an autonomous loop, handle the completion
-    if (loopState && loopState.isLooping) {
-      const output = agent.collectedOutput;
-      const response = this.parseAgentResponse(output);
-      const currentMilestone = loopState.currentMilestone;
-
-      if (response) {
-        if (response.status === 'COMPLETE') {
-          projectLogger.info('Milestone completed', { reason: response.reason });
-
-          if (currentMilestone) {
-            this.emit('milestoneCompleted', projectId, currentMilestone, response.reason);
-          }
-
-          // Continue to next milestone if loop should continue
-          if (loopState.shouldContinue) {
-            loopState.currentMilestone = null;
-            loopState.currentConversationId = null;
-            await this.runNextMilestone(projectId);
-          } else {
-            this.cleanupLoop(projectId);
-          }
-        } else {
-          projectLogger.warn('Milestone failed', { reason: response.reason });
-          this.emit('milestoneFailed', projectId, currentMilestone, response.reason);
-          this.cleanupLoop(projectId);
-        }
-      } else {
-        projectLogger.warn('No valid completion response found in agent output');
-        this.emit('milestoneFailed', projectId, currentMilestone, 'Agent did not return a valid completion response');
-        this.cleanupLoop(projectId);
-      }
-    }
-
-    await this.processQueue();
+    // Process queue
+    void this.processQueue();
   }
 
   private async handleStatusChange(projectId: string, status: AgentStatus): Promise<void> {
-    const projectStatus = status === 'running' ? 'running' : status === 'error' ? 'error' : 'stopped';
-    await this.projectRepository.updateStatus(projectId, projectStatus);
+    this.emit('status', projectId, status);
 
-    // Save session ID to conversation when agent starts running
-    if (status === 'running') {
-      const agent = this.agents.get(projectId);
-
-      if (agent?.sessionId) {
-        const project = await this.projectRepository.findById(projectId);
-
-        if (project?.currentConversationId) {
-          await this.conversationRepository
-            .updateMetadata(projectId, project.currentConversationId, { sessionId: agent.sessionId })
-            .catch(() => {});
-        }
+    // Update project status
+    try {
+      // Map agent status to project status
+      let projectStatus: ProjectStatus['status'];
+      if (status === 'running') {
+        projectStatus = 'running';
+      } else if (status === 'error') {
+        projectStatus = 'error';
+      } else {
+        projectStatus = 'stopped';
       }
+      await this.projectRepository.updateStatus(projectId, projectStatus);
+    } catch (error) {
+      this.logger.error('Failed to update project agent status', {
+        projectId,
+        status,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
     }
   }
 
   private async handleSessionNotFound(agent: ClaudeAgent, missingSessionId: string): Promise<void> {
     const projectId = agent.projectId;
-    const projectLogger = this.logger.withProject(projectId);
 
-    projectLogger.info('Handling session not found error', {
+    this.logger.warn('Session not found by Claude, recovering', {
+      projectId,
       missingSessionId,
-      agentMode: agent.mode,
     });
 
-    // Get project info
+    // Use session manager to handle recovery
+    const recovery = await this.sessionManager.handleSessionNotFound(projectId, missingSessionId);
+
+    // Agent will exit, and user will need to restart with new session
+    this.logger.info('Session recovery complete, agent will need restart', {
+      projectId,
+      newConversationId: recovery.conversationId,
+    });
+  }
+
+  private async handleAgentCompletionResponse(
+    projectId: string,
+    response: AgentCompletionResponse
+  ): Promise<void> {
     const project = await this.projectRepository.findById(projectId);
-
     if (!project) {
-      projectLogger.error('Project not found during session recovery');
       return;
     }
 
-    const oldConversationId = project.currentConversationId;
-
-    // Stop the current agent
-    if (agent.processInfo?.pid) {
-      this.pidTracker.removeProcess(agent.processInfo.pid);
-    }
-    await agent.stop();
-    this.agents.delete(projectId);
-
-    // Clear the current conversation (same as "Clear" button)
-    // This will cause the next agent start to create a fresh conversation
-    await this.projectRepository.setCurrentConversation(projectId, null);
-
-    projectLogger.info('Cleared conversation due to session not found', {
-      oldConversationId,
-      missingSessionId,
-    });
-
-    // Emit session recovery event to notify the UI
-    const reason = 'Session not found in Claude. The previous conversation may have been deleted. Please start a new conversation.';
-    this.emit('sessionRecovery', projectId, oldConversationId || missingSessionId, '', reason);
-  }
-
-  private async processQueue(): Promise<void> {
-    if (this.queue.length === 0 || this.agents.size >= this.maxConcurrentAgents) {
+    const loopState = this.loopOrchestrator.getLoopState(projectId);
+    if (!loopState?.currentMilestone) {
       return;
     }
 
-    const next = this.queue.shift();
+    if (response.status === 'COMPLETE') {
+      const nextMilestone = await this.loopOrchestrator.handleMilestoneComplete(
+        projectId,
+        project.path,
+        loopState.currentMilestone,
+        response.reason
+      );
 
-    if (!next) {
-      return;
+      if (nextMilestone) {
+        // Stop current agent and start next milestone
+        await this.stopAgent(projectId);
+        await this.runMilestone(projectId, project.path, nextMilestone);
+      }
+    } else {
+      this.loopOrchestrator.handleMilestoneFailed(
+        projectId,
+        loopState.currentMilestone,
+        response.reason
+      );
+      await this.stopAgent(projectId);
     }
-
-    this.emitQueueChange();
-
-    const project = await this.projectRepository.findById(next.projectId);
-
-    if (!project) {
-      await this.processQueue();
-      return;
-    }
-
-    await this.startAgentImmediately(next.projectId, project.path, next.instructions);
-  }
-
-  private saveContextUsageIfNeeded(agent: ClaudeAgent, conversationId: string): void {
-    const contextUsage = agent.contextUsage;
-
-    if (!contextUsage) {
-      return;
-    }
-
-    // Save to conversation metadata
-    const savePromise = this.conversationRepository
-      .updateMetadata(agent.projectId, conversationId, { contextUsage })
-      .catch(() => {});
-    void this.trackMessageSave(savePromise);
-
-    // Also save to project status for persistence when agent is stopped
-    // (this is synchronous internally, no need to track)
-    this.projectRepository
-      .updateContextUsage(agent.projectId, contextUsage)
-      .catch(() => {});
   }
 
   private emit<K extends keyof AgentManagerEvents>(
     event: K,
     ...args: Parameters<AgentManagerEvents[K]>
   ): void {
-    for (const listener of this.listeners[event]) {
-      (listener as (...args: Parameters<AgentManagerEvents[K]>) => void)(...args);
-    }
+    this.listeners[event].forEach((listener) => {
+      try {
+        (listener as Function)(...args);
+      } catch (error) {
+        this.logger.error(`Error in ${event} listener`, { error });
+      }
+    });
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }

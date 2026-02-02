@@ -824,6 +824,11 @@
       $conv.append(MessageRenderer.renderMessage(msg));
     });
 
+    // Inject mermaid toolbars after rendering all messages
+    if (MessageRenderer.injectMermaidToolbars) {
+      MessageRenderer.injectMermaidToolbars();
+    }
+
     scrollConversationToBottom();
   }
 
@@ -933,6 +938,11 @@
 
       var $rendered = $(MessageRenderer.renderMessage(message));
       $conv.append($rendered);
+
+      // Inject mermaid toolbars if message contains mermaid diagrams
+      if (MessageRenderer.injectMermaidToolbars) {
+        MessageRenderer.injectMermaidToolbars();
+      }
 
       // Load plan content for exit plan mode messages
       if (message.type === 'plan_mode' && message.planModeInfo && message.planModeInfo.action === 'exit') {
@@ -1565,17 +1575,21 @@
       if (isMobile) {
         $('#input-hint-text').text('Tap Send to send');
         $('#input-message').attr('placeholder', 'Type a message to Claude...');
+        $('#btn-send-message').attr('title', 'Send');
       } else {
         $('#input-hint-text').text('Ctrl+Enter to send, Enter for new line');
         $('#input-message').attr('placeholder', 'Type a message to Claude... (Ctrl+Enter to send)');
+        $('#btn-send-message').attr('title', 'Send (Ctrl+Enter)');
       }
     } else {
       if (isMobile) {
         $('#input-hint-text').text('Tap Send to send');
         $('#input-message').attr('placeholder', 'Type a message to Claude...');
+        $('#btn-send-message').attr('title', 'Send');
       } else {
         $('#input-hint-text').text('Enter to send, Shift+Enter for new line');
         $('#input-message').attr('placeholder', 'Type a message to Claude... (Enter to send, Shift+Enter for new line)');
+        $('#btn-send-message').attr('title', 'Send (Enter)');
       }
     }
 
@@ -4807,6 +4821,7 @@
     setupEventHandlers();
     setupTabHandlers();
     FileBrowser.setupHandlers();
+    FileBrowser.setupDragAndDrop();
     GitModule.setupGitHandlers();
     ShellModule.setupHandlers();
     DebugModal.setupHandlers();

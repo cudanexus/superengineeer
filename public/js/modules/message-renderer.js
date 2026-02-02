@@ -623,7 +623,8 @@
     $('.mermaid-wrapper').each(function() {
       var $wrapper = $(this);
       if ($wrapper.find('.mermaid-toolbar').length === 0) {
-        var $toolbar = $('#mermaid-toolbar-template').html();
+        // Clone the toolbar template's inner content
+        var $toolbar = $('#mermaid-toolbar-template').children().first().clone();
         $wrapper.append($toolbar);
       }
     });

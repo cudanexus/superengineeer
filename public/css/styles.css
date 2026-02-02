@@ -631,11 +631,47 @@ body {
 .markdown-content ul,
 .markdown-content ol {
   margin: 0.5rem 0;
-  padding-left: 1.5rem;
+  padding-left: 2rem; /* Increased for better alignment */
+  list-style-position: outside;
+}
+
+.markdown-content ul {
+  list-style-type: disc;
+}
+
+.markdown-content ol {
+  list-style-type: decimal;
+}
+
+.markdown-content ul ul {
+  list-style-type: circle;
+}
+
+.markdown-content ul ul ul {
+  list-style-type: square;
+}
+
+/* Add nested list rules for proper indentation */
+.markdown-content ul ul,
+.markdown-content ol ul,
+.markdown-content ul ol,
+.markdown-content ol ol {
+  margin-top: 0.25rem;
+  margin-bottom: 0.25rem;
+  padding-left: 1.5rem; /* Slightly less for nested lists */
 }
 
 .markdown-content li {
   margin-bottom: 0.25rem;
+  line-height: 1.6;
+  list-style-position: outside;
+  padding-left: 0.25rem; /* Small padding for text alignment */
+}
+
+/* Fix alignment for mixed list types */
+.markdown-content li > ul,
+.markdown-content li > ol {
+  margin-top: 0.25rem;
 }
 
 .markdown-content blockquote {
@@ -702,6 +738,7 @@ body {
 .mermaid-wrapper {
   position: relative;
   display: inline-block;
+  width: 100%;
 }
 
 /* Show toolbar on hover */
@@ -1943,6 +1980,25 @@ body {
   text-overflow: ellipsis;
 }
 
+/* Drag and drop styles */
+.file-tree-item.dragging {
+  opacity: 0.5;
+  cursor: move;
+}
+
+.file-tree-item.drag-over {
+  background-color: #4c1d95;
+  outline: 2px dashed #a78bfa;
+}
+
+.file-tree-item[draggable="true"] {
+  cursor: move;
+}
+
+.file-tree-item[draggable="true"]:hover {
+  cursor: grab;
+}
+
 /* File search results */
 .file-search-result {
   display: flex;
@@ -2262,6 +2318,22 @@ body {
 .file-tab .tab-close:hover {
   background-color: rgba(239, 68, 68, 0.3);
   color: #f87171;
+}
+
+.file-tab .tab-preview-toggle {
+  padding: 0.125rem;
+  border-radius: 0.25rem;
+  opacity: 0.6;
+  transition: opacity 0.1s, background-color 0.1s;
+}
+
+.file-tab:hover .tab-preview-toggle {
+  opacity: 1;
+}
+
+.file-tab .tab-preview-toggle:hover {
+  background-color: rgba(147, 197, 253, 0.3);
+  color: #93c5fd;
 }
 
 /* File editor with syntax highlighting */

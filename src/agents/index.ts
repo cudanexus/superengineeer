@@ -5,13 +5,36 @@ export {
   AgentFactory,
   AgentManagerDependencies,
   DefaultAgentManager,
-  QueuedProject,
   AgentResourceStatus,
-  AgentLoopState,
-  AgentCompletionResponse,
-  MilestoneRef,
-  TrackedProcessInfo,
-  OrphanCleanupResult,
   ImageData,
   FullAgentStatus,
 } from './agent-manager';
+
+// Export from new modules
+export {
+  QueuedProject,
+  AgentQueueEvents,
+  AgentQueue,
+} from './agent-queue';
+
+export {
+  SessionRecoveryResult,
+  SessionManagerEvents,
+  SessionManager,
+} from './session-manager';
+
+export {
+  MilestoneRef,
+  LoopConfig,
+  LoopState,
+  AgentLoopState,
+  AgentCompletionResponse,
+  AutonomousLoopEvents,
+  AutonomousLoopOrchestrator,
+} from './autonomous-loop-orchestrator';
+
+export {
+  TrackedProcessInfo,
+  OrphanCleanupResult,
+  ProcessTracker,
+} from './process-tracker';

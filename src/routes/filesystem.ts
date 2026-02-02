@@ -397,5 +397,51 @@ export function createFilesystemRouter(service: FilesystemService): Router {
     handleCreateDirectory(service, dirPath, res);
   });
 
+  router.put('/move', async (req: Request, res: Response) => {
+    const { sourcePath, targetPath } = req.body as { sourcePath?: string; targetPath?: string };
+
+    if (!sourcePath || !targetPath) {
+      res.status(400).json({ error: 'sourcePath and targetPath are required' });
+      return;
+    }
+
+    try {
+      const fsPromises = fs.promises;
+
+      // Check if source exists
+      try {
+        await fsPromises.stat(sourcePath);
+      } catch {
+        res.status(404).json({ error: 'Source file or directory not found' });
+        return;
+      }
+
+      // Check if target already exists
+      try {
+        await fsPromises.stat(targetPath);
+        res.status(409).json({ error: 'Target already exists' });
+        return;
+      } catch {
+        // Target doesn't exist, which is good
+      }
+
+      // Perform the move
+      await fsPromises.rename(sourcePath, targetPath);
+
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Move error:', error);
+      if (error.code === 'ENOENT') {
+        res.status(404).json({ error: 'Source file or directory not found' });
+      } else if (error.code === 'EEXIST') {
+        res.status(409).json({ error: 'Target already exists' });
+      } else if (error.code === 'EXDEV') {
+        res.status(400).json({ error: 'Cannot move across different drives' });
+      } else {
+        res.status(500).json({ error: error.message || 'Failed to move file or directory' });
+      }
+    }
+  });
+
   return router;
 }

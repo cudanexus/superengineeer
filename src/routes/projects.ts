@@ -7,6 +7,7 @@ import { ProjectService, RoadmapParser, RoadmapGenerator, InstructionGenerator, 
 import { GitService } from '../services/git-service';
 import { AgentManager } from '../agents';
 import { getLogger } from '../utils';
+import { isPathWithinProject } from '../utils/path-validator';
 import { RalphLoopService, RalphLoopConfig } from '../services/ralph-loop/types';
 import { SUPPORTED_MODELS, isValidModel, getModelDisplayName, DEFAULT_MODEL } from '../config/models';
 
@@ -954,13 +955,15 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
     }
 
     // Validate that the file path is within the project or is a global Claude file
-    const normalizedPath = path.normalize(filePath);
-    const isInProject = normalizedPath.startsWith(path.normalize(project.path));
     const homeDir = process.env.HOME || process.env.USERPROFILE || '';
-    const globalClaudePath = path.join(homeDir, '.claude', 'CLAUDE.md');
-    const isGlobalClaude = normalizedPath === path.normalize(globalClaudePath);
+    const globalClaudePath = path.resolve(path.join(homeDir, '.claude', 'CLAUDE.md'));
+    const resolvedFilePath = path.resolve(filePath);
 
-    if (!isInProject && !isGlobalClaude) {
+    // Check if it's the global Claude file
+    const isGlobalClaude = resolvedFilePath === globalClaudePath;
+
+    // If not global, must be within project
+    if (!isGlobalClaude && !isPathWithinProject(resolvedFilePath, project.path)) {
       throw new ValidationError('File path must be within the project or be the global CLAUDE.md');
     }
 

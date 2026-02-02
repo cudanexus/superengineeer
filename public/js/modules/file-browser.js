@@ -78,7 +78,7 @@
 
     if (entry.isDirectory) {
       var chevronClass = isExpanded ? 'tree-chevron expanded' : 'tree-chevron';
-      var html = '<div class="file-tree-item directory' + (isSelected ? ' selected' : '') + '" data-path="' + escapeHtml(entry.path) + '" data-is-dir="true" style="padding-left: ' + indent + 'px;">' +
+      var html = '<div class="file-tree-item directory' + (isSelected ? ' selected' : '') + '" data-path="' + escapeHtml(entry.path) + '" data-is-dir="true" draggable="true" style="padding-left: ' + indent + 'px;">' +
         '<svg class="' + chevronClass + '" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
           '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>' +
         '</svg>' +
@@ -100,7 +100,7 @@
       return html;
     } else {
       var editableClass = entry.isEditable ? ' editable' : '';
-      return '<div class="file-tree-item file' + editableClass + (isSelected ? ' selected' : '') + '" data-path="' + escapeHtml(entry.path) + '" data-is-dir="false" data-editable="' + (entry.isEditable ? 'true' : 'false') + '" style="padding-left: ' + (indent + 20) + 'px;">' +
+      return '<div class="file-tree-item file' + editableClass + (isSelected ? ' selected' : '') + '" data-path="' + escapeHtml(entry.path) + '" data-is-dir="false" data-editable="' + (entry.isEditable ? 'true' : 'false') + '" draggable="true" style="padding-left: ' + indent + 'px;">' +
         '<svg class="tree-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
           '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>' +
         '</svg>' +
@@ -137,6 +137,10 @@
     }
   }
 
+  function isMarkdownFile(filePath) {
+    return /\.(md|markdown)$/i.test(filePath);
+  }
+
   function openFile(filePath, fileName) {
     // Check if file is already open
     var existingFile = state.openFiles.find(function(f) { return f.path === filePath; });
@@ -149,12 +153,15 @@
     // Load file content
     api.readFile(filePath)
       .done(function(data) {
+        var isMarkdown = isMarkdownFile(filePath);
         state.openFiles.push({
           path: filePath,
           name: fileName,
           content: data.content,
           originalContent: data.content,
-          modified: false
+          modified: false,
+          isMarkdown: isMarkdown,
+          previewMode: isMarkdown // Default to preview mode for markdown
         });
         renderOpenFileTabs();
         setActiveFile(filePath);
@@ -182,9 +189,15 @@
       $('#file-editor-empty').addClass('hidden');
       $('#file-editor-wrapper').removeClass('hidden');
       $('#file-editor-path').text(filePath);
-      $('#file-editor-textarea').val(file.content);
-      updateFileModifiedState(file);
-      updateEditorSyntaxHighlighting(filePath, file.content);
+
+      if (file.isMarkdown && file.previewMode) {
+        renderMarkdownPreview(file);
+      } else {
+        $('#file-editor-textarea').removeClass('hidden').val(file.content);
+        $('#markdown-preview-container').remove();
+        updateFileModifiedState(file);
+        updateEditorSyntaxHighlighting(filePath, file.content);
+      }
 
       // Show editor in mobile view
       showMobileFileEditor();
@@ -234,9 +247,20 @@
       var activeClass = file.path === state.activeFilePath ? ' active' : '';
       var modifiedIndicator = file.modified ? '<span class="tab-modified"></span>' : '';
 
+      var markdownToggle = '';
+      if (file.isMarkdown) {
+        markdownToggle = '<button class="tab-preview-toggle ml-1 text-gray-400 hover:text-gray-200" onclick="toggleMarkdownPreview(\'' + escapeHtml(file.path).replace(/'/g, "\\'") + '\')" title="' + (file.previewMode ? 'Edit' : 'Preview') + '">' +
+          (file.previewMode ?
+            '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>' :
+            '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>'
+          ) +
+        '</button>';
+      }
+
       var html = '<div class="file-tab' + activeClass + '" data-path="' + escapeHtml(file.path) + '">' +
         modifiedIndicator +
         '<span class="tab-name">' + escapeHtml(file.name) + '</span>' +
+        markdownToggle +
         '<button class="tab-close" data-path="' + escapeHtml(file.path) + '" title="Close">' +
           '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
             '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>' +
@@ -512,7 +536,13 @@
 
     if (!file) return;
 
-    var content = $('#file-editor-textarea').val();
+    // Get content based on whether we're in preview mode or not
+    var content;
+    if (file.isMarkdown && file.previewMode) {
+      content = file.content; // Use the stored content when in preview mode
+    } else {
+      content = $('#file-editor-textarea').val();
+    }
 
     api.writeFile(file.path, content)
       .done(function() {
@@ -943,6 +973,131 @@
     });
   }
 
+  function setupDragAndDrop() {
+    var draggedElement = null;
+    var draggedPath = null;
+
+    // Drag start
+    $(document).on('dragstart', '.file-tree-item', function(e) {
+      draggedElement = this;
+      draggedPath = $(this).attr('data-path');
+      e.originalEvent.dataTransfer.effectAllowed = 'move';
+      e.originalEvent.dataTransfer.setData('text/plain', draggedPath);
+      $(this).addClass('dragging');
+    });
+
+    // Drag over - only directories can be drop targets
+    $(document).on('dragover', '.file-tree-item.directory', function(e) {
+      e.preventDefault();
+      e.originalEvent.dataTransfer.dropEffect = 'move';
+
+      var targetPath = $(this).attr('data-path');
+      if (isValidDropTarget(draggedPath, targetPath)) {
+        $(this).addClass('drag-over');
+      }
+    });
+
+    // Drag leave
+    $(document).on('dragleave', '.file-tree-item.directory', function() {
+      $(this).removeClass('drag-over');
+    });
+
+    // Drop
+    $(document).on('drop', '.file-tree-item.directory', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      var targetPath = $(this).attr('data-path');
+      $(this).removeClass('drag-over');
+
+      if (draggedPath && isValidDropTarget(draggedPath, targetPath)) {
+        moveFileOrFolder(draggedPath, targetPath);
+      }
+    });
+
+    // Drag end
+    $(document).on('dragend', '.file-tree-item', function() {
+      $(this).removeClass('dragging');
+      $('.drag-over').removeClass('drag-over');
+      draggedElement = null;
+      draggedPath = null;
+    });
+  }
+
+  // Validate drop target (prevent dropping parent into child)
+  function isValidDropTarget(sourcePath, targetPath) {
+    if (!sourcePath || !targetPath) return false;
+    if (sourcePath === targetPath) return false;
+    if (targetPath.startsWith(sourcePath + '/')) return false;
+    return true;
+  }
+
+  // Move file/folder via API
+  function moveFileOrFolder(sourcePath, targetPath) {
+    var fileName = sourcePath.split('/').pop();
+    var newPath = targetPath + '/' + fileName;
+
+    $.ajax({
+      url: '/api/fs/move',
+      method: 'PUT',
+      contentType: 'application/json',
+      data: JSON.stringify({
+        sourcePath: sourcePath,
+        targetPath: newPath
+      })
+    }).done(function() {
+      showToast('Moved successfully', 'success');
+      loadFileTree(state.fileBrowser.rootPath);
+    }).fail(function(xhr) {
+      showToast('Failed to move: ' + getErrorMessage(xhr), 'error');
+    });
+  }
+
+  function getErrorMessage(xhr) {
+    if (xhr.responseJSON && xhr.responseJSON.error) {
+      return xhr.responseJSON.error;
+    }
+    return xhr.statusText || 'Unknown error';
+  }
+
+  function renderMarkdownPreview(file) {
+    // Hide textarea
+    $('#file-editor-textarea').addClass('hidden');
+
+    // Remove existing preview if any
+    $('#markdown-preview-container').remove();
+
+    // Create preview container
+    var previewHtml = '<div id="markdown-preview-container" class="markdown-preview markdown-content p-4 overflow-auto" style="height: calc(100% - 4rem); background-color: #1f2937; border-radius: 0.375rem;">';
+
+    // Use MessageRenderer to render markdown if available
+    if (window.MessageRenderer && MessageRenderer.renderMarkdown) {
+      previewHtml += MessageRenderer.renderMarkdown(file.content);
+    } else {
+      // Fallback to basic rendering
+      previewHtml += '<pre>' + escapeHtml(file.content) + '</pre>';
+    }
+
+    previewHtml += '</div>';
+
+    // Insert preview after editor header
+    $('#file-editor-wrapper .editor-header').after(previewHtml);
+  }
+
+  function toggleMarkdownPreview(filePath) {
+    var file = state.openFiles.find(function(f) { return f.path === filePath; });
+    if (file && file.isMarkdown) {
+      file.previewMode = !file.previewMode;
+      renderOpenFileTabs();
+      if (state.activeFilePath === filePath) {
+        setActiveFile(filePath);
+      }
+    }
+  }
+
+  // Make toggleMarkdownPreview globally available for onclick
+  window.toggleMarkdownPreview = toggleMarkdownPreview;
+
   return {
     init: init,
     loadFileTree: loadFileTree,
@@ -956,6 +1111,7 @@
     showMobileClaudeFileEditor: showMobileClaudeFileEditor,
     hideMobileClaudeFileEditor: hideMobileClaudeFileEditor,
     isMobileView: isMobileView,
-    setupHandlers: setupHandlers
+    setupHandlers: setupHandlers,
+    setupDragAndDrop: setupDragAndDrop
   };
 }));

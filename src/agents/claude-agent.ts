@@ -1,4 +1,4 @@
-import { ChildProcess, spawn, exec } from 'child_process';
+import { ChildProcess, spawn, exec, execFile } from 'child_process';
 import { EventEmitter } from 'events';
 import * as path from 'path';
 
@@ -524,7 +524,12 @@ export class DefaultClaudeAgent implements ClaudeAgent {
   private killProcessTree(pid: number): void {
     if (isWindows) {
       // Windows: taskkill with /T kills the process tree
-      exec(`taskkill /PID ${pid} /T`, () => {});
+      // Use execFile to prevent command injection
+      execFile('taskkill', ['/PID', String(pid), '/T'], (error) => {
+        if (error) {
+          this.logger.debug('Failed to kill process tree', { pid, error: error.message });
+        }
+      });
     } else {
       // Unix: Send SIGTERM to process group
       try {
@@ -543,7 +548,12 @@ export class DefaultClaudeAgent implements ClaudeAgent {
   private forceKillProcess(pid: number): void {
     if (isWindows) {
       // Windows: Force kill with /F flag
-      exec(`taskkill /PID ${pid} /T /F`, () => {});
+      // Use execFile to prevent command injection
+      execFile('taskkill', ['/PID', String(pid), '/T', '/F'], (error) => {
+        if (error) {
+          this.logger.debug('Failed to force kill process', { pid, error: error.message });
+        }
+      });
     } else {
       // Unix: SIGKILL
       try {

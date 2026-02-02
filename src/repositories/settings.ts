@@ -182,6 +182,44 @@ export const DEFAULT_PROMPT_TEMPLATES: PromptTemplate[] = [
 Base your analysis on the project files, configuration, and code structure.`,
     isQuickAction: true,
   },
+  {
+    id: 'code-review',
+    name: 'Review Code',
+    description: 'Create a comprehensive code review plan',
+    content: `Please use the /code-reviewer skill to analyze code.
+
+**Scope:** \${select:scope:Entire codebase,Specific directory,Single file,Changed files only=Entire codebase}
+
+\${select:scope=Specific directory:Directory Path:\${text:directory=/src}}
+
+\${select:scope=Single file:File Path:\${text:file=}}
+
+**Priority Focus:** \${select:priority:All areas,Performance,Security,Maintainability,Testing,Architecture=All areas}
+
+**Depth:** \${select:depth:Quick scan,Standard review,Deep analysis=Standard review}
+
+**Additional Concerns (optional):** \${textarea:concerns=}
+
+Provide a detailed plan with prioritized recommendations for improving code quality.`,
+    isQuickAction: true,
+  },
+  {
+    id: 'expert-developer',
+    name: 'Expert Developer',
+    description: 'Use expert developer for implementation',
+    content: `Please use the /expert-developer skill for development.
+
+**Task:** \${select:task_type:Implement current plan,Custom task=Implement current plan}
+
+\${select:task_type=Custom task:Task Description:\${textarea:custom_task=}}
+
+**Approach:** \${select:approach:Best practices focus,Performance optimized,Security hardened,Maintainability first=Best practices focus}
+
+**Testing Strategy:** \${select:testing:Full TDD,Write tests after,Minimal tests=Full TDD}
+
+Remember to follow all best practices and produce production-ready code.`,
+    isQuickAction: true,
+  },
 ];
 
 export interface McpServerConfig {
@@ -372,6 +410,23 @@ export class FileSettingsRepository implements SettingsRepository {
     }
   }
 
+  private mergeTemplates(existingTemplates: PromptTemplate[] | undefined): PromptTemplate[] {
+    if (!Array.isArray(existingTemplates)) {
+      return [...DEFAULT_PROMPT_TEMPLATES];
+    }
+
+    // Get IDs of existing templates
+    const existingIds = existingTemplates.map(t => t.id);
+
+    // Find default templates that are missing
+    const missingDefaults = DEFAULT_PROMPT_TEMPLATES.filter(
+      defaultTemplate => !existingIds.includes(defaultTemplate.id)
+    );
+
+    // Merge existing with missing defaults
+    return [...existingTemplates, ...missingDefaults];
+  }
+
   private mergeWithDefaults(parsed: Partial<GlobalSettings>): GlobalSettings {
     const parsedPerms = parsed.claudePermissions;
     const parsedLimits = parsed.agentLimits;
@@ -402,7 +457,7 @@ export class FileSettingsRepository implements SettingsRepository {
         includePartialMessages: parsedStreaming?.includePartialMessages ?? DEFAULT_SETTINGS.agentStreaming.includePartialMessages,
         noSessionPersistence: parsedStreaming?.noSessionPersistence ?? DEFAULT_SETTINGS.agentStreaming.noSessionPersistence,
       },
-      promptTemplates: Array.isArray(parsed.promptTemplates) ? parsed.promptTemplates : DEFAULT_SETTINGS.promptTemplates,
+      promptTemplates: this.mergeTemplates(parsed.promptTemplates),
       ralphLoop: {
         defaultMaxTurns: parsedRalphLoop?.defaultMaxTurns ?? DEFAULT_SETTINGS.ralphLoop.defaultMaxTurns,
         // Migrate old Sonnet default to Opus

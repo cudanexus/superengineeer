@@ -1,4 +1,4 @@
-import { ChildProcess, spawn, exec } from 'child_process';
+import { ChildProcess, spawn, exec, execFile } from 'child_process';
 import { EventEmitter } from 'events';
 import * as path from 'path';
 
@@ -642,7 +642,8 @@ export class ReviewerAgent {
 
   private killProcessTree(pid: number): void {
     if (isWindows) {
-      exec(`taskkill /PID ${pid} /T`, () => {});
+      // Use execFile to prevent command injection
+      execFile('taskkill', ['/PID', String(pid), '/T'], () => {});
     } else {
       try {
         process.kill(-pid, 'SIGTERM');
@@ -658,7 +659,8 @@ export class ReviewerAgent {
 
   private forceKillProcess(pid: number): void {
     if (isWindows) {
-      exec(`taskkill /PID ${pid} /T /F`, () => {});
+      // Use execFile to prevent command injection
+      execFile('taskkill', ['/PID', String(pid), '/T', '/F'], () => {});
     } else {
       try {
         process.kill(-pid, 'SIGKILL');
