@@ -11,8 +11,8 @@ import {
   RoadmapRespondBody,
   NextItemBody
 } from './types';
-import { MilestoneItemRef, ProjectStatus } from '../../repositories';
-import { validateBody, validateParams } from '../../middleware/validation';
+import { MilestoneItemRef } from '../../repositories';
+import { validateBody } from '../../middleware/validation';
 import { validateProjectExists } from '../../middleware/project';
 import { roadmapGenerationRateLimit } from '../../middleware/rate-limit';
 import {
@@ -37,7 +37,7 @@ export function createRoadmapRouter(deps: ProjectRouterDependencies): Router {
   router.get('/', validateProjectExists(projectRepository), asyncHandler(async (req: Request, res: Response) => {
     const project = req.project!;
 
-    const roadmapPath = path.join((project as ProjectStatus).path, 'doc', 'ROADMAP.md');
+    const roadmapPath = path.join((project).path, 'doc', 'ROADMAP.md');
 
     try {
       const content = await fs.promises.readFile(roadmapPath, 'utf-8');
@@ -57,8 +57,8 @@ export function createRoadmapRouter(deps: ProjectRouterDependencies): Router {
 
     const result = await roadmapGenerator.generate({
       projectId: id,
-      projectPath: (project as ProjectStatus).path,
-      projectName: (project as ProjectStatus).name,
+      projectPath: (project).path,
+      projectName: (project).name,
       prompt: prompt!,
     });
 
@@ -76,7 +76,7 @@ export function createRoadmapRouter(deps: ProjectRouterDependencies): Router {
     const body = req.body as RoadmapPromptBody;
     const { prompt } = body;
 
-    const roadmapPath = path.join((project as ProjectStatus).path, 'doc', 'ROADMAP.md');
+    const roadmapPath = path.join((project).path, 'doc', 'ROADMAP.md');
 
     // Read existing roadmap
     let existingContent = '';
@@ -90,8 +90,8 @@ export function createRoadmapRouter(deps: ProjectRouterDependencies): Router {
     // Generate modified roadmap
     const result = await roadmapGenerator.generate({
       projectId: id,
-      projectPath: (project as ProjectStatus).path,
-      projectName: (project as ProjectStatus).name,
+      projectPath: (project).path,
+      projectName: (project).name,
       prompt: `Here is the existing ROADMAP.md:\n\n${existingContent}\n\nPlease modify it according to this request: ${prompt}`,
     });
 
@@ -112,7 +112,7 @@ export function createRoadmapRouter(deps: ProjectRouterDependencies): Router {
     const body = req.body as DeleteTaskBody;
     const { phaseId, milestoneId, taskIndex } = body;
 
-    const roadmapPath = path.join((project as ProjectStatus).path, 'doc', 'ROADMAP.md');
+    const roadmapPath = path.join((project).path, 'doc', 'ROADMAP.md');
 
     let content: string;
 
@@ -135,7 +135,7 @@ export function createRoadmapRouter(deps: ProjectRouterDependencies): Router {
     const body = req.body as DeleteMilestoneBody;
     const { phaseId, milestoneId } = body;
 
-    const roadmapPath = path.join((project as ProjectStatus).path, 'doc', 'ROADMAP.md');
+    const roadmapPath = path.join((project).path, 'doc', 'ROADMAP.md');
 
     let content: string;
 
@@ -158,7 +158,7 @@ export function createRoadmapRouter(deps: ProjectRouterDependencies): Router {
     const body = req.body as DeletePhaseBody;
     const { phaseId } = body;
 
-    const roadmapPath = path.join((project as ProjectStatus).path, 'doc', 'ROADMAP.md');
+    const roadmapPath = path.join((project).path, 'doc', 'ROADMAP.md');
 
     let content: string;
 

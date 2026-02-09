@@ -1254,7 +1254,9 @@ describe('DefaultWebSocketServer', () => {
         }));
 
         const clients = wsServer.getConnectedClients('test-project');
-        expect(new Date(clients[0]?.lastResourceUpdate!).getTime())
+        const lastUpdate = clients[0]?.lastResourceUpdate;
+        expect(lastUpdate).toBeDefined();
+        expect(new Date(lastUpdate!).getTime())
           .toBeGreaterThanOrEqual(new Date(beforeUpdate).getTime());
       });
 

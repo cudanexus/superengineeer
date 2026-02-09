@@ -5,7 +5,7 @@ import { asyncHandler, NotFoundError, ValidationError, getProjectLogs } from '..
 import { isPathWithinProject } from '../../utils/path-validator';
 import { SUPPORTED_MODELS, isValidModel, getModelDisplayName, DEFAULT_MODEL } from '../../config/models';
 import { getAgentManager, getProcessTracker, getRalphLoopService, getWebSocketServer } from '../index';
-import { ProjectStatus, generateIdFromPath } from '../../repositories';
+import { generateIdFromPath } from '../../repositories';
 import {
   ProjectRouterDependencies,
   CreateProjectBody,
@@ -202,7 +202,7 @@ export function createCoreRouter(deps: ProjectRouterDependencies): Router {
   router.get('/:id/permissions', validateParams(projectIdSchema), projectExistsMiddleware, asyncHandler((req: Request, res: Response) => {
     const project = req.project!;
 
-    res.json((project as ProjectStatus).permissionOverrides || {
+    res.json((project).permissionOverrides || {
       enabled: false,
       allowRules: [],
       denyRules: [],
@@ -236,10 +236,10 @@ export function createCoreRouter(deps: ProjectRouterDependencies): Router {
   router.get('/:id/model', validateParams(projectIdSchema), projectExistsMiddleware, asyncHandler((req: Request, res: Response) => {
     const project = req.project!;
 
-    const effectiveModel = (project as ProjectStatus).modelOverride || DEFAULT_MODEL;
+    const effectiveModel = (project).modelOverride || DEFAULT_MODEL;
 
     res.json({
-      projectModel: (project as ProjectStatus).modelOverride,
+      projectModel: (project).modelOverride,
       defaultModel: DEFAULT_MODEL,
       effectiveModel,
       availableModels: SUPPORTED_MODELS.map(m => ({
@@ -280,7 +280,7 @@ export function createCoreRouter(deps: ProjectRouterDependencies): Router {
   router.get('/:id/mcp-overrides', validateParams(projectIdSchema), projectExistsMiddleware, asyncHandler((req: Request, res: Response) => {
     const project = req.project!;
 
-    res.json((project as ProjectStatus).mcpOverrides || {
+    res.json((project).mcpOverrides || {
       enabled: false,
       serverOverrides: {}
     });
@@ -331,9 +331,9 @@ export function createCoreRouter(deps: ProjectRouterDependencies): Router {
     const project = req.project!;
 
     const checks = await Promise.all([
-      checkProjectClaudeMd((project as ProjectStatus).path),
+      checkProjectClaudeMd((project).path),
       checkGlobalClaudeMd(),
-      checkRoadmap((project as ProjectStatus).path),
+      checkRoadmap((project).path),
     ]);
 
     res.json({ checks });
@@ -343,7 +343,7 @@ export function createCoreRouter(deps: ProjectRouterDependencies): Router {
   router.get('/:id/claude-files', validateParams(projectIdSchema), projectExistsMiddleware, asyncHandler((req: Request, res: Response) => {
     const project = req.project!;
 
-    const files = findClaudeFiles((project as ProjectStatus).path);
+    const files = findClaudeFiles((project).path);
     res.json({ files });
   }));
 
@@ -367,8 +367,8 @@ export function createCoreRouter(deps: ProjectRouterDependencies): Router {
     if (!isGlobalFile) {
       // For project files, ensure they're within the project
       const allowedPaths = [
-        path.join((project as ProjectStatus).path, 'CLAUDE.md'),
-        path.join((project as ProjectStatus).path, '.claude', 'CLAUDE.md'),
+        path.join((project).path, 'CLAUDE.md'),
+        path.join((project).path, '.claude', 'CLAUDE.md'),
       ];
 
       const resolvedPath = path.resolve(filePath!);
@@ -379,7 +379,7 @@ export function createCoreRouter(deps: ProjectRouterDependencies): Router {
       }
 
       // Additional check for path traversal
-      if (!isPathWithinProject(resolvedPath, (project as ProjectStatus).path)) {
+      if (!isPathWithinProject(resolvedPath, (project).path)) {
         throw new ValidationError('File path is outside project directory');
       }
     }

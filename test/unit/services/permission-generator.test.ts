@@ -48,6 +48,36 @@ describe('DefaultPermissionGenerator', () => {
         expect(result.allowedTools).toEqual([]);
         expect(result.disallowedTools).toEqual([]);
       });
+
+      it('should not skip permissions when mode is plan', () => {
+        const permissions = createPermissions({
+          dangerouslySkipPermissions: true,
+          defaultMode: 'plan',
+          allowRules: ['Read'],
+        });
+
+        const result = generator.generateArgs(permissions);
+
+        expect(result.skipPermissions).toBe(false);
+        expect(result.permissionMode).toBe('plan');
+        expect(result.allowedTools).toContain('Read');
+      });
+
+      it('should not skip permissions when project overrides mode to plan', () => {
+        const permissions = createPermissions({
+          dangerouslySkipPermissions: true,
+          defaultMode: 'acceptEdits',
+        });
+        const projectOverrides: ProjectPermissionOverrides = {
+          enabled: true,
+          defaultMode: 'plan',
+        };
+
+        const result = generator.generateArgs(permissions, projectOverrides);
+
+        expect(result.skipPermissions).toBe(false);
+        expect(result.permissionMode).toBe('plan');
+      });
     });
 
     describe('with global rules only', () => {

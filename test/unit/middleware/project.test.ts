@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { validateProjectExists } from '../../../src/middleware/project';
 import { NotFoundError, ValidationError } from '../../../src/utils';
-import { ProjectRepository, ProjectStatus } from '../../../src/repositories';
+import { ProjectRepository } from '../../../src/repositories';
 import { ProjectDiscoveryService } from '../../../src/services/project-discovery';
 
 describe('Project Middleware', () => {

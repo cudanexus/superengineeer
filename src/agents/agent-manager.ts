@@ -354,11 +354,13 @@ export class DefaultAgentManager implements AgentManager {
     // Generate permission config with MCP servers
     const permArgs = this.permissionGenerator.generateArgs(settings.claudePermissions, projectOverrides, mcpServers);
 
+    const effectiveMode = options?.permissionMode || permArgs.permissionMode;
+
     const permissionConfig: PermissionConfig = {
-      skipPermissions: permArgs.skipPermissions,
+      skipPermissions: effectiveMode === 'plan' ? false : permArgs.skipPermissions,
       allowedTools: permArgs.allowedTools,
       disallowedTools: permArgs.disallowedTools,
-      permissionMode: options?.permissionMode || permArgs.permissionMode,
+      permissionMode: effectiveMode,
     };
 
     // Create agent
@@ -398,7 +400,10 @@ export class DefaultAgentManager implements AgentManager {
     }
 
     // Build Claude API-compatible JSON content blocks
-    const contentBlocks: Array<any> = [];
+    const contentBlocks: Array<
+      | { type: 'image'; source: { type: string; media_type: string; data: string } }
+      | { type: 'text'; text: string }
+    > = [];
 
     // Add images first
     for (const image of images) {
@@ -794,11 +799,13 @@ export class DefaultAgentManager implements AgentManager {
     const projectOverrides = project.permissionOverrides ?? null;
     const permArgs = this.permissionGenerator.generateArgs(settings.claudePermissions, projectOverrides);
 
+    const effectiveOneOffMode = options.permissionMode || permArgs.permissionMode;
+
     const permissionConfig: PermissionConfig = {
-      skipPermissions: permArgs.skipPermissions,
+      skipPermissions: effectiveOneOffMode === 'plan' ? false : permArgs.skipPermissions,
       allowedTools: permArgs.allowedTools,
       disallowedTools: permArgs.disallowedTools,
-      permissionMode: options.permissionMode || permArgs.permissionMode,
+      permissionMode: effectiveOneOffMode,
     };
 
     const model = await this.getModelForProject(options.projectId);

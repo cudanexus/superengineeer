@@ -1121,7 +1121,7 @@ describe('DefaultAgentManager', () => {
   describe('MCP server configuration', () => {
     it('should filter out disabled MCP servers when creating agent', async () => {
       const mockSettings = {
-        ...mockSettingsRepo.get(),
+        ...await mockSettingsRepo.get(),
         mcp: {
           enabled: true,
           servers: [
@@ -1147,7 +1147,7 @@ describe('DefaultAgentManager', () => {
 
     it('should pass empty array when MCP is globally disabled', async () => {
       const mockSettings = {
-        ...mockSettingsRepo.get(),
+        ...await mockSettingsRepo.get(),
         mcp: {
           enabled: false,
           servers: [
@@ -1168,7 +1168,7 @@ describe('DefaultAgentManager', () => {
 
     it('should handle missing MCP configuration gracefully', async () => {
       const mockSettings = {
-        ...mockSettingsRepo.get(),
+        ...await mockSettingsRepo.get(),
         // No mcp property
       };
       mockSettingsRepo.get.mockResolvedValue(mockSettings);
@@ -1184,7 +1184,7 @@ describe('DefaultAgentManager', () => {
 
     it('should apply project MCP overrides to filter disabled servers', async () => {
       const mockSettings = {
-        ...mockSettingsRepo.get(),
+        ...await mockSettingsRepo.get(),
         mcp: {
           enabled: true,
           servers: [
@@ -1225,7 +1225,7 @@ describe('DefaultAgentManager', () => {
 
     it('should disable all MCP servers when project overrides have enabled: false', async () => {
       const mockSettings = {
-        ...mockSettingsRepo.get(),
+        ...await mockSettingsRepo.get(),
         mcp: {
           enabled: true,
           servers: [
@@ -1258,7 +1258,7 @@ describe('DefaultAgentManager', () => {
 
     it('should use global servers when project has no overrides', async () => {
       const mockSettings = {
-        ...mockSettingsRepo.get(),
+        ...await mockSettingsRepo.get(),
         mcp: {
           enabled: true,
           servers: [
@@ -1290,7 +1290,7 @@ describe('DefaultAgentManager', () => {
 
     it('should handle project overrides with no specific server overrides', async () => {
       const mockSettings = {
-        ...mockSettingsRepo.get(),
+        ...await mockSettingsRepo.get(),
         mcp: {
           enabled: true,
           servers: [

@@ -4,9 +4,9 @@ import { AgentManager, AgentMessage, QueuedProject, AgentResourceStatus, Context
 import { RoadmapGenerator, RoadmapMessage, AuthService, ShellService } from '../services';
 import { RalphLoopService, RalphLoopStatus, IterationSummary, ReviewerFeedback, RalphLoopFinalStatus } from '../services/ralph-loop/types';
 import { ConversationRepository, ProjectRepository } from '../repositories';
-import { getLogger, Logger, getLogStore } from '../utils/logger';
+import { getLogger, Logger, getLogStore, LogEntry } from '../utils/logger';
 import { parseCookie, COOKIE_NAME } from '../middleware/auth-middleware';
-import { ResourceStats, ResourceEventData, ResourceStatsBroadcast } from './types';
+import { ResourceStats, ResourceEventData } from './types';
 
 export interface ConnectedClient {
   clientId: string;
@@ -745,18 +745,19 @@ export class DefaultWebSocketServer implements ProjectWebSocketServer {
     const logStore = getLogStore();
 
     // Listen for frontend errors and broadcast them to all clients
-    logStore.on('frontend_error', (logEntry) => {
+    logStore.on('frontend_error', (logEntry: LogEntry) => {
+      const ctx = logEntry.context || {};
       const frontendError: FrontendErrorData = {
-        timestamp: logEntry.timestamp as string,
-        message: logEntry.message as string,
-        clientId: logEntry.context?.clientId as string | undefined,
-        errorType: (logEntry.context?.errorType as string) || 'runtime',
-        url: logEntry.context?.source as string | undefined,
-        projectId: logEntry.projectId as string | undefined,
-        userAgent: logEntry.context?.userAgent as string | undefined,
-        stack: logEntry.context?.stack as string | undefined,
-        line: logEntry.context?.line as number | undefined,
-        column: logEntry.context?.column as number | undefined,
+        timestamp: logEntry.timestamp,
+        message: logEntry.message,
+        clientId: ctx.clientId as string | undefined,
+        errorType: (ctx.errorType as string) || 'runtime',
+        url: ctx.source as string | undefined,
+        projectId: logEntry.projectId,
+        userAgent: ctx.userAgent as string | undefined,
+        stack: ctx.stack as string | undefined,
+        line: ctx.line as number | undefined,
+        column: ctx.column as number | undefined,
       };
 
       this.broadcast({

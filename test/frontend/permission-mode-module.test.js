@@ -21,7 +21,8 @@ describe('PermissionModeModule', () => {
       addClass: jest.fn().mockReturnThis(),
       removeClass: jest.fn().mockReturnThis(),
       prop: jest.fn().mockReturnThis(),
-      on: jest.fn().mockReturnThis()
+      on: jest.fn().mockReturnThis(),
+      attr: jest.fn().mockReturnThis()
     };
 
     return jest.fn().mockReturnValue(mockElement);

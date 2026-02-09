@@ -1706,6 +1706,11 @@
         $('#btn-save-settings').removeClass('has-changes');
         updateRunningCount();
         updateInputHint();
+
+        if (typeof PermissionModeModule !== 'undefined') {
+          PermissionModeModule.updateSkipPermissionsWarning();
+        }
+
         closeAllModals();
         showToast('Settings saved', 'success');
       })
@@ -2030,6 +2035,14 @@
   function setupAgentHandlers() {
     $('#btn-start-agent').on('click', function() {
       startSelectedAgent();
+    });
+
+    $('#btn-stop-agent').on('click', function() {
+      if (state.isRalphLoopRunning) {
+        stopRalphLoop();
+      } else {
+        stopSelectedAgent();
+      }
     });
 
     $('#btn-restart-agent').on('click', function() {
@@ -2752,16 +2765,25 @@
   function updateStartStopButtons() {
     var project = findProjectById(state.selectedProjectId);
     var isRunning = project && project.status === 'running';
+    var hasSession = !!state.currentSessionId;
 
     // Hide loop controls (not used in interactive mode)
     $('#loop-controls').addClass('hidden');
 
     if (isRunning) {
+      // Agent is running: show Stop + Restart, hide Start
       $('#btn-start-agent').addClass('hidden');
+      $('#btn-stop-agent').removeClass('hidden');
       $('#btn-restart-agent').removeClass('hidden');
-    } else {
-      // Show Start button when stopped
+    } else if (hasSession) {
+      // Agent was started but is now stopped: show Start, hide Stop + Restart
       $('#btn-start-agent').removeClass('hidden');
+      $('#btn-stop-agent').addClass('hidden');
+      $('#btn-restart-agent').addClass('hidden');
+    } else {
+      // Never started: hide all
+      $('#btn-start-agent').addClass('hidden');
+      $('#btn-stop-agent').addClass('hidden');
       $('#btn-restart-agent').addClass('hidden');
     }
   }
@@ -3610,6 +3632,7 @@
     var projectId = state.selectedProjectId;
     setQuickActionLoading(projectId, true);
     showContentLoading('Stopping agent...');
+    $('#btn-stop-agent').prop('disabled', true);
     $('#btn-restart-agent').prop('disabled', true);
 
     api.stopAgent(projectId)
@@ -3630,6 +3653,7 @@
         // Only hide loading and re-enable button if still viewing the same project
         if (state.selectedProjectId === projectId) {
           hideContentLoading();
+          $('#btn-stop-agent').prop('disabled', false);
           $('#btn-restart-agent').prop('disabled', false);
         }
       });
@@ -3643,6 +3667,7 @@
     var permissionMode = state.permissionMode;
 
     showToast('Restarting agent...', 'info');
+    $('#btn-stop-agent').prop('disabled', true);
     $('#btn-restart-agent').prop('disabled', true);
 
     // Helper function to start agent with delay
@@ -3670,6 +3695,7 @@
           updateProjectStatusById(projectId, 'stopped');
         })
         .always(function() {
+          $('#btn-stop-agent').prop('disabled', false);
           $('#btn-restart-agent').prop('disabled', false);
         });
     }
@@ -4316,6 +4342,7 @@
     if (!isActive) {
       // Hide Ralph Loop UI
       showAgentRunningIndicator(false);
+      $('#btn-stop-agent').addClass('hidden');
       $('#btn-restart-agent').addClass('hidden');
       $('#btn-ralph-loop-pause').addClass('hidden');
       $('#btn-agent-mode').addClass('hidden');
@@ -4336,6 +4363,7 @@
       showAgentRunningIndicator(true, statusText);
 
       // Show appropriate buttons
+      $('#btn-stop-agent').removeClass('hidden');
       $('#btn-restart-agent').removeClass('hidden');
       $('#btn-agent-mode').removeClass('hidden');  // Show Agent Mode button
 
@@ -5046,6 +5074,10 @@
         state.hasUnsavedMcpChanges = false; // Reset on initial load
         state.sendWithCtrlEnter = settings.sendWithCtrlEnter !== false;
         updateInputHint();
+
+        if (typeof PermissionModeModule !== 'undefined') {
+          PermissionModeModule.updateSkipPermissionsWarning();
+        }
       });
   }
 

@@ -16,14 +16,6 @@ export interface PermissionGenerator {
 
 export class DefaultPermissionGenerator implements PermissionGenerator {
   generateArgs(permissions: ClaudePermissions, projectOverrides?: ProjectPermissionOverrides | null, mcpServers?: McpServerConfig[]): PermissionArgs {
-    if (permissions.dangerouslySkipPermissions) {
-      return {
-        allowedTools: [],
-        disallowedTools: [],
-        skipPermissions: true,
-      };
-    }
-
     // Start with global rules
     let allowRules = [...permissions.allowRules];
     let denyRules = [...permissions.denyRules];
@@ -48,6 +40,17 @@ export class DefaultPermissionGenerator implements PermissionGenerator {
       if (projectOverrides.defaultMode) {
         defaultMode = projectOverrides.defaultMode;
       }
+    }
+
+    // Only skip permissions in acceptEdits mode (not plan mode)
+    const shouldSkip = permissions.dangerouslySkipPermissions && defaultMode === 'acceptEdits';
+
+    if (shouldSkip) {
+      return {
+        allowedTools: [],
+        disallowedTools: [],
+        skipPermissions: true,
+      };
     }
 
     const allowedTools = this.combineRules(allowRules, permissions.allowedTools);

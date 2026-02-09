@@ -123,13 +123,24 @@ export class MessageBuilder {
       return null;
     }
 
+    interface McpTransport {
+      type: string;
+      url?: string;
+      headers?: Record<string, string>;
+    }
+
+    interface McpServerEntry {
+      command?: string;
+      args?: string[];
+      env?: Record<string, string>;
+      transport?: McpTransport;
+    }
+
     // Build the config object
-    const mcpConfig: any = {
-      mcpServers: {}
-    };
+    const mcpServers: Record<string, McpServerEntry> = {};
 
     for (const server of servers) {
-      const serverConfig: any = {};
+      const serverConfig: McpServerEntry = {};
 
       if (server.type === 'stdio') {
         serverConfig.command = server.command;
@@ -150,7 +161,7 @@ export class MessageBuilder {
         }
       }
 
-      mcpConfig.mcpServers[server.name] = serverConfig;
+      mcpServers[server.name] = serverConfig;
     }
 
     // Create temp directory if it doesn't exist
@@ -165,7 +176,7 @@ export class MessageBuilder {
     const configPath = path.join(tempDir, configFileName);
 
     // Write the config file
-    fs.writeFileSync(configPath, JSON.stringify(mcpConfig, null, 2));
+    fs.writeFileSync(configPath, JSON.stringify({ mcpServers }, null, 2));
 
     return configPath;
   }

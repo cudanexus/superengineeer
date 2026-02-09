@@ -11,7 +11,6 @@ import {
   GitTagBody,
   GitPushTagBody
 } from './types';
-import { ProjectStatus } from '../../repositories';
 import { validateBody, validateParams, validateQuery } from '../../middleware/validation';
 import { validateProjectExists } from '../../middleware/project';
 import {
@@ -23,12 +22,10 @@ import {
   gitPullSchema,
   gitTagSchema,
   gitPushTagSchema,
-  tagNameSchema,
   projectAndTagNameSchema,
   fileDiffQuerySchema
 } from './schemas';
 import { AgentManager, AgentManagerEvents } from '../../agents';
-import { AgentMessage, AgentStatus } from '../../agents/claude-agent';
 
 const COMMIT_MSG_TIMEOUT_MS = 60000;
 const MAX_DIFF_LENGTH = 15000;
@@ -135,7 +132,7 @@ export function createGitRouter(deps: ProjectRouterDependencies): Router {
   router.get('/status', validateProjectExists(projectRepository), asyncHandler(async (req: Request, res: Response) => {
     const project = req.project!;
 
-    const status = await gitService.getStatus((project as ProjectStatus).path);
+    const status = await gitService.getStatus((project).path);
     res.json(status);
   }));
 
@@ -143,7 +140,7 @@ export function createGitRouter(deps: ProjectRouterDependencies): Router {
   router.get('/branches', validateProjectExists(projectRepository), asyncHandler(async (req: Request, res: Response) => {
     const project = req.project!;
 
-    const branches = await gitService.getBranches((project as ProjectStatus).path);
+    const branches = await gitService.getBranches((project).path);
     res.json(branches);
   }));
 
@@ -152,7 +149,7 @@ export function createGitRouter(deps: ProjectRouterDependencies): Router {
     const project = req.project!;
     const staged = req.query.staged === 'true';
 
-    const diff = await gitService.getDiff((project as ProjectStatus).path, staged);
+    const diff = await gitService.getDiff((project).path, staged);
     res.json({ diff });
   }));
 
@@ -162,7 +159,7 @@ export function createGitRouter(deps: ProjectRouterDependencies): Router {
     const body = req.body as GitStageBody;
     const { paths } = body;
 
-    await gitService.stageFiles((project as ProjectStatus).path, paths!);
+    await gitService.stageFiles((project).path, paths!);
     res.json({ success: true });
   }));
 
@@ -170,7 +167,7 @@ export function createGitRouter(deps: ProjectRouterDependencies): Router {
   router.post('/stage-all', validateProjectExists(projectRepository), asyncHandler(async (req: Request, res: Response) => {
     const project = req.project!;
 
-    await gitService.stageAll((project as ProjectStatus).path);
+    await gitService.stageAll((project).path);
     res.json({ success: true });
   }));
 
@@ -180,7 +177,7 @@ export function createGitRouter(deps: ProjectRouterDependencies): Router {
     const body = req.body as GitStageBody;
     const { paths } = body;
 
-    await gitService.unstageFiles((project as ProjectStatus).path, paths!);
+    await gitService.unstageFiles((project).path, paths!);
     res.json({ success: true });
   }));
 
@@ -188,7 +185,7 @@ export function createGitRouter(deps: ProjectRouterDependencies): Router {
   router.post('/unstage-all', validateProjectExists(projectRepository), asyncHandler(async (req: Request, res: Response) => {
     const project = req.project!;
 
-    await gitService.unstageAll((project as ProjectStatus).path);
+    await gitService.unstageAll((project).path);
     res.json({ success: true });
   }));
 
@@ -298,7 +295,7 @@ export function createGitRouter(deps: ProjectRouterDependencies): Router {
     const body = req.body as GitStageBody;
     const { paths } = body;
 
-    await gitService.discardChanges((project as ProjectStatus).path, paths!);
+    await gitService.discardChanges((project).path, paths!);
     res.json({ success: true });
   }));
 
@@ -306,7 +303,7 @@ export function createGitRouter(deps: ProjectRouterDependencies): Router {
   router.get('/tags', validateProjectExists(projectRepository), asyncHandler(async (req: Request, res: Response) => {
     const project = req.project!;
 
-    const tags = await gitService.listTags((project as ProjectStatus).path);
+    const tags = await gitService.listTags((project).path);
     res.json({ tags });
   }));
 
@@ -347,7 +344,7 @@ export function createGitRouter(deps: ProjectRouterDependencies): Router {
   // Generate commit message using one-off agent
   router.post('/generate-commit-message', validateProjectExists(projectRepository), asyncHandler(async (req: Request, res: Response) => {
     const project = req.project!;
-    const projectPath = (project as ProjectStatus).path;
+    const projectPath = (project).path;
     const projectId = req.params['id'] as string;
 
     const status = await gitService.getStatus(projectPath);

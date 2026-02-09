@@ -69,6 +69,28 @@
         $('#btn-perm-accept').addClass('perm-active');
         break;
     }
+
+    updateSkipPermissionsWarning();
+  }
+
+  /**
+   * Update the skip permissions warning icon on the Accept Edits button
+   */
+  function updateSkipPermissionsWarning() {
+    var skipEnabled = state.settings &&
+      state.settings.claudePermissions &&
+      state.settings.claudePermissions.dangerouslySkipPermissions;
+
+    var $icon = $('#skip-perms-icon');
+    var $btn = $('#btn-perm-accept');
+
+    if (skipEnabled) {
+      $icon.removeClass('hidden');
+      $btn.attr('title', 'Accept Edits - Skipping ALL permission prompts (dangerous)');
+    } else {
+      $icon.addClass('hidden');
+      $btn.attr('title', 'Accept Edits - Auto-approve file edits');
+    }
   }
 
   /**
@@ -288,6 +310,7 @@
     setMode: setMode,
     applyPendingIfNeeded: applyPendingIfNeeded,
     approvePlanAndSwitch: approvePlanAndSwitch,
+    updateSkipPermissionsWarning: updateSkipPermissionsWarning,
     setupHandlers: setupHandlers
   };
 }));

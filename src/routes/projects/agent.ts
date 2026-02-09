@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { asyncHandler, ValidationError, ConflictError, getLogger } from '../../utils';
 import { ProjectRouterDependencies, AgentMessageBody } from './types';
-import { ProjectStatus } from '../../repositories';
+
 import { validateBody, validateParams } from '../../middleware/validation';
 import { validateProjectExists } from '../../middleware/project';
 import { agentOperationRateLimit, moderateRateLimit } from '../../middleware/rate-limit';
@@ -30,7 +30,7 @@ export function createAgentRouter(deps: ProjectRouterDependencies): Router {
     }
 
     // Validate roadmap exists before starting
-    const roadmapPath = path.join((project as ProjectStatus).path, 'doc', 'ROADMAP.md');
+    const roadmapPath = path.join((project).path, 'doc', 'ROADMAP.md');
 
     try {
       await fs.promises.access(roadmapPath);
@@ -67,8 +67,8 @@ export function createAgentRouter(deps: ProjectRouterDependencies): Router {
     let contextUsage = agentManager.getContextUsage(id);
 
     // If agent is not running, use last saved context usage from project status
-    if (!contextUsage && (project as ProjectStatus).lastContextUsage) {
-      contextUsage = (project as ProjectStatus).lastContextUsage;
+    if (!contextUsage && (project).lastContextUsage) {
+      contextUsage = (project).lastContextUsage;
     }
 
     res.json({ contextUsage });

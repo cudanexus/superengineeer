@@ -50,7 +50,7 @@ export function createOptimizationRouter(deps: OptimizationRouterDependencies): 
   );
 
   // Get optimization status
-  router.get('/optimization-status', asyncHandler(async (req: Request, res: Response) => {
+  router.get('/optimization-status', asyncHandler((req: Request, res: Response) => {
     const projectId = req.params['id'] as string;
 
     res.json({

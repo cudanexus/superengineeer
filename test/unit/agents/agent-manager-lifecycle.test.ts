@@ -4,8 +4,6 @@ import {
   AgentManagerDependencies,
   AgentFactory,
   AgentFactoryOptions,
-  OrphanCleanupResult,
-  TrackedProcessInfo,
   ImageData,
 } from '../../../src/agents/agent-manager';
 import { ClaudeAgent, AgentMessage, AgentStatus, ProcessInfo, ContextUsage, AgentEvents } from '../../../src/agents/claude-agent';

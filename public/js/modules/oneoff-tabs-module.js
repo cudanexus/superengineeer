@@ -100,6 +100,14 @@
     $('#conversation-toolbar > .flex:first-child > *').addClass('oneoff-hidden');
     injectOneOffToolbarButtons(oneOffId);
 
+    // Recreate DOM container if it was cleared (e.g. after project switch)
+    var $tabConv = $('.oneoff-tab-conv[data-oneoff-id="' + oneOffId + '"]');
+
+    if (!$tabConv.length) {
+      createTabContainer(oneOffId);
+      renderConversation(oneOffId);
+    }
+
     $('.oneoff-tab-conv').addClass('hidden');
     $('.oneoff-tab-conv[data-oneoff-id="' + oneOffId + '"]').removeClass('hidden');
 

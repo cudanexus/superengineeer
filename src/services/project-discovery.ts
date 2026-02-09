@@ -94,9 +94,11 @@ export class DefaultProjectDiscoveryService implements ProjectDiscoveryService {
           // Still recurse to find nested projects
           await scan(fullPath, depth + 1);
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         // Ignore permission errors and continue scanning
-        if (error.code !== 'EACCES' && error.code !== 'EPERM') {
+        const errCode = (error as NodeJS.ErrnoException).code;
+
+        if (errCode !== 'EACCES' && errCode !== 'EPERM') {
           this.logger.debug('Error scanning directory', { dir, error });
         }
       }

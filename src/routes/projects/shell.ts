@@ -1,8 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { asyncHandler, getLogger } from '../../utils';
 import { ProjectRouterDependencies, ShellInputBody, ShellResizeBody } from './types';
-import { ProjectStatus } from '../../repositories';
-import { validateBody, validateParams } from '../../middleware/validation';
+import { validateBody } from '../../middleware/validation';
 import { validateProjectExists } from '../../middleware/project';
 import { strictRateLimit } from '../../middleware/rate-limit';
 import {
@@ -47,7 +46,7 @@ export function createShellRouter(deps: ProjectRouterDependencies): Router {
       return;
     }
 
-    const session = shellService.createSession(id, (project as ProjectStatus).path);
+    const session = shellService.createSession(id, (project).path);
     res.json({ sessionId: session.id, status: 'ready' });
   }));
 

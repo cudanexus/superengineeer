@@ -2,8 +2,7 @@ import { Router, Request, Response } from 'express';
 import { asyncHandler, NotFoundError } from '../../utils';
 import { ProjectRouterDependencies, RenameConversationBody } from './types';
 import { computeConversationStats } from './helpers';
-import { ProjectStatus } from '../../repositories';
-import { validateBody, validateParams, validateQuery } from '../../middleware/validation';
+import { validateBody, validateParams } from '../../middleware/validation';
 import { validateProjectExists } from '../../middleware/project';
 import {
   renameConversationSchema,
@@ -40,7 +39,7 @@ export function createConversationRouter(deps: ProjectRouterDependencies): Route
     // 1. If specific conversationId query param provided, use that
     // 2. Otherwise use currentConversationId from project (if agent is running)
     // 3. Otherwise show empty conversation
-    const targetConversationId = conversationId || (project as ProjectStatus).currentConversationId;
+    const targetConversationId = conversationId || (project).currentConversationId;
 
     if (!targetConversationId) {
       res.json({ conversation: null, stats: null });
