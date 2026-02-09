@@ -483,7 +483,7 @@ export class StreamHandler extends EventEmitter {
         this.emitToolResultWithId(
           block.tool_use_id || 'unknown',
           status,
-          block.content || ''
+          typeof block.content === 'string' ? block.content : JSON.stringify(block.content || '')
         );
       }
     }
@@ -932,7 +932,11 @@ export class StreamHandler extends EventEmitter {
 
   private extractEventContent(event: StreamEvent): string {
     if (event.text) return event.text;
-    if (event.content) return event.content;
+
+    if (event.content) {
+      return typeof event.content === 'string' ? event.content : JSON.stringify(event.content);
+    }
+
     if (event.message?.type) return event.message.type;
     return 'Unknown content';
   }

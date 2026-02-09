@@ -155,6 +155,45 @@ describe('ApiClient', () => {
       expect(mockPost).toHaveBeenCalledWith('/api/projects/proj-123/agent/stop');
     });
 
+    it('stopOneOffAgent should POST to correct endpoint', () => {
+      ApiClient.stopOneOffAgent('proj-123', 'oneoff-abc-123');
+      expect(mockAjax).toHaveBeenCalledWith({
+        url: '/api/projects/proj-123/agent/oneoff/oneoff-abc-123/stop',
+        method: 'POST'
+      });
+    });
+
+    it('sendOneOffMessage should POST to correct endpoint', () => {
+      ApiClient.sendOneOffMessage('proj-123', 'oneoff-abc-123', 'hello');
+      expect(mockAjax).toHaveBeenCalledWith({
+        url: '/api/projects/proj-123/agent/oneoff/oneoff-abc-123/send',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ message: 'hello' })
+      });
+    });
+
+    it('sendOneOffMessage should include images when provided', () => {
+      var images = [{ id: 'img1', dataUrl: 'data:image/png;base64,abc', mimeType: 'image/png', size: 100 }];
+      ApiClient.sendOneOffMessage('proj-123', 'oneoff-abc-123', 'hello', images);
+      expect(mockAjax).toHaveBeenCalledWith({
+        url: '/api/projects/proj-123/agent/oneoff/oneoff-abc-123/send',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ message: 'hello', images: [{ type: 'image/png', data: 'abc' }] })
+      });
+    });
+
+    it('getOneOffStatus should GET correct endpoint', () => {
+      ApiClient.getOneOffStatus('proj-123', 'oneoff-abc-123');
+      expect(mockGet).toHaveBeenCalledWith('/api/projects/proj-123/agent/oneoff/oneoff-abc-123/status');
+    });
+
+    it('getOneOffContext should GET correct endpoint', () => {
+      ApiClient.getOneOffContext('proj-123', 'oneoff-abc-123');
+      expect(mockGet).toHaveBeenCalledWith('/api/projects/proj-123/agent/oneoff/oneoff-abc-123/context');
+    });
+
     it('getAgentStatus should GET correct endpoint', () => {
       ApiClient.getAgentStatus('proj-123');
       expect(mockGet).toHaveBeenCalledWith('/api/projects/proj-123/agent/status');
@@ -345,12 +384,12 @@ describe('ApiClient', () => {
     });
 
     it('setProjectModel should PUT with model', () => {
-      ApiClient.setProjectModel('proj-123', 'claude-opus-4-20250514');
+      ApiClient.setProjectModel('proj-123', 'claude-opus-4-6');
       expect(mockAjax).toHaveBeenCalledWith({
         url: '/api/projects/proj-123/model',
         method: 'PUT',
         contentType: 'application/json',
-        data: JSON.stringify({ model: 'claude-opus-4-20250514' })
+        data: JSON.stringify({ model: 'claude-opus-4-6' })
       });
     });
 
@@ -569,8 +608,8 @@ describe('ApiClient', () => {
       const config = {
         taskDescription: 'Implement feature X',
         maxTurns: 5,
-        workerModel: 'claude-sonnet-4-20250514',
-        reviewerModel: 'claude-sonnet-4-20250514'
+        workerModel: 'claude-opus-4-6',
+        reviewerModel: 'claude-sonnet-4-5-20250929'
       };
       ApiClient.startRalphLoop('proj-123', config);
       expect(mockAjax).toHaveBeenCalledWith({

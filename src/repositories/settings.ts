@@ -295,8 +295,8 @@ const DEFAULT_SETTINGS: GlobalSettings = {
   promptTemplates: DEFAULT_PROMPT_TEMPLATES,
   ralphLoop: {
     defaultMaxTurns: 5,
-    defaultWorkerModel: 'claude-opus-4-20250514',
-    defaultReviewerModel: 'claude-sonnet-4-20250514',
+    defaultWorkerModel: 'claude-opus-4-6',
+    defaultReviewerModel: 'claude-sonnet-4-5-20250929',
     defaultWorkerSystemPrompt: `# Worker Agent Instructions
 
 You are a software development worker agent. Your role is to implement the requested changes or features with precision and thoroughness.
@@ -411,6 +411,16 @@ export class FileSettingsRepository implements SettingsRepository {
     }
   }
 
+  private migrateOldModelId(modelId: string | undefined): string | undefined {
+    const OLD_MODEL_IDS = ['claude-sonnet-4-20250514', 'claude-opus-4-20250514'];
+
+    if (modelId && OLD_MODEL_IDS.includes(modelId)) {
+      return undefined;
+    }
+
+    return modelId;
+  }
+
   private mergeTemplates(existingTemplates: PromptTemplate[] | undefined): PromptTemplate[] {
     if (!Array.isArray(existingTemplates)) {
       return [...DEFAULT_PROMPT_TEMPLATES];
@@ -461,11 +471,9 @@ export class FileSettingsRepository implements SettingsRepository {
       promptTemplates: this.mergeTemplates(parsed.promptTemplates),
       ralphLoop: {
         defaultMaxTurns: parsedRalphLoop?.defaultMaxTurns ?? DEFAULT_SETTINGS.ralphLoop.defaultMaxTurns,
-        // Migrate old Sonnet default to Opus
-        defaultWorkerModel: (parsedRalphLoop?.defaultWorkerModel === 'claude-sonnet-4-20250514'
-          ? 'claude-opus-4-20250514'
-          : parsedRalphLoop?.defaultWorkerModel) ?? DEFAULT_SETTINGS.ralphLoop.defaultWorkerModel,
-        defaultReviewerModel: parsedRalphLoop?.defaultReviewerModel ?? DEFAULT_SETTINGS.ralphLoop.defaultReviewerModel,
+        // Migrate old model IDs to new defaults
+        defaultWorkerModel: this.migrateOldModelId(parsedRalphLoop?.defaultWorkerModel) ?? DEFAULT_SETTINGS.ralphLoop.defaultWorkerModel,
+        defaultReviewerModel: this.migrateOldModelId(parsedRalphLoop?.defaultReviewerModel) ?? DEFAULT_SETTINGS.ralphLoop.defaultReviewerModel,
         defaultWorkerSystemPrompt: parsedRalphLoop?.defaultWorkerSystemPrompt ?? DEFAULT_SETTINGS.ralphLoop.defaultWorkerSystemPrompt,
         defaultReviewerSystemPrompt: parsedRalphLoop?.defaultReviewerSystemPrompt ?? DEFAULT_SETTINGS.ralphLoop.defaultReviewerSystemPrompt,
         historyLimit: parsedRalphLoop?.historyLimit ?? DEFAULT_SETTINGS.ralphLoop.historyLimit,

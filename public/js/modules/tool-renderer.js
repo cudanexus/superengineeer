@@ -623,6 +623,37 @@
   }
 
   /**
+   * Generate a short result preview based on tool name and output
+   */
+  function generateResultPreview(toolName, resultContent) {
+    if (!resultContent) return '';
+
+    if (typeof resultContent !== 'string') {
+      resultContent = JSON.stringify(resultContent);
+    }
+
+    var lines = resultContent.split('\n');
+    var lineCount = lines.length;
+
+    switch (toolName) {
+      case 'Read':
+        return lineCount + ' line' + (lineCount !== 1 ? 's' : '') + ' read';
+      case 'Glob':
+        var fileCount = lines.filter(function(l) { return l.trim(); }).length;
+        return fileCount + ' file' + (fileCount !== 1 ? 's' : '') + ' matched';
+      case 'Grep':
+        var matchCount = lines.filter(function(l) { return l.trim(); }).length;
+        return matchCount + ' match' + (matchCount !== 1 ? 'es' : '');
+      case 'Bash':
+        if (resultContent.length <= 120) return resultContent.trim();
+        return lines[0].substring(0, 80) + '... (' + lineCount + ' lines)';
+      default:
+        if (resultContent.length <= 80) return resultContent.trim();
+        return resultContent.substring(0, 60).trim() + '... (' + lineCount + ' lines)';
+    }
+  }
+
+  /**
    * Update tool status when result arrives
    */
   function updateToolStatus(toolId, status, resultContent) {
@@ -641,6 +672,24 @@
 
       if (resultContent) {
         toolDataStore[toolId].resultContent = resultContent;
+      }
+    }
+
+    // Append result preview for completed tools
+    if (resultContent && status === 'completed') {
+      var $preview = $tool.find('.tool-result-preview');
+
+      if ($preview.length === 0) {
+        var toolName = toolDataStore[toolId] ? toolDataStore[toolId].name : '';
+        var preview = generateResultPreview(toolName, resultContent);
+
+        if (preview) {
+          $tool.append(
+            '<div class="tool-result-preview mt-1 text-xs text-gray-500 truncate">' +
+              escapeHtml(preview) +
+            '</div>'
+          );
+        }
       }
     }
 
@@ -687,6 +736,7 @@
     renderToolArgs: renderToolArgs,
     renderToolArgsPreview: renderToolArgsPreview,
     renderToolMessage: renderToolMessage,
+    generateResultPreview: generateResultPreview,
     updateToolStatus: updateToolStatus,
     getToolData: getToolData,
     clearToolData: clearToolData

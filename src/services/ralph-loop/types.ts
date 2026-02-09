@@ -252,8 +252,8 @@ Be specific and actionable in your feedback. If approving, explain why the work 
  */
 export const DEFAULT_RALPH_LOOP_SETTINGS: RalphLoopSettings = {
   defaultMaxTurns: 5,
-  defaultWorkerModel: 'claude-opus-4-20250514',
-  defaultReviewerModel: 'claude-sonnet-4-20250514',
+  defaultWorkerModel: 'claude-opus-4-6',
+  defaultReviewerModel: 'claude-sonnet-4-5-20250929',
   workerPromptTemplate: DEFAULT_WORKER_PROMPT_TEMPLATE,
   reviewerPromptTemplate: DEFAULT_REVIEWER_PROMPT_TEMPLATE,
 };

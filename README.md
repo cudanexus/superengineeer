@@ -231,6 +231,7 @@ Claudito includes built-in authentication to protect your agent manager:
 | **Context Monitor** | View token usage and context window utilization |
 | **Task Tracking** | View Claude's current tasks and progress |
 | **Project Optimizations** | Check for CLAUDE.md issues and optimization suggestions |
+| **One-Off Agent Tabs** | Interactive sub-tabs with full rendering, per-tab toolbar (Tasks, Search, Permission Mode, Model, Font Size), and tool result previews |
 | **Font Controls** | Adjust text size with +/- buttons |
 | **Keyboard Shortcuts** | Configurable keybindings (Ctrl+Enter or Enter to send) |
 | **Image Support** | Paste or drag-and-drop images into messages |
@@ -287,7 +288,8 @@ A full PTY-based terminal integrated into the UI:
 
 ### Additional Features
 
-- **CLAUDE.md Editor**: Edit global and project-specific CLAUDE.md files with preview
+- **CLAUDE.md Editor**: Edit global and project-specific CLAUDE.md files with preview and AI-powered optimization
+- **One-Off Agent Sub-Tabs**: Background agent tasks appear as interactive sub-tabs in Agent Output with full tool rendering, per-tab toolbar (Tasks with badge, Search with highlighting, Permission Mode, Model selector, Font Size controls), per-tab input matching main tab (rows=3, cancel+send buttons, hint text), and agent lifecycle management. Shared controls (Permission Mode, Model, Font Size) sync across all tabs. Optimization uses direct file editing via Claude's Edit tool
 - **Conversation History**: Browse, restore, and rename previous conversations
 - **Session Resumption**: Resume Claude sessions across restarts
 - **Debug Panel**: View logs, Claude I/O, process info, and troubleshoot issues
@@ -312,7 +314,7 @@ Access settings via the gear icon in the UI sidebar.
 | `sendWithCtrlEnter` | Ctrl+Enter sends (true) or Enter sends (false) | `true` |
 | `historyLimit` | Max conversations in history | `25` |
 | `agentPromptTemplate` | Template for agent instructions | (see below) |
-| `defaultModel` | Default Claude model for agents | `claude-sonnet-4-20250514` |
+| `defaultModel` | Default Claude model for agents | `claude-opus-4-6` |
 | `appendSystemPrompt` | Custom text appended to Claude's system prompt | `""` |
 
 ### Permission Configuration
@@ -462,6 +464,10 @@ DELETE /api/projects/:id          # Delete project
 ```
 POST   /api/projects/:id/agent/start       # Start agent
 POST   /api/projects/:id/agent/stop        # Stop agent
+POST   /api/projects/:id/agent/oneoff/:oneOffId/stop  # Stop one-off agent
+POST   /api/projects/:id/agent/oneoff/:oneOffId/send  # Send message to one-off agent
+GET    /api/projects/:id/agent/oneoff/:oneOffId/status # Get one-off agent status
+GET    /api/projects/:id/agent/oneoff/:oneOffId/context # Get one-off agent context
 POST   /api/projects/:id/agent/send        # Send message
 GET    /api/projects/:id/agent/status      # Get status
 GET    /api/projects/:id/agent/context     # Get context usage
@@ -594,6 +600,9 @@ ws.send(JSON.stringify({ type: 'subscribe', projectId: 'your-project-id' }));
 // - ralph_loop_output: Ralph Loop real-time worker/reviewer output
 // - ralph_loop_complete: Ralph Loop finished
 // - ralph_loop_error: Ralph Loop error occurred
+// - oneoff_message: One-off agent output (routed to sub-tabs)
+// - oneoff_status: One-off agent status changes
+// - oneoff_waiting: One-off agent waiting for input
 ```
 
 ## Development

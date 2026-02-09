@@ -253,8 +253,8 @@ describe('AgentManager Lifecycle Tests', () => {
       },
       ralphLoop: {
         defaultMaxTurns: 5,
-        defaultWorkerModel: 'claude-opus-4-20250514',
-        defaultReviewerModel: 'claude-sonnet-4-20250514',
+        defaultWorkerModel: 'claude-opus-4-6',
+        defaultReviewerModel: 'claude-sonnet-4-5-20250929',
         defaultWorkerSystemPrompt: 'Worker prompt',
         defaultReviewerSystemPrompt: 'Reviewer prompt',
         historyLimit: 5,
@@ -1272,9 +1272,121 @@ describe('AgentManager Lifecycle Tests', () => {
 
       expect(mockAgentFactory.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          model: 'claude-opus-4-20250514',  // This is the DEFAULT_MODEL from config/models.ts
+          model: 'claude-opus-4-6',  // This is the DEFAULT_MODEL from config/models.ts
         })
       );
+    });
+  });
+
+  describe('One-off agent interactive features', () => {
+    const projectId = 'test-project';
+
+    beforeEach(() => {
+      const mockProject = createTestProject({
+        id: projectId,
+        name: 'Test Project',
+        path: '/test/project',
+      });
+
+      addProjectToRepository(mockProject);
+    });
+
+    async function startOneOff(): Promise<string> {
+      return agentManager.startOneOffAgent({
+        projectId,
+        message: 'test task',
+        label: 'Test Task',
+      });
+    }
+
+    it('should send input to one-off agent', async () => {
+      const oneOffId = await startOneOff();
+      const createdAgent = mockAgentFactory.create.mock.results[0]!.value as MockClaudeAgent;
+      const sendInputSpy = jest.spyOn(createdAgent, 'sendInput');
+
+      agentManager.sendOneOffInput(oneOffId, 'hello');
+
+      expect(sendInputSpy).toHaveBeenCalledWith('hello');
+    });
+
+    it('should throw when sendOneOffInput called with invalid id', () => {
+      expect(() => {
+        agentManager.sendOneOffInput('nonexistent', 'hello');
+      }).toThrow('No one-off agent found: nonexistent');
+    });
+
+    it('should return full status for one-off agent', async () => {
+      const oneOffId = await startOneOff();
+      const status = agentManager.getOneOffStatus(oneOffId);
+
+      expect(status).not.toBeNull();
+      expect(status!.status).toBe('running');
+      expect(status!.mode).toBe('interactive');
+      expect(status!.isWaitingForInput).toBe(false);
+    });
+
+    it('should return null status for unknown one-off agent', () => {
+      expect(agentManager.getOneOffStatus('nonexistent')).toBeNull();
+    });
+
+    it('should return context usage from one-off agent', async () => {
+      const oneOffId = await startOneOff();
+      const createdAgent = mockAgentFactory.create.mock.results[0]!.value as MockClaudeAgent;
+
+      createdAgent.simulateContextUsage(createTestContextUsage({ totalTokens: 5000 }));
+
+      const context = agentManager.getOneOffContextUsage(oneOffId);
+
+      expect(context).not.toBeNull();
+      expect(context!.totalTokens).toBe(5000);
+    });
+
+    it('should return null context for unknown one-off agent', () => {
+      expect(agentManager.getOneOffContextUsage('nonexistent')).toBeNull();
+    });
+
+    it('should emit oneOffWaiting event', async () => {
+      const oneOffId = await startOneOff();
+      const createdAgent = mockAgentFactory.create.mock.results[0]!.value as MockClaudeAgent;
+
+      const waitingHandler = jest.fn();
+      agentManager.on('oneOffWaiting', waitingHandler);
+
+      createdAgent.simulateWaiting(true, 1);
+
+      expect(waitingHandler).toHaveBeenCalledWith(oneOffId, true, 1);
+    });
+
+    it('should track waiting state via isOneOffWaitingForInput', async () => {
+      const oneOffId = await startOneOff();
+      const createdAgent = mockAgentFactory.create.mock.results[0]!.value as MockClaudeAgent;
+
+      expect(agentManager.isOneOffWaitingForInput(oneOffId)).toBe(false);
+
+      createdAgent.simulateWaiting(true, 1);
+
+      expect(agentManager.isOneOffWaitingForInput(oneOffId)).toBe(true);
+
+      createdAgent.simulateWaiting(false, 2);
+
+      expect(agentManager.isOneOffWaitingForInput(oneOffId)).toBe(false);
+    });
+
+    it('should return false for isOneOffWaitingForInput with unknown id', () => {
+      expect(agentManager.isOneOffWaitingForInput('nonexistent')).toBe(false);
+    });
+
+    it('should clean up waiting versions on stopOneOffAgent', async () => {
+      const oneOffId = await startOneOff();
+      const createdAgent = mockAgentFactory.create.mock.results[0]!.value as MockClaudeAgent;
+
+      createdAgent.simulateWaiting(true, 1);
+
+      expect(agentManager.isOneOffWaitingForInput(oneOffId)).toBe(true);
+
+      await agentManager.stopOneOffAgent(oneOffId);
+
+      expect(agentManager.getOneOffStatus(oneOffId)).toBeNull();
     });
   });
 });

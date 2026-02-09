@@ -186,16 +186,16 @@ describe('FileSettingsRepository', () => {
       const updates: SettingsUpdate = {
         ralphLoop: {
           defaultMaxTurns: 10,
-          defaultWorkerModel: 'claude-opus-4-20250514',
+          defaultWorkerModel: 'claude-opus-4-6',
         },
       };
 
       const result = await repository.update(updates);
 
       expect(result.ralphLoop.defaultMaxTurns).toBe(10);
-      expect(result.ralphLoop.defaultWorkerModel).toBe('claude-opus-4-20250514');
+      expect(result.ralphLoop.defaultWorkerModel).toBe('claude-opus-4-6');
       // Unchanged nested property should remain
-      expect(result.ralphLoop.defaultReviewerModel).toBe('claude-sonnet-4-20250514');
+      expect(result.ralphLoop.defaultReviewerModel).toBe('claude-sonnet-4-5-20250929');
     });
 
     it('should update promptTemplates', async () => {
@@ -307,8 +307,8 @@ describe('FileSettingsRepository', () => {
         expect(settings.agentStreaming.noSessionPersistence).toBe(false);
 
         expect(settings.ralphLoop.defaultMaxTurns).toBe(5);
-        expect(settings.ralphLoop.defaultWorkerModel).toBe('claude-opus-4-20250514');
-        expect(settings.ralphLoop.defaultReviewerModel).toBe('claude-sonnet-4-20250514');
+        expect(settings.ralphLoop.defaultWorkerModel).toBe('claude-opus-4-6');
+        expect(settings.ralphLoop.defaultReviewerModel).toBe('claude-sonnet-4-5-20250929');
 
         expect(settings.promptTemplates).toEqual(DEFAULT_PROMPT_TEMPLATES);
       });

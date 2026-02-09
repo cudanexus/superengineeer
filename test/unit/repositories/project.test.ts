@@ -615,7 +615,7 @@ describe('FileProjectRepository', () => {
   });
 
   describe('updateModelOverride', () => {
-    const testModel = 'claude-opus-4-20250514';
+    const testModel = 'claude-opus-4-6';
 
     it('should return null for non-existent project', async () => {
       const result = await repository.updateModelOverride('non-existent', testModel);

@@ -9,6 +9,7 @@ export {
   ImageData,
   FullAgentStatus,
   OneOffAgentOptions,
+  OneOffMeta,
 } from './agent-manager';
 
 // Export from new modules

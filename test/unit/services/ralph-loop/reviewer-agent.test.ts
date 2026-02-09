@@ -36,7 +36,7 @@ describe('ReviewerAgent', () => {
     agent = new ReviewerAgent(
       {
         projectPath: '/test/project',
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-opus-4-6',
         contextInitializer: mockContextInitializer,
       },
       mockSpawner
@@ -91,7 +91,7 @@ describe('ReviewerAgent', () => {
         expect.arrayContaining([
           '--print',
           '--model',
-          'claude-sonnet-4-20250514',
+          'claude-opus-4-6',
           '--dangerously-skip-permissions',
           '--input-format',
           'stream-json',

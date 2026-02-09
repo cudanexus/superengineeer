@@ -3,7 +3,7 @@ import { Server, createServer } from 'http';
 import fs from 'fs';
 import path from 'path';
 import { AppConfig } from '../config';
-import { createApiRouter, getAgentManager, getRoadmapGenerator, getShellService, getRalphLoopService, getConversationRepository, getProjectRepository, setWebSocketServer, getOptimizationService } from '../routes';
+import { createApiRouter, getAgentManager, getRoadmapGenerator, getShellService, getRalphLoopService, getConversationRepository, getProjectRepository, setWebSocketServer } from '../routes';
 import { createAuthRouter } from '../routes/auth';
 import { DefaultWebSocketServer, ProjectWebSocketServer } from '../websocket';
 import { createErrorHandler, formatAccessibleUrls } from '../utils';
@@ -255,7 +255,6 @@ export class ExpressHttpServer implements HttpServer {
     const roadmapGenerator = getRoadmapGenerator();
     const shellService = getShellService();
     const ralphLoopService = getRalphLoopService();
-    const optimizationService = getOptimizationService();
 
     if (!agentManager || !this.httpServer) {
       return;
@@ -269,7 +268,6 @@ export class ExpressHttpServer implements HttpServer {
       ralphLoopService: ralphLoopService || undefined,
       conversationRepository: getConversationRepository() || undefined,
       projectRepository: getProjectRepository() || undefined,
-      optimizationService: optimizationService || undefined,
     });
     this.wsServer.initialize(this.httpServer);
 

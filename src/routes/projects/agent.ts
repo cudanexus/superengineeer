@@ -154,6 +154,45 @@ export function createAgentRouter(deps: ProjectRouterDependencies): Router {
     res.json({ success: true, status, mode: 'interactive', sessionId: actualSessionId });
   }));
 
+  // Stop a one-off agent
+  router.post('/oneoff/:oneOffId/stop', asyncHandler(async (req: Request, res: Response) => {
+    await agentManager.stopOneOffAgent(req.params['oneOffId'] as string);
+    res.json({ success: true });
+  }));
+
+  // Send input to a one-off agent
+  router.post('/oneoff/:oneOffId/send', asyncHandler((req: Request, res: Response) => {
+    const oneOffId = req.params['oneOffId'] as string;
+    const { message, images } = req.body as AgentMessageBody;
+
+    if (!message && (!images || images.length === 0)) {
+      throw new ValidationError('Message is required');
+    }
+
+    agentManager.sendOneOffInput(oneOffId, message || '', images);
+    res.json({ success: true });
+  }));
+
+  // Get one-off agent status
+  router.get('/oneoff/:oneOffId/status', asyncHandler((req: Request, res: Response) => {
+    const oneOffId = req.params['oneOffId'] as string;
+    const status = agentManager.getOneOffStatus(oneOffId);
+
+    if (!status) {
+      res.status(404).json({ error: 'One-off agent not found' });
+      return;
+    }
+
+    res.json(status);
+  }));
+
+  // Get one-off agent context usage
+  router.get('/oneoff/:oneOffId/context', asyncHandler((req: Request, res: Response) => {
+    const oneOffId = req.params['oneOffId'] as string;
+    const contextUsage = agentManager.getOneOffContextUsage(oneOffId);
+    res.json({ contextUsage });
+  }));
+
   // Send input to running interactive agent
   router.post('/send', validateBody(agentSendMessageSchema), validateProjectExists(projectRepository), moderateRateLimit, asyncHandler((req: Request, res: Response) => {
     const logger = getLogger('agent-send');

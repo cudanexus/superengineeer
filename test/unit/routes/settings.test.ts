@@ -64,22 +64,22 @@ describe('SettingsRouter', () => {
       const response = await request(app).get('/settings/models');
 
       expect(response.status).toBe(200);
-      const sonnetModel = response.body.models.find(
-        (m: { id: string }) => m.id === 'claude-sonnet-4-20250514'
+      const opusModel = response.body.models.find(
+        (m: { id: string }) => m.id === 'claude-opus-4-6'
       );
-      expect(sonnetModel).toBeDefined();
-      expect(sonnetModel.displayName).toBe('Claude Sonnet 4');
+      expect(opusModel).toBeDefined();
+      expect(opusModel.displayName).toBe('Claude Opus 4.6');
     });
 
-    it('should include opus model', async () => {
+    it('should include sonnet model', async () => {
       const response = await request(app).get('/settings/models');
 
       expect(response.status).toBe(200);
-      const opusModel = response.body.models.find(
-        (m: { id: string }) => m.id === 'claude-opus-4-20250514'
+      const sonnetModel = response.body.models.find(
+        (m: { id: string }) => m.id === 'claude-sonnet-4-5-20250929'
       );
-      expect(opusModel).toBeDefined();
-      expect(opusModel.displayName).toBe('Claude Opus 4');
+      expect(sonnetModel).toBeDefined();
+      expect(sonnetModel.displayName).toBe('Claude Sonnet 4.5');
     });
   });
 

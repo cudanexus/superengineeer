@@ -3,6 +3,11 @@
   --claudito-font-size: 14px;
 }
 
+/* Hide main toolbar buttons when one-off tab is active */
+.oneoff-hidden {
+  display: none !important;
+}
+
 /* Spin animation for loading states */
 @keyframes spin {
   from {

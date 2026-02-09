@@ -36,7 +36,7 @@ describe('WorkerAgent', () => {
     agent = new WorkerAgent(
       {
         projectPath: '/test/project',
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-opus-4-6',
         contextInitializer: mockContextInitializer,
       },
       mockSpawner
@@ -78,7 +78,7 @@ describe('WorkerAgent', () => {
         expect.arrayContaining([
           '--print',
           '--model',
-          'claude-sonnet-4-20250514',
+          'claude-opus-4-6',
           '--dangerously-skip-permissions',
           '--input-format',
           'stream-json',

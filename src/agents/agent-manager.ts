@@ -47,6 +47,12 @@ export interface OneOffAgentOptions {
   projectId: string;
   message: string;
   permissionMode?: 'acceptEdits' | 'plan';
+  label?: string;
+}
+
+export interface OneOffMeta {
+  projectId: string;
+  label: string;
 }
 
 export interface AgentManagerEvents {
@@ -61,6 +67,7 @@ export interface AgentManagerEvents {
   sessionRecovery: (projectId: string, oldConversationId: string, newConversationId: string, reason: string) => void;
   oneOffMessage: (oneOffId: string, message: AgentMessage) => void;
   oneOffStatus: (oneOffId: string, status: AgentStatus) => void;
+  oneOffWaiting: (oneOffId: string, isWaiting: boolean, version: number) => void;
 }
 
 export interface AgentResourceStatus {
@@ -128,6 +135,11 @@ export interface AgentManager {
   getRunningProjectIds(): string[];
   startOneOffAgent(options: OneOffAgentOptions): Promise<string>;
   stopOneOffAgent(oneOffId: string): Promise<void>;
+  getOneOffMeta(oneOffId: string): OneOffMeta | null;
+  sendOneOffInput(oneOffId: string, input: string, images?: ImageData[]): void;
+  getOneOffStatus(oneOffId: string): FullAgentStatus | null;
+  getOneOffContextUsage(oneOffId: string): ContextUsage | null;
+  isOneOffWaitingForInput(oneOffId: string): boolean;
   on<K extends keyof AgentManagerEvents>(event: K, listener: AgentManagerEvents[K]): void;
   off<K extends keyof AgentManagerEvents>(event: K, listener: AgentManagerEvents[K]): void;
 }
@@ -141,7 +153,7 @@ export interface AgentFactoryOptions {
   streaming?: AgentStreamingOptions;
   sessionId?: string;
   isNewSession?: boolean;
-  /** Claude model to use (e.g., 'claude-sonnet-4-20250514') */
+  /** Claude model to use (e.g., 'claude-opus-4-6') */
   model?: string;
   mcpServers?: McpServerConfig[];
 }
@@ -176,6 +188,7 @@ type EventListeners = {
 export class DefaultAgentManager implements AgentManager {
   private readonly agents: Map<string, ClaudeAgent> = new Map();
   private readonly oneOffAgents: Map<string, ClaudeAgent> = new Map();
+  private readonly oneOffMeta: Map<string, OneOffMeta> = new Map();
   private readonly agentQueue: AgentQueue;
   private readonly sessionManager: SessionManager;
   private readonly loopOrchestrator: AutonomousLoopOrchestrator;
@@ -202,8 +215,10 @@ export class DefaultAgentManager implements AgentManager {
     sessionRecovery: new Set(),
     oneOffMessage: new Set(),
     oneOffStatus: new Set(),
+    oneOffWaiting: new Set(),
   };
   private waitingVersions: Map<string, number> = new Map();
+  private oneOffWaitingVersions: Map<string, number> = new Map();
   private queuedMessages: Map<string, string[]> = new Map();
   private pendingPlans: Map<string, { planContent: string; sessionId: string | null }> = new Map();
   private _maxConcurrentAgents: number;
@@ -797,6 +812,10 @@ export class DefaultAgentManager implements AgentManager {
     });
 
     this.oneOffAgents.set(oneOffId, agent);
+    this.oneOffMeta.set(oneOffId, {
+      projectId: options.projectId,
+      label: options.label || 'One-off Agent',
+    });
     this.setupOneOffAgentListeners(oneOffId, agent);
     agent.start(options.message);
 
@@ -812,6 +831,52 @@ export class DefaultAgentManager implements AgentManager {
 
     await agent.stop();
     this.oneOffAgents.delete(oneOffId);
+    this.oneOffMeta.delete(oneOffId);
+    this.oneOffWaitingVersions.delete(oneOffId);
+  }
+
+  getOneOffMeta(oneOffId: string): OneOffMeta | null {
+    return this.oneOffMeta.get(oneOffId) || null;
+  }
+
+  sendOneOffInput(oneOffId: string, input: string, images?: ImageData[]): void {
+    const agent = this.oneOffAgents.get(oneOffId);
+
+    if (!agent) {
+      throw new Error(`No one-off agent found: ${oneOffId}`);
+    }
+
+    const contentToSend = images ? this.buildMultimodalContent(input, images) : input;
+    agent.sendInput(contentToSend);
+  }
+
+  getOneOffStatus(oneOffId: string): FullAgentStatus | null {
+    const agent = this.oneOffAgents.get(oneOffId);
+
+    if (!agent) {
+      return null;
+    }
+
+    return {
+      status: agent.status,
+      mode: agent.mode,
+      queued: false,
+      queuedMessageCount: agent.queuedMessageCount,
+      isWaitingForInput: agent.isWaitingForInput,
+      waitingVersion: this.oneOffWaitingVersions.get(oneOffId) || 0,
+      sessionId: agent.sessionId,
+      permissionMode: agent.permissionMode || null,
+    };
+  }
+
+  getOneOffContextUsage(oneOffId: string): ContextUsage | null {
+    const agent = this.oneOffAgents.get(oneOffId);
+    return agent ? agent.contextUsage : null;
+  }
+
+  isOneOffWaitingForInput(oneOffId: string): boolean {
+    const agent = this.oneOffAgents.get(oneOffId);
+    return agent ? agent.isWaitingForInput : false;
   }
 
   private setupOneOffAgentListeners(oneOffId: string, agent: ClaudeAgent): void {
@@ -823,8 +888,18 @@ export class DefaultAgentManager implements AgentManager {
       this.emit('oneOffStatus', oneOffId, status);
     });
 
+    agent.on('waitingForInput', (waitingStatus: WaitingStatus) => {
+      if (waitingStatus.isWaiting) {
+        this.oneOffWaitingVersions.set(oneOffId, waitingStatus.version);
+      }
+
+      this.emit('oneOffWaiting', oneOffId, waitingStatus.isWaiting, waitingStatus.version);
+    });
+
     agent.on('exit', () => {
       this.oneOffAgents.delete(oneOffId);
+      this.oneOffMeta.delete(oneOffId);
+      this.oneOffWaitingVersions.delete(oneOffId);
     });
   }
 

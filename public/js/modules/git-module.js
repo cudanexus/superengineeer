@@ -18,6 +18,7 @@
 
   // Module state
   var gitOperationInProgress = false;
+  var lastGitStatus = null;
 
   /**
    * Initialize the module with dependencies
@@ -90,6 +91,8 @@
   }
 
   function renderGitStatus(status) {
+    lastGitStatus = status;
+
     if (!status.isRepo) {
       $('#git-not-repo').removeClass('hidden').addClass('flex');
       $('#git-content').addClass('hidden');
@@ -1018,13 +1021,12 @@
   }
 
   function generateCommitMessage() {
-    if (!state.selectedProjectId || !gitStatus) {
+    if (!state.selectedProjectId) {
       showToast('No project selected', 'warning');
       return;
     }
 
-    // Check if we have staged files
-    if (!gitStatus.staged || gitStatus.staged.length === 0) {
+    if (!lastGitStatus || !lastGitStatus.staged || lastGitStatus.staged.length === 0) {
       showToast('No staged files to commit', 'warning');
       return;
     }
@@ -1032,40 +1034,56 @@
     var $link = $('#btn-generate-commit-msg');
     $link.html('<svg class="w-3 h-3 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Generating...');
 
-    // Build the prompt
-    var stagedFiles = gitStatus.staged.map(function(file) {
-      return file.type + ': ' + file.path;
-    }).join('\n');
+    showCommitLoadingMask();
 
-    var prompt = 'Please generate a concise and descriptive git commit message for the following staged changes:\n\n' +
-      'Staged files:\n' + stagedFiles + '\n\n' +
-      'Important:\n' +
-      '- The commit message should follow conventional commit format (type: description)\n' +
-      '- Keep it under 72 characters\n' +
-      '- Be specific about what changed\n' +
-      '- Use present tense ("add" not "added")\n' +
-      '- Don\'t include "Co-Authored-By" or any other metadata\n\n' +
-      'Just provide the commit message, nothing else.';
+    api.generateCommitMessage(state.selectedProjectId)
+      .done(function(result) {
+        if (result.message) {
+          $('#git-commit-message').val(result.message);
+          showToast('Commit message generated', 'success');
+        } else {
+          showToast('No commit message generated', 'warning');
+        }
+      })
+      .fail(function(xhr) {
+        showToast('Failed to generate commit message: ' + getErrorMessage(xhr), 'error');
+      })
+      .always(function() {
+        hideCommitLoadingMask();
+        resetGenerateButton();
+      });
+  }
 
-    // Check if agent is running
-    var project = findProjectById ? findProjectById(state.selectedProjectId) : null;
-    if (project && project.status === 'running') {
-      // Send via interactive agent
-      api.sendAgentMessage(state.selectedProjectId, prompt)
-        .done(function() {
-          showToast('Generating commit message...', 'info');
-          state.gitCommitMessagePending = true;
-        })
-        .fail(function(xhr) {
-          showToast('Failed to generate commit message: ' + getErrorMessage(xhr), 'error');
-        })
-        .always(function() {
-          $link.html('<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg> Generate');
-        });
-    } else {
-      showToast('Please start the agent first', 'warning');
-      $link.html('<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg> Generate');
+  function resetGenerateButton() {
+    $('#btn-generate-commit-msg').html(
+      '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+      '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>' +
+      '</svg> Generate'
+    );
+  }
+
+  function showCommitLoadingMask() {
+    var $section = $('#git-actions-section');
+    var $mask = $section.find('.commit-loading-mask');
+
+    if ($mask.length === 0) {
+      $mask = $('<div class="commit-loading-mask absolute inset-0 bg-gray-900/80 z-50 flex items-center justify-center">' +
+        '<div class="text-center">' +
+          '<svg class="w-8 h-8 animate-spin mx-auto mb-2 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+            '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>' +
+          '</svg>' +
+          '<p class="text-sm text-gray-300">Generating commit message...</p>' +
+        '</div>' +
+      '</div>');
+      $section.css('position', 'relative');
+      $section.append($mask);
     }
+
+    $mask.removeClass('hidden');
+  }
+
+  function hideCommitLoadingMask() {
+    $('#git-actions-section .commit-loading-mask').addClass('hidden');
   }
 
   return {

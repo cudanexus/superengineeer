@@ -305,6 +305,34 @@ describe('TaskDisplayModule', () => {
       expect(html).toContain('Working task');
       expect(html).toContain('Processing...');
     });
+
+    it('should use todosOverride when provided', () => {
+      mockState.currentTodos = [
+        { content: 'Global task', status: 'pending' }
+      ];
+
+      const overrideTodos = [
+        { content: 'Override task', status: 'completed' },
+        { content: 'Override task 2', status: 'in_progress' }
+      ];
+
+      const html = TaskDisplayModule.renderModalContent(overrideTodos);
+
+      expect(html).toContain('Override task');
+      expect(html).toContain('Override task 2');
+      expect(html).not.toContain('Global task');
+      expect(html).toContain('1 of 2 completed');
+    });
+
+    it('should fall back to state.currentTodos when override is null', () => {
+      mockState.currentTodos = [
+        { content: 'State task', status: 'pending' }
+      ];
+
+      const html = TaskDisplayModule.renderModalContent(null);
+
+      expect(html).toContain('State task');
+    });
   });
 
   describe('openTasksModal', () => {

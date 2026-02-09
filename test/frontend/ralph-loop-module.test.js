@@ -211,11 +211,11 @@ describe('RalphLoopModule', () => {
         }
 
         if (selector === '#ralph-worker-model') {
-          return { val: jest.fn().mockReturnValue('claude-sonnet-4-20250514') };
+          return { val: jest.fn().mockReturnValue('claude-opus-4-6') };
         }
 
         if (selector === '#ralph-reviewer-model') {
-          return { val: jest.fn().mockReturnValue('claude-sonnet-4-20250514') };
+          return { val: jest.fn().mockReturnValue('claude-sonnet-4-5-20250929') };
         }
 
         return {

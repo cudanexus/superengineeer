@@ -284,10 +284,11 @@
 
   /**
    * Render full tasks modal content
+   * @param {Array} [todosOverride] - Optional todos array to use instead of state.currentTodos
    * @returns {string} HTML string
    */
-  function renderModalContent() {
-    var todos = state.currentTodos;
+  function renderModalContent(todosOverride) {
+    var todos = todosOverride || state.currentTodos;
 
     if (!todos || todos.length === 0) {
       return '<div class="text-center py-8">' +

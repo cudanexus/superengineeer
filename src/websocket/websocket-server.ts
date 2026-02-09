@@ -1,7 +1,7 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { Server, IncomingMessage } from 'http';
 import { AgentManager, AgentMessage, QueuedProject, AgentResourceStatus, ContextUsage, WaitingStatus, FullAgentStatus } from '../agents';
-import { RoadmapGenerator, RoadmapMessage, AuthService, ShellService, ClaudeOptimizationService } from '../services';
+import { RoadmapGenerator, RoadmapMessage, AuthService, ShellService } from '../services';
 import { RalphLoopService, RalphLoopStatus, IterationSummary, ReviewerFeedback, RalphLoopFinalStatus } from '../services/ralph-loop/types';
 import { ConversationRepository, ProjectRepository } from '../repositories';
 import { getLogger, Logger, getLogStore } from '../utils/logger';
@@ -98,22 +98,19 @@ export interface FrontendErrorData {
   column?: number;
 }
 
-export interface OptimizationProgressData {
-  status: 'starting' | 'running' | 'processing' | 'completed' | 'failed';
-  message: string;
-  percentage?: number;
+export interface OneOffMessageData extends AgentMessage {
+  oneOffId: string;
 }
 
-export interface OptimizationCompleteData {
-  result: {
-    success: boolean;
-    originalContent?: string;
-    optimizedContent?: string;
-    diff?: string;
-    summary?: string;
-    error?: string;
-  };
-  filePath: string;
+export interface OneOffStatusData {
+  oneOffId: string;
+  status: string;
+}
+
+export interface OneOffWaitingData {
+  oneOffId: string;
+  isWaiting: boolean;
+  version: number;
 }
 
 
@@ -143,8 +140,9 @@ export type WebSocketMessageData =
   | RalphLoopErrorData
   | FrontendErrorData
   | ResourceEventData
-  | OptimizationProgressData
-  | OptimizationCompleteData
+  | OneOffMessageData
+  | OneOffStatusData
+  | OneOffWaitingData
   | string; // Covers 'connected' messages and simple loop events
 
 export interface SessionRecoveryData {
@@ -175,8 +173,9 @@ export interface WebSocketMessage {
     | 'ralph_loop_tool_use'
     | 'frontend_error'
     | 'resource_event'
-    | 'optimization_progress'
-    | 'optimization_complete'
+    | 'oneoff_message'
+    | 'oneoff_status'
+    | 'oneoff_waiting'
 ;
   projectId?: string;
   data?: WebSocketMessageData | SessionRecoveryData;
@@ -199,7 +198,6 @@ export interface WebSocketServerDependencies {
   ralphLoopService?: RalphLoopService;
   conversationRepository?: ConversationRepository;
   projectRepository?: ProjectRepository;
-  optimizationService?: ClaudeOptimizationService;
 }
 
 export class DefaultWebSocketServer implements ProjectWebSocketServer {
@@ -211,7 +209,6 @@ export class DefaultWebSocketServer implements ProjectWebSocketServer {
   private readonly ralphLoopService?: RalphLoopService;
   private readonly conversationRepository?: ConversationRepository;
   private readonly projectRepository?: ProjectRepository;
-  private readonly optimizationService?: ClaudeOptimizationService;
   private readonly projectSubscriptions: Map<string, Set<WebSocket>> = new Map();
   private readonly logger: Logger;
   // Client registry for tracking connected clients
@@ -226,13 +223,12 @@ export class DefaultWebSocketServer implements ProjectWebSocketServer {
     this.ralphLoopService = deps.ralphLoopService;
     this.conversationRepository = deps.conversationRepository;
     this.projectRepository = deps.projectRepository;
-    this.optimizationService = deps.optimizationService;
     this.logger = getLogger('websocket');
     this.setupAgentListeners();
     this.setupRoadmapListeners();
     this.setupShellListeners();
     this.setupRalphLoopListeners();
-    this.setupOptimizationListeners();
+    this.setupOneOffListeners();
     this.setupLoggerListeners();
   }
 
@@ -707,29 +703,40 @@ export class DefaultWebSocketServer implements ProjectWebSocketServer {
     });
   }
 
-  private setupOptimizationListeners(): void {
-    if (!this.optimizationService) {
-      this.logger.debug('No optimization service provided, skipping listener setup');
-      return;
-    }
+  private setupOneOffListeners(): void {
+    this.agentManager.on('oneOffMessage', (oneOffId, message) => {
+      const meta = this.agentManager.getOneOffMeta(oneOffId);
 
-    this.logger.info('Setting up optimization service listeners');
+      if (!meta) return;
 
-    this.optimizationService.on('optimizationProgress', (data: any) => {
-      const { projectId, status, message, percentage } = data;
-      this.broadcastToProject(projectId, {
-        type: 'optimization_progress',
-        projectId,
-        data: { status, message, percentage },
+      this.broadcastToProject(meta.projectId, {
+        type: 'oneoff_message',
+        projectId: meta.projectId,
+        data: { ...message, oneOffId },
       });
     });
 
-    this.optimizationService.on('optimization:complete', (data: any) => {
-      const { projectId, result, filePath } = data;
-      this.broadcastToProject(projectId, {
-        type: 'optimization_complete',
-        projectId,
-        data: { result, filePath },
+    this.agentManager.on('oneOffStatus', (oneOffId, status) => {
+      const meta = this.agentManager.getOneOffMeta(oneOffId);
+
+      if (!meta) return;
+
+      this.broadcastToProject(meta.projectId, {
+        type: 'oneoff_status',
+        projectId: meta.projectId,
+        data: { oneOffId, status },
+      });
+    });
+
+    this.agentManager.on('oneOffWaiting', (oneOffId, isWaiting, version) => {
+      const meta = this.agentManager.getOneOffMeta(oneOffId);
+
+      if (!meta) return;
+
+      this.broadcastToProject(meta.projectId, {
+        type: 'oneoff_waiting',
+        projectId: meta.projectId,
+        data: { oneOffId, isWaiting, version },
       });
     });
   }

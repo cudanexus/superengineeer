@@ -525,4 +525,83 @@ describe('ToolRenderer', () => {
       expect(ToolRenderer.getToolData('tool-to-clear')).toBeNull();
     });
   });
+
+  describe('generateResultPreview', () => {
+    it('should show line count for Read results', () => {
+      const content = 'line1\nline2\nline3\nline4\nline5';
+      const preview = ToolRenderer.generateResultPreview('Read', content);
+      expect(preview).toContain('5 lines');
+    });
+
+    it('should show file count for Glob results', () => {
+      const content = 'file1.js\nfile2.ts\nfile3.py';
+      const preview = ToolRenderer.generateResultPreview('Glob', content);
+      expect(preview).toContain('3 files');
+    });
+
+    it('should show match count for Grep results', () => {
+      const content = 'match1\nmatch2\nmatch3\nmatch4';
+      const preview = ToolRenderer.generateResultPreview('Grep', content);
+      expect(preview).toContain('4 matches');
+    });
+
+    it('should truncate long Bash output', () => {
+      const longOutput = 'x'.repeat(500);
+      const preview = ToolRenderer.generateResultPreview('Bash', longOutput);
+      expect(preview.length).toBeLessThan(longOutput.length);
+    });
+
+    it('should return empty for empty content', () => {
+      const preview = ToolRenderer.generateResultPreview('Read', '');
+      expect(preview).toBe('');
+    });
+
+    it('should return empty for null content', () => {
+      const preview = ToolRenderer.generateResultPreview('Read', null);
+      expect(preview).toBe('');
+    });
+  });
+
+  describe('updateToolStatus with result preview', () => {
+    it('should store resultContent after updateToolStatus', () => {
+      const mockStatusEl = {
+        length: 1,
+        removeClass: jest.fn().mockReturnThis(),
+        addClass: jest.fn().mockReturnThis()
+      };
+
+      const mockTool = {
+        length: 1,
+        find: jest.fn((selector) => {
+          if (selector === '.tool-status') return mockStatusEl;
+          if (selector === '.tool-result-preview') return { length: 0 };
+          return { length: 0 };
+        }),
+        append: jest.fn()
+      };
+
+      window.$ = jest.fn().mockReturnValue(mockTool);
+
+      const msg = {
+        toolInfo: {
+          id: 'tool-preview-1',
+          name: 'Read',
+          input: { file_path: '/test/file.ts' },
+          status: 'running'
+        }
+      };
+      ToolRenderer.renderToolMessage(msg);
+
+      ToolRenderer.updateToolStatus('tool-preview-1', 'completed', 'line1\nline2\nline3');
+
+      const toolData = ToolRenderer.getToolData('tool-preview-1');
+      expect(toolData).not.toBeNull();
+      expect(toolData.resultContent).toBe('line1\nline2\nline3');
+
+      // Should also append preview to DOM
+      expect(mockTool.append).toHaveBeenCalled();
+
+      delete window.$;
+    });
+  });
 });

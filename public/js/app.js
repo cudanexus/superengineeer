@@ -30,6 +30,7 @@
   var ClaudeCommandsModule = window.ClaudeCommandsModule;
   var ResourceMonitor = window.ResourceMonitor;
   var WebSocketModule = window.WebSocketModule;
+  var OneOffToolbarModule = window.OneOffToolbarModule;
 
   // Alias for backward compatibility within this file
   var api = ApiClient;
@@ -541,6 +542,15 @@
 
     // Render full tool details
     var html = ToolRenderer.renderToolArgs(toolData.name, toolData.input);
+
+    if (toolData.resultContent) {
+      html += '<div class="border-t border-gray-700 mt-3 pt-3">' +
+        '<h4 class="text-sm font-medium text-gray-400 mb-2">Result Output</h4>' +
+        '<pre class="whitespace-pre-wrap text-xs text-gray-300 bg-gray-800 p-3 rounded max-h-96 overflow-y-auto">' +
+        escapeHtml(toolData.resultContent) + '</pre>' +
+        '</div>';
+    }
+
     $content.html(html);
 
     openModal('modal-tool-detail');
@@ -886,7 +896,6 @@
 
     updateStartStopButtons();
     updateInputArea();
-    updateStopRestartButton(project.id);
   }
 
   // Conversation rendering
@@ -1012,7 +1021,7 @@
         ToolRenderer.updateToolStatus(
           message.toolInfo.id,
           message.toolInfo.status || 'completed',
-          message.toolInfo.resultContent
+          message.toolInfo.output || message.toolInfo.resultContent
         );
         return; // Don't render tool_result as a separate message
       }
@@ -1993,6 +2002,11 @@
 
     $('#font-size-display').text(size);
 
+    // Sync one-off tab toolbars
+    if (typeof OneOffToolbarModule !== 'undefined' && OneOffToolbarModule) {
+      OneOffToolbarModule.syncFontSize(state.fontSize);
+    }
+
     // Persist to localStorage
     saveToLocalStorage(LOCAL_STORAGE_KEYS.FONT_SIZE, state.fontSize);
   }
@@ -2022,12 +2036,7 @@
       if (state.isRalphLoopRunning) {
         stopRalphLoop();
       } else {
-        var project = findProjectById(state.selectedProjectId);
-        if (project && project.status === 'running') {
-          stopSelectedAgent();
-        } else {
-          restartSelectedAgent();
-        }
+        restartSelectedAgent();
       }
     });
 
@@ -2041,6 +2050,14 @@
 
     // Cancel button handler
     $('#btn-cancel-agent').on('click', function() {
+      // If a one-off tab is active, stop the one-off agent instead
+      if (state.activeOneOffTabId && state.selectedProjectId) {
+        api.stopOneOffAgent(state.selectedProjectId, state.activeOneOffTabId).fail(function() {
+          showToast('Failed to stop agent', 'error');
+        });
+        return;
+      }
+
       cancelAgentOperation();
     });
 
@@ -2774,6 +2791,12 @@
   }
 
   function sendMessage() {
+    // If a one-off tab is active, route to the one-off agent
+    if (state.activeOneOffTabId && typeof OneOffTabsModule !== 'undefined') {
+      OneOffTabsModule.sendOneOffMessage(state.activeOneOffTabId);
+      return;
+    }
+
     var $input = $('#input-message');
     var message = $input.val().trim();
     var hasImages = state.pendingImages.length > 0;
@@ -3129,6 +3152,11 @@
       if (RalphLoopModule) {
         RalphLoopModule.onProjectChanged();
       }
+
+      // Notify OneOffTabsModule of project change
+      if (typeof OneOffTabsModule !== 'undefined') {
+        OneOffTabsModule.onProjectChanged(projectId);
+      }
     }
 
     state.selectedProjectId = projectId;
@@ -3188,6 +3216,10 @@
         if (data.permissionMode) {
           state.permissionMode = data.permissionMode;
           PermissionModeModule.updateButtons();
+
+          if (typeof OneOffToolbarModule !== 'undefined' && OneOffToolbarModule) {
+            OneOffToolbarModule.syncPermissionMode(state.permissionMode);
+          }
         }
 
         // Update isWaitingForInput on the project (only if server version is newer)
@@ -3295,7 +3327,7 @@
       .done(function(data) {
         // data = { projectModel, effectiveModel, globalDefault }
         // If no project override, default to Opus
-        var modelValue = data.projectModel || 'claude-opus-4-20250514';
+        var modelValue = data.projectModel || 'claude-opus-4-6';
         $('#project-model-select').val(modelValue);
         state.currentProjectModel = data.projectModel;
         state.effectiveModel = data.effectiveModel;
@@ -3304,7 +3336,7 @@
       })
       .fail(function() {
         // On failure, default to Opus
-        $('#project-model-select').val('claude-opus-4-20250514');
+        $('#project-model-select').val('claude-opus-4-6');
         state.currentProjectModel = null;
       });
   }
@@ -3315,7 +3347,7 @@
     if (modelData.projectModel) {
       title = 'Using: ' + getModelDisplayName(modelData.projectModel) + ' (project override)';
     } else {
-      title = 'Using: Opus 4 (default)';
+      title = 'Using: Opus 4.6 (default)';
     }
 
     $('#model-selector').attr('title', title);
@@ -3323,8 +3355,9 @@
 
   function getModelDisplayName(modelId) {
     var displayNames = {
-      'claude-sonnet-4-20250514': 'Sonnet 4',
-      'claude-opus-4-20250514': 'Opus 4'
+      'claude-opus-4-6': 'Opus 4.6',
+      'claude-sonnet-4-5-20250929': 'Sonnet 4.5',
+      'claude-haiku-4-5-20251001': 'Haiku 4.5'
     };
 
     return displayNames[modelId] || modelId;
@@ -3349,6 +3382,11 @@
           globalDefault: state.globalDefaultModel
         });
 
+        // Sync one-off tab toolbars
+        if (typeof OneOffToolbarModule !== 'undefined' && OneOffToolbarModule) {
+          OneOffToolbarModule.syncModel(model);
+        }
+
         // Note: If an agent is running, it will continue with the old model
         // until it is restarted. The backend handles restart if needed.
         var project = findProjectById(projectId);
@@ -3359,7 +3397,7 @@
       })
       .fail(function(xhr) {
         // Revert the selector to the previous value or Opus if no override
-        $('#project-model-select').val(state.currentProjectModel || 'claude-opus-4-20250514');
+        $('#project-model-select').val(state.currentProjectModel || 'claude-opus-4-6');
         showErrorToast(xhr, 'Failed to change model');
       });
   }
@@ -3873,13 +3911,13 @@
         $('#ralph-config-task-description').val('');
         $('#ralph-config-max-turns').val(state.settings?.ralphLoop?.defaultMaxTurns || 5);
         // Always default to Opus for worker model
-        var workerModel = state.settings?.ralphLoop?.defaultWorkerModel || 'claude-opus-4-20250514';
-        // Override Sonnet with Opus if it's the old default
-        if (workerModel === 'claude-sonnet-4-20250514') {
-          workerModel = 'claude-opus-4-20250514';
+        var workerModel = state.settings?.ralphLoop?.defaultWorkerModel || 'claude-opus-4-6';
+        // Override old model IDs with new defaults
+        if (workerModel === 'claude-sonnet-4-20250514' || workerModel === 'claude-opus-4-20250514') {
+          workerModel = 'claude-opus-4-6';
         }
         $('#ralph-config-worker-model').val(workerModel);
-        $('#ralph-config-reviewer-model').val(state.settings?.ralphLoop?.defaultReviewerModel || 'claude-sonnet-4-20250514');
+        $('#ralph-config-reviewer-model').val(state.settings?.ralphLoop?.defaultReviewerModel || 'claude-sonnet-4-5-20250929');
         $('#ralph-config-worker-system-prompt').val('');
         $('#ralph-config-reviewer-system-prompt').val('');
 
@@ -3904,13 +3942,13 @@
         $('#ralph-config-task-description').val('');
         $('#ralph-config-max-turns').val(state.settings?.ralphLoop?.defaultMaxTurns || 5);
         // Always default to Opus for worker model
-        var workerModel = state.settings?.ralphLoop?.defaultWorkerModel || 'claude-opus-4-20250514';
-        // Override Sonnet with Opus if it's the old default
-        if (workerModel === 'claude-sonnet-4-20250514') {
-          workerModel = 'claude-opus-4-20250514';
+        var workerModel = state.settings?.ralphLoop?.defaultWorkerModel || 'claude-opus-4-6';
+        // Override old model IDs with new defaults
+        if (workerModel === 'claude-sonnet-4-20250514' || workerModel === 'claude-opus-4-20250514') {
+          workerModel = 'claude-opus-4-6';
         }
         $('#ralph-config-worker-model').val(workerModel);
-        $('#ralph-config-reviewer-model').val(state.settings?.ralphLoop?.defaultReviewerModel || 'claude-sonnet-4-20250514');
+        $('#ralph-config-reviewer-model').val(state.settings?.ralphLoop?.defaultReviewerModel || 'claude-sonnet-4-5-20250929');
         $('#ralph-config-worker-system-prompt').val('');
         $('#ralph-config-reviewer-system-prompt').val('');
 
@@ -4353,33 +4391,6 @@
       });
   }
 
-  function handleOptimizationProgress(projectId, data) {
-    if (projectId !== state.selectedProjectId || !state.claudeOptimizationPending) {
-      return;
-    }
-
-    // Update progress in the modal
-    ModalsModule.updateOptimizationProgress(data.message || 'Optimizing...');
-  }
-
-  function handleOptimizationComplete(projectId, data) {
-    if (projectId !== state.selectedProjectId || !state.claudeOptimizationPending) {
-      return;
-    }
-
-    state.claudeOptimizationPending = false;
-
-    if (!data.result || !data.result.success) {
-      ModalsModule.hideOptimizationLoadingMask();
-      showToast('Optimization failed: ' + (data.result?.error || 'Unknown error'), 'error');
-      // Reset the optimize button
-      $('#btn-optimize-claude-file').html('<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg> Optimize').prop('disabled', false);
-      return;
-    }
-
-    // Show the result in the modal
-    ModalsModule.showOptimizationResult(data.result);
-  }
 
   function updateProjectStatusById(projectId, status) {
     var project = findProjectById(projectId);
@@ -4390,34 +4401,7 @@
 
       if (state.selectedProjectId === projectId) {
         updateProjectStatus(project);
-        updateStopRestartButton(projectId);
       }
-    }
-  }
-
-  function updateStopRestartButton(projectId) {
-    var project = findProjectById(projectId);
-    var $button = $('#btn-restart-agent');
-
-    if (project && project.status === 'running') {
-      // Show Stop
-      $button.html(
-        '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
-        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>' +
-        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/>' +
-        '</svg>' +
-        'Stop'
-      );
-      $button.removeClass('bg-green-600 hover:bg-green-700').addClass('bg-red-600 hover:bg-red-700');
-    } else {
-      // Show Restart
-      $button.html(
-        '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
-        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>' +
-        '</svg>' +
-        'Restart'
-      );
-      $button.removeClass('bg-red-600 hover:bg-red-700').addClass('bg-green-600 hover:bg-green-700');
     }
   }
 
@@ -4611,11 +4595,23 @@
           DebugModal.handleFrontendError(message.data);
         }
         break;
-      case 'optimization_progress':
-        handleOptimizationProgress(message.projectId, message.data);
+      case 'oneoff_message':
+        if (typeof OneOffTabsModule !== 'undefined') {
+          OneOffTabsModule.appendMessage(message.projectId, message.data.oneOffId, message.data);
+        }
         break;
-      case 'optimization_complete':
-        handleOptimizationComplete(message.projectId, message.data);
+      case 'oneoff_status':
+        if (typeof OneOffTabsModule !== 'undefined') {
+          OneOffTabsModule.updateStatus(message.projectId, message.data.oneOffId, message.data.status);
+        }
+        break;
+      case 'oneoff_waiting':
+        if (typeof OneOffTabsModule !== 'undefined') {
+          OneOffTabsModule.updateWaiting(
+            message.projectId, message.data.oneOffId,
+            message.data.isWaiting, message.data.version
+          );
+        }
         break;
     }
   }
@@ -4731,22 +4727,6 @@
       }
     }
 
-    // Check for optimization response
-    if (state.claudeOptimizationPending && message.type === 'assistant' && message.content) {
-      if (message.content.includes('OPTIMIZED_CONTENT:') && message.content.includes('SUMMARY:')) {
-        // Extract optimized content
-        var match = message.content.match(/OPTIMIZED_CONTENT:\s*([\s\S]*?)\s*SUMMARY:/);
-        if (match && match[1]) {
-          var optimizedContent = match[1].trim();
-          // Update the editor with optimized content
-          $('#claude-file-editor').val(optimizedContent);
-          $('#btn-save-claude-file').removeClass('hidden');
-          showToast('CLAUDE.md optimized! Review changes and save.', 'success');
-        }
-        state.claudeOptimizationPending = false;
-      }
-    }
-
     // Check for commit message response
     if (state.gitCommitMessagePending && message.type === 'assistant' && message.content) {
       // Check if it looks like a commit message (short, no markdown, conventional format)
@@ -4804,6 +4784,10 @@
       if (fullStatus && fullStatus.permissionMode) {
         state.permissionMode = fullStatus.permissionMode;
         PermissionModeModule.updateButtons();
+
+        if (typeof OneOffToolbarModule !== 'undefined' && OneOffToolbarModule) {
+          OneOffToolbarModule.syncPermissionMode(state.permissionMode);
+        }
       }
 
       // Sync agent mode if provided
@@ -5253,12 +5237,53 @@
       showToast: showToast,
       showErrorToast: showErrorToast,
       openModal: openModal,
+      closeModal: closeModal,
+      switchTab: switchTab,
       Formatters: Formatters,
       FileBrowser: FileBrowser,
       marked: window.marked,
       hljs: window.hljs,
       findProjectById: findProjectById
     });
+
+    // Initialize OneOffToolbarModule with dependencies
+    if (typeof OneOffToolbarModule !== 'undefined') {
+      // Expose app-level functions via state so toolbar can call them
+      state.handleProjectModelChange = handleProjectModelChange;
+      state.updateFontSize = updateFontSize;
+
+      OneOffToolbarModule.init({
+        state: state,
+        escapeHtml: escapeHtml,
+        escapeRegExp: escapeRegExp,
+        openModal: openModal,
+        showToast: showToast,
+        PermissionModeModule: PermissionModeModule,
+        TaskDisplayModule: TaskDisplayModule
+      });
+    }
+
+    // Initialize OneOffTabsModule with dependencies
+    if (typeof OneOffTabsModule !== 'undefined') {
+      OneOffTabsModule.init({
+        state: state,
+        api: api,
+        escapeHtml: escapeHtml,
+        showToast: showToast,
+        showConfirm: function(message, onConfirm) {
+          showConfirm('Confirm', message).then(function(confirmed) {
+            if (confirmed && onConfirm) {
+              onConfirm();
+            }
+          });
+        },
+        MessageRenderer: MessageRenderer,
+        ToolRenderer: ToolRenderer,
+        FileCache: typeof FileCache !== 'undefined' ? FileCache : null,
+        TaskDisplayModule: TaskDisplayModule,
+        OneOffToolbarModule: typeof OneOffToolbarModule !== 'undefined' ? OneOffToolbarModule : null
+      });
+    }
 
     ConversationHistoryModule.init({
       state: state,

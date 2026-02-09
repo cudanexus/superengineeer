@@ -536,7 +536,7 @@ ApiClient.getGitStatus(projectId)
 const config = {
   taskDescription: 'Implement user authentication',
   maxTurns: 10,
-  workerModel: 'claude-sonnet-4-20250514'
+  workerModel: 'claude-opus-4-6'
 };
 
 ApiClient.startRalphLoop(projectId, config)

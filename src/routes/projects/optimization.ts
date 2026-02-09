@@ -38,31 +38,14 @@ export function createOptimizationRouter(deps: OptimizationRouterDependencies): 
         throw new ValidationError('Optimization is already in progress for this project');
       }
 
-      // Start optimization in background
-      const optimizationPromise = optimizationService.optimizeFile({
+      const oneOffId = await optimizationService.startOptimization({
         projectId,
         filePath: body.filePath,
         content: body.content,
-        optimizationGoals: body.optimizationGoals
+        optimizationGoals: body.optimizationGoals,
       });
 
-      // Return immediately with success
-      res.json({
-        success: true,
-        message: 'Optimization started'
-      });
-
-      // Handle optimization completion in background
-      optimizationPromise.then(result => {
-        // Result will be emitted via WebSocket
-        if (result.success) {
-          console.log(`Optimization completed for project ${projectId}`);
-        } else {
-          console.error(`Optimization failed for project ${projectId}: ${result.error}`);
-        }
-      }).catch(error => {
-        console.error(`Optimization error for project ${projectId}:`, error);
-      });
+      res.json({ success: true, oneOffId });
     })
   );
 

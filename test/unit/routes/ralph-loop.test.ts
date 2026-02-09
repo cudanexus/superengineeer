@@ -87,8 +87,8 @@ describe('Ralph Loop Routes', () => {
         expect.objectContaining({
           taskDescription: 'Implement feature Y',
           maxTurns: 5, // default from settings
-          workerModel: 'claude-opus-4-20250514',
-          reviewerModel: 'claude-sonnet-4-20250514',
+          workerModel: 'claude-opus-4-6',
+          reviewerModel: 'claude-sonnet-4-5-20250929',
         })
       );
     });

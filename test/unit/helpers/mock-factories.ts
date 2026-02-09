@@ -75,8 +75,8 @@ export const DEFAULT_TEST_SETTINGS: GlobalSettings = {
   promptTemplates: [],
   ralphLoop: {
     defaultMaxTurns: 5,
-    defaultWorkerModel: 'claude-opus-4-20250514',
-    defaultReviewerModel: 'claude-sonnet-4-20250514',
+    defaultWorkerModel: 'claude-opus-4-6',
+    defaultReviewerModel: 'claude-sonnet-4-5-20250929',
     defaultWorkerSystemPrompt: 'Worker prompt',
     defaultReviewerSystemPrompt: 'Reviewer prompt',
     historyLimit: 5,
@@ -970,6 +970,11 @@ export function createMockAgentManager(): jest.Mocked<AgentManager> {
     getRunningProjectIds: jest.fn().mockImplementation(() => Array.from(runningAgents.keys())),
     startOneOffAgent: jest.fn().mockResolvedValue('oneoff-test-id'),
     stopOneOffAgent: jest.fn().mockResolvedValue(undefined),
+    getOneOffMeta: jest.fn().mockReturnValue(null),
+    sendOneOffInput: jest.fn(),
+    getOneOffStatus: jest.fn().mockReturnValue(null),
+    getOneOffContextUsage: jest.fn().mockReturnValue(null),
+    isOneOffWaitingForInput: jest.fn().mockReturnValue(false),
     on: jest.fn().mockImplementation(<K extends keyof AgentManagerEvents>(
       event: K,
       listener: AgentManagerEvents[K]
@@ -1084,8 +1089,8 @@ import { RalphLoopFileSystem } from '../../../src/repositories/ralph-loop';
 
 export const sampleRalphLoopConfig: RalphLoopConfig = {
   maxTurns: 5,
-  workerModel: 'claude-sonnet-4-20250514',
-  reviewerModel: 'claude-sonnet-4-20250514',
+  workerModel: 'claude-opus-4-6',
+  reviewerModel: 'claude-sonnet-4-5-20250929',
   taskDescription: 'Implement a test feature',
 };
 

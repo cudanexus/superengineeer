@@ -464,6 +464,69 @@
     });
   };
 
+  /**
+   * Stop a one-off agent
+   * @function stopOneOffAgent
+   * @memberof module:ApiClient
+   * @param {string} projectId - Project UUID
+   * @param {string} oneOffId - One-off agent ID
+   * @returns {Promise<void>} Resolves when agent stopped
+   */
+  ApiClient.stopOneOffAgent = function(projectId, oneOffId) {
+    return $.ajax({
+      url: baseUrl + '/api/projects/' + projectId + '/agent/oneoff/' + encodeURIComponent(oneOffId) + '/stop',
+      method: 'POST'
+    });
+  };
+
+  /**
+   * Send a message to a one-off agent
+   * @param {string} projectId - Project UUID
+   * @param {string} oneOffId - One-off agent ID
+   * @param {string} message - Message to send
+   * @param {Array} [images] - Optional images
+   * @returns {Promise<void>}
+   */
+  ApiClient.sendOneOffMessage = function(projectId, oneOffId, message, images) {
+    var payload = { message: message };
+
+    if (images && images.length > 0) {
+      payload.images = images.map(function(img) {
+        return {
+          type: img.mimeType,
+          data: img.dataUrl.split(',')[1]
+        };
+      });
+    }
+
+    return $.ajax({
+      url: baseUrl + '/api/projects/' + projectId + '/agent/oneoff/' + encodeURIComponent(oneOffId) + '/send',
+      method: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify(payload)
+    });
+  };
+
+  /**
+   * Get one-off agent status
+   * @param {string} projectId - Project UUID
+   * @param {string} oneOffId - One-off agent ID
+   * @returns {Promise<Object>}
+   */
+  ApiClient.getOneOffStatus = function(projectId, oneOffId) {
+    return $.get(baseUrl + '/api/projects/' + projectId + '/agent/oneoff/' + encodeURIComponent(oneOffId) + '/status');
+  };
+
+  /**
+   * Get one-off agent context usage
+   * @param {string} projectId - Project UUID
+   * @param {string} oneOffId - One-off agent ID
+   * @returns {Promise<Object>}
+   */
+  ApiClient.getOneOffContext = function(projectId, oneOffId) {
+    return $.get(baseUrl + '/api/projects/' + projectId + '/agent/oneoff/' + encodeURIComponent(oneOffId) + '/context');
+  };
+
   // ============================================================
   // Queue
   // ============================================================
@@ -714,7 +777,7 @@
    * const updated = await ApiClient.updateSettings({
    *   maxConcurrentAgents: 5,
    *   sendWithCtrlEnter: false,
-   *   defaultModel: 'claude-sonnet-4-20250514'
+   *   defaultModel: 'claude-opus-4-6'
    * });
    */
   ApiClient.updateSettings = function(settings) {
@@ -770,7 +833,7 @@
    * @returns {Promise<void>} Resolves when updated
    * @example
    * // Set project to use Opus
-   * await ApiClient.setProjectModel(projectId, 'claude-opus-4-20250514');
+   * await ApiClient.setProjectModel(projectId, 'claude-opus-4-6');
    *
    * // Clear override to use global default
    * await ApiClient.setProjectModel(projectId, null);
@@ -1277,6 +1340,22 @@
     });
   };
 
+  /**
+   * Generate a commit message using a one-off Claude agent
+   * @function generateCommitMessage
+   * @memberof module:ApiClient
+   * @param {string} projectId - Project UUID
+   * @returns {Promise<{message: string}>} Generated commit message
+   */
+  ApiClient.generateCommitMessage = function(projectId) {
+    return $.ajax({
+      url: baseUrl + '/api/projects/' + projectId + '/git/generate-commit-message',
+      method: 'POST',
+      contentType: 'application/json',
+      timeout: 90000
+    });
+  };
+
   // ============================================================
   // Shell
   // ============================================================
@@ -1395,8 +1474,8 @@
    * const loop = await ApiClient.startRalphLoop(projectId, {
    *   taskDescription: 'Implement user authentication with JWT',
    *   maxTurns: 10,
-   *   workerModel: 'claude-sonnet-4-20250514',
-   *   reviewerModel: 'claude-opus-4-20250514'
+   *   workerModel: 'claude-opus-4-6',
+   *   reviewerModel: 'claude-sonnet-4-5-20250929'
    * });
    * console.log(`Started loop ${loop.taskId}`);
    */

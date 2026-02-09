@@ -113,7 +113,7 @@ export interface ClaudeAgentConfig {
   sessionId?: string;
   /** If true, use --session-id to create new session. If false, use --resume to resume existing session. */
   isNewSession?: boolean;
-  /** Claude model to use (e.g., 'claude-sonnet-4-20250514') */
+  /** Claude model to use (e.g., 'claude-opus-4-6') */
   model?: string;
   /** MCP (Model Context Protocol) servers to connect */
   mcpServers?: McpServerConfig[];

@@ -10,7 +10,7 @@ src/
   config/           # Configuration loading
   server/           # Express server + WebSocket integration
   routes/           # API route handlers
-  services/         # Business logic (ProjectService, RoadmapParser, InstructionGenerator)
+  services/         # Business logic (ProjectService, RoadmapParser, InstructionGenerator, ClaudeOptimizationService)
   repositories/     # Data persistence (Project, Conversation, Settings)
   agents/           # Claude agent management (ClaudeAgent, AgentManager)
   websocket/        # WebSocket server for real-time updates
@@ -44,270 +44,90 @@ conversations/
 
 ## Key Interfaces
 
-- `ConfigLoader` - Configuration loading abstraction
-- `HttpServer` - Server lifecycle abstraction
-- `FilesystemService` - Filesystem browsing abstraction
-- `ProjectRepository` - Project data persistence (status.json per project)
-- `ConversationRepository` - Conversation history (per project/item)
-- `SettingsRepository` - Global settings (includes agentPromptTemplate)
-- `ProjectService` - Project creation with folder validation
-- `RoadmapParser` - Parse ROADMAP.md into structured data
-- `RoadmapGenerator` - Generate ROADMAP.md via Claude
-- `InstructionGenerator` - Generate agent instructions from template
-- `GitService` - Git operations via simple-git library
-- `EventManager` - In-memory event bus for decoupled component communication
-- `ClaudeAgent` - Claude Code CLI process management
-- `AgentManager` - Multi-agent lifecycle management
-- `ProjectWebSocketServer` - Real-time updates via WebSocket
-- `Logger` - Configurable logging with project context + circular buffer
+- **Infrastructure**: `ConfigLoader`, `HttpServer`, `ProjectWebSocketServer`, `EventManager` (in-memory event bus), `Logger` (with circular buffer)
+- **Data**: `ProjectRepository` (status.json per project), `ConversationRepository` (per project/item), `SettingsRepository` (global settings + agentPromptTemplate)
+- **Services**: `ProjectService`, `FilesystemService`, `GitService` (simple-git), `RoadmapParser`, `RoadmapGenerator`, `InstructionGenerator`, `ClaudeOptimizationService` (edits files directly via Edit tool)
+- **Agents**: `ClaudeAgent` (CLI process management), `AgentManager` (multi-agent lifecycle: interactive + one-off)
 
 ## API Endpoints
 
-- `GET /api/health` - Health check
-- `GET /api/agents/status` - Get agent resource status
-- `GET /api/settings` - Get global settings
-- `PUT /api/settings` - Update global settings
-- `GET /api/settings/models` - Get available Claude models
-- `GET /api/fs/drives` - List available drives
-- `GET /api/fs/browse?path=` - List directory contents (directories only)
-- `GET /api/fs/browse-with-files?path=` - List directory with files (includes isEditable flag)
-- `GET /api/fs/read?path=` - Read file content
-- `PUT /api/fs/write` - Write file content (body: {path, content})
-- `DELETE /api/fs/delete` - Delete file or folder (body: {path, isDirectory})
-- `GET /api/projects` - List all projects
-- `POST /api/projects` - Create project
-- `GET /api/projects/:id` - Get project details
-- `DELETE /api/projects/:id` - Delete project
-- `GET /api/projects/:id/roadmap` - Get roadmap (content + parsed)
-- `POST /api/projects/:id/roadmap/generate` - Generate roadmap via Claude (streams output via WebSocket)
-- `PUT /api/projects/:id/roadmap` - Modify existing roadmap via Claude prompt (streams output via WebSocket)
-- `POST /api/projects/:id/roadmap/respond` - Send response to Claude when it asks a question
-- `DELETE /api/projects/:id/roadmap/task` - Delete a task (body: {phaseId, milestoneId, taskIndex})
-- `DELETE /api/projects/:id/roadmap/milestone` - Delete a milestone (body: {phaseId, milestoneId})
-- `DELETE /api/projects/:id/roadmap/phase` - Delete a phase (body: {phaseId})
-- `PUT /api/projects/:id/roadmap/next-item` - Set next item to work on
-- `POST /api/projects/:id/agent/interactive` - Start interactive agent session
-- `POST /api/projects/:id/agent/interactive` - Start interactive agent session (body: {message?, images?, sessionId?, permissionMode?})
-- `POST /api/projects/:id/agent/send` - Send message to interactive agent
-- `POST /api/projects/:id/agent/stop` - Stop agent
-- `GET /api/projects/:id/agent/status` - Get agent status (includes mode, sessionId, waitingVersion)
-- `GET /api/projects/:id/agent/context` - Get agent context usage (tokens, percentages)
-- `GET /api/projects/:id/agent/loop` - Get loop status
-- `GET /api/projects/:id/agent/queue` - Get queued messages
-- `DELETE /api/projects/:id/agent/queue` - Remove project from agent startup queue
-- `DELETE /api/projects/:id/agent/queue/:index` - Remove a queued message by index
-- `GET /api/projects/:id/conversation` - Get conversation history
-- `GET /api/projects/:id/conversations` - List all conversations (supports `?limit=N`)
-- `PUT /api/projects/:id/conversations/:conversationId` - Rename conversation (body: {label})
-- `GET /api/projects/:id/debug` - Get debug info
-- `GET /api/projects/:id/claude-files` - Get CLAUDE.md files (global and project)
-- `PUT /api/projects/:id/claude-files` - Save CLAUDE.md file (body: {filePath, content})
-- `GET /api/projects/:id/permissions` - Get project permission overrides
-- `PUT /api/projects/:id/permissions` - Update project permission overrides
-- `GET /api/projects/:id/model` - Get project model configuration
-- `PUT /api/projects/:id/model` - Update project model override (body: {model})
-- `GET /api/projects/:id/optimizations` - Get project optimization suggestions (CLAUDE.md, ROADMAP.md)
-- `POST /api/projects/:id/ralph-loop/start` - Start Ralph Loop (body: {taskDescription, maxTurns?, workerModel?, reviewerModel?})
-- `POST /api/projects/:id/ralph-loop/:taskId/stop` - Stop Ralph Loop
-- `POST /api/projects/:id/ralph-loop/:taskId/pause` - Pause Ralph Loop
-- `POST /api/projects/:id/ralph-loop/:taskId/resume` - Resume Ralph Loop
-- `GET /api/projects/:id/ralph-loop` - List all Ralph Loops for project
-- `GET /api/projects/:id/ralph-loop/:taskId` - Get Ralph Loop state
-- `DELETE /api/projects/:id/ralph-loop/:taskId` - Delete Ralph Loop
+All project routes prefixed with `/api/projects/:id`. Standard REST verbs (GET/POST/PUT/DELETE).
+
+**Global**: `GET /api/health`, `GET /api/agents/status`, `GET|PUT /api/settings`, `GET /api/settings/models`
+
+**Filesystem** (`/api/fs`): `drives`, `browse?path=`, `browse-with-files?path=`, `read?path=`, `PUT write`, `DELETE delete`
+
+**Projects**: CRUD on `/api/projects` + `/:id`
+
+**Roadmap** (`/:id/roadmap`): GET (content+parsed), `POST generate`, PUT (modify), `POST respond`, `PUT next-item`, DELETE `task|milestone|phase`
+
+**Agent** (`/:id/agent`): `POST interactive` (start session), `POST send`, `POST stop`, GET `status|context|loop|queue`, DELETE `queue(/:index)`
+
+**One-Off Agents** (`/:id/agent/oneoff/:oneOffId`): `POST send|stop`, GET `status|context`
+
+**Conversations** (`/:id`): GET `conversation|conversations(?limit=N)`, `PUT conversations/:conversationId` (rename)
+
+**Config** (`/:id`): GET/PUT `claude-files|permissions|model`, GET `optimizations|debug`
+
+**Ralph Loop** (`/:id/ralph-loop`): GET (list), `POST start`, `/:taskId` GET|DELETE, `/:taskId/stop|pause|resume`
 
 ## WebSocket Messages
 
-- `subscribe` / `unsubscribe` - Subscribe to project updates
-- `agent_message` - Real-time agent output
-- `agent_status` - Agent status changes
-- `agent_waiting` - Agent waiting for input status (includes version for sync)
-- `queue_change` - Queue status updates
-- `roadmap_message` - Real-time roadmap generation output
-- `session_recovery` - Session couldn't be resumed, new conversation created
-- `ralph_loop_status` - Ralph Loop status changes (idle/worker_running/reviewer_running/completed/failed/paused)
-- `ralph_loop_iteration` - Ralph Loop iteration started
-- `ralph_loop_output` - Ralph Loop real-time worker/reviewer output
-- `ralph_loop_complete` - Ralph Loop finished (approved/max_turns_reached/critical_failure)
-- `ralph_loop_worker_complete` - Worker iteration completed
-- `ralph_loop_reviewer_complete` - Reviewer iteration completed
-- `ralph_loop_error` - Ralph Loop error occurred
+**Core**: `subscribe`/`unsubscribe`, `agent_message`, `agent_status`, `agent_waiting` (includes version), `queue_change`, `roadmap_message`, `session_recovery`
 
-## Automated Development Systems
+**Ralph Loop**: `ralph_loop_status` (idle/worker_running/reviewer_running/completed/failed/paused), `ralph_loop_iteration`, `ralph_loop_output`, `ralph_loop_complete`, `ralph_loop_worker_complete`, `ralph_loop_reviewer_complete`, `ralph_loop_error`
 
-### Ralph Loop (Primary)
-Ralph Loop implements Geoffrey Huntley's "Ralph Wiggum technique" - an iterative worker/reviewer pattern:
+**One-Off Agents**: `oneoff_message`, `oneoff_status`, `oneoff_waiting` (includes oneOffId, isWaiting, version)
+
+## Ralph Loop
+
+Implements Geoffrey Huntley's "Ralph Wiggum technique" - an iterative worker/reviewer pattern:
 1. **Worker Phase**: Executes task with fresh context each iteration
 2. **Reviewer Phase**: Reviews worker output and provides structured feedback
 3. **Decision**: Approve (complete), reject (iterate), or fail (stop)
 4. **Configurable**: Max iterations, worker/reviewer models, custom prompts
 5. **Real-time**: Live output streaming and progress tracking
 
-
-## Configuration (Environment Variables)
-
-- `PORT` - Server port (default: 3000)
-- `HOST` - Server host (default: 0.0.0.0)
-- `NODE_ENV` - Environment (development/production/test)
-- `LOG_LEVEL` - Log level (debug/info/warn/error)
-- `MAX_CONCURRENT_AGENTS` - Max concurrent agents (default: 3)
-- `DEV_MODE` or `CLAUDITO_DEV_MODE` - Enable dev mode (default: true in development, false in production). Dev mode shows experimental features like the Git tab.
-
-## Commands
+## Commands & Configuration
 
 - `npm run dev` - Development with hot reload
 - `npm run build` - Build TypeScript
 - `npm start` - Run production build
 - `npm test` - Run tests
 
-## Agent Execution Modes
+**Environment Variables**: `PORT` (3000), `HOST` (0.0.0.0), `NODE_ENV`, `LOG_LEVEL`, `MAX_CONCURRENT_AGENTS` (3), `DEV_MODE`/`CLAUDITO_DEV_MODE` (enables experimental features like Git tab)
 
-- **Interactive Mode**: Direct chat with Claude, send messages, see tool usage in real-time. Agent auto-starts when first message is sent.
-- **Ralph Loop Mode**: Advanced iterative development with worker/reviewer cycle. Dedicated UI in Ralph Loop tab provides comprehensive controls, progress tracking, and history.
+## Permissions & Modes
 
-## Permission Modes (Runtime Toggle)
+**Runtime modes** (changeable via UI, restarts agent with same session):
+- **Accept Edits** (default): Auto-approve file edits
+- **Plan**: Review plan before execution. `ExitPlanMode` shows Approve ("yes") / Request Changes (user input) / Reject ("no")
 
-Permission mode can be changed at runtime via UI buttons. Changing mode while agent is running restarts it with the same session:
-- **Accept Edits** (default): Auto-approve file edits (pencil icon)
-- **Plan**: Review plan before execution (clipboard icon)
+**Global** (`claudePermissions`): `dangerouslySkipPermissions`, `defaultMode` ('acceptEdits'|'plan'), `allowRules`/`denyRules` arrays (format: `Tool` or `Tool(specifier)`, e.g. "Read", "Bash(npm run:*)")
 
-When Claude uses `EnterPlanMode` or `ExitPlanMode` tools, the UI displays special plan mode indicators. For `ExitPlanMode`:
-- **Approve Plan**: Sends "yes" to Claude
-- **Request Changes**: Focuses input field for user to describe desired changes
-- **Reject Plan**: Sends "no" to Claude
+**Per-project** (`permissionOverrides` in status.json): `enabled`, `allowRules`, `denyRules`, `defaultMode`
 
 ## Session Management
 
-Conversations use UUID v4 IDs that also serve as Claude session IDs:
-- New conversations: `--session-id {uuid}` creates a new Claude session with that specific ID
-- Resuming conversations: `--resume {uuid}` resumes an existing Claude session
-- Changing permission mode queues the change until Claude is idle, then restarts with 1s delay
-- **Session Recovery**: If Claude doesn't recognize the session (deleted or old app version), the system:
-  1. Deletes the old conversation
-  2. Creates a new conversation with fresh UUID
-  3. Clears the UI output
-  4. Notifies the user that the conversation couldn't be recovered
-  5. Restarts with the new session (using `--session-id`)
+Sessions use UUID v4 IDs: `--session-id {uuid}` (new) or `--resume {uuid}` (existing). Permission mode changes queue until idle, then restart with 1s delay. Unrecognized sessions auto-create fresh conversation with new UUID.
 
-## Server Features
+## Features
 
-- **Graceful Shutdown**: SIGINT/SIGTERM stops all running agents and flushes pending conversation writes before server shutdown
-- **PID Tracking**: Agent PIDs persisted to `$HOME/.claudito/pids.json`, orphans verified and killed on startup
-- **Conversation Statistics**: Duration, message count, tool call count, total tokens displayed in UI (real-time updates)
-- **Context Usage Persistence**: Token usage saved to both conversation metadata and project status.json for historical tracking (viewable even when agent is stopped)
+**Server**: Graceful shutdown (SIGINT/SIGTERM), PID tracking (`$HOME/.claudito/pids.json`, orphans killed on startup), conversation statistics (duration, messages, tool calls, tokens), context usage persistence
 
-## UI Features
-
-- **Two Main Tabs**:
-  - Agent Output: Conversation with Claude, tool usage, messages
-  - Project Files: File browser with editor for project files
-
-- **Interactive Mode**:
-  - Auto-starts agent on first message send
-  - Configurable keybindings (Ctrl+Enter or Enter to send)
-  - No Start button needed - just type and send
-  - Permission mode toggle (Accept Edits/Plan) - restarts agent with same session
-  - Model selector in header for per-project model override
-
-- **File Editor**:
-  - Browse project files in tree view
-  - Open multiple files in tabs
-  - Edit text files with save functionality (Ctrl+S)
-  - Delete files and folders
-  - Unsaved changes indicator
-
-- **Claude Files Modal**:
-  - Edit CLAUDE.md files (global and project)
-  - Markdown preview with syntax highlighting
-
-- **Conversation History**:
-  - View past conversations
-  - Rename conversations with custom labels
-  - Configurable history limit (default: 25)
-
-- **Roadmap Management**:
-  - Select milestones or individual tasks with checkboxes
-  - "Run Selected" button auto-generates prompts
-  - Delete individual tasks, entire milestones, or phases
-  - Works with both running and stopped agents
-
-- **Debug Modal**:
-  - View current agent process info (PID, working directory, start time)
-  - Monitor Ralph Loop state
-  - See last executed command with copy button
-  - Browse recent logs with color-coded levels
-  - View all tracked processes across projects
-
-- **Ralph Loop Tab**:
-  - Iterative worker/reviewer development pattern (Geoffrey Huntley's Ralph Wiggum technique)
-  - Configure task description, max iterations, and models
-  - Start/Pause/Resume/Stop controls
-  - Real-time progress display with iteration tracking
-  - Live output streaming from worker and reviewer
-  - History view of past Ralph Loop executions
-
-- **Mobile Support**:
-  - Responsive sidebar with hamburger menu toggle
-  - Collapsible navigation on small screens
-  - File browser: full-screen file list, then full-screen editor with back button
-  - Claude files modal: full-screen file list, then full-screen editor with back button
+**UI Tabs**: Agent Output (conversation + tool usage) and Project Files (tree view, multi-tab editor, Ctrl+S save, delete files/folders)
+- **One-Off Agent Sub-Tabs**: Full rendering per tab, per-tab input/toolbar (Tasks, Search, Permission Mode, Model, Font Size), direct file editing
+- **Claude Files Modal**: Edit CLAUDE.md files (global/project), markdown preview, optimize via one-off agent
+- **Roadmap Management**: Checkbox selection, "Run Selected" auto-generates prompts, delete tasks/milestones/phases
+- **Ralph Loop Tab**: Start/Pause/Resume/Stop controls, live output streaming, history view
+- **Other**: Conversation history (view/rename, configurable limit), debug modal, mobile-responsive layout
 
 ## Settings
 
-- `maxConcurrentAgents` - Maximum concurrent agents (1-10)
-- `agentPromptTemplate` - Template for agent instructions
-- `appendSystemPrompt` - Custom text appended to Claude's system prompt via `--append-system-prompt` flag. Changing this setting restarts all running agents.
-- `sendWithCtrlEnter` - Input keybinding preference (true=Ctrl+Enter sends, false=Enter sends)
-- `historyLimit` - Maximum conversations in history dropdown (5-100, default: 25)
-- `promptTemplates` - Reusable message templates with interpolation variables
-- `defaultModel` - Default Claude model for agents (default: claude-sonnet-4-20250514)
+`maxConcurrentAgents` (1-10), `agentPromptTemplate`, `appendSystemPrompt` (restarts all agents on change), `sendWithCtrlEnter`, `historyLimit` (5-100, default: 25), `promptTemplates`, `defaultModel` (default: claude-opus-4-6)
 
-## Prompt Templates
-
-Templates allow creating reusable prompts with dynamic fields. Managed in Settings > Templates tab.
-
-**Variable syntax**: `${type:name}` or `${type:name:options}`
-
-- `${text:varname}` - Single-line text input
-- `${textarea:varname}` - Multi-line textarea
-- `${select:varname:opt1,opt2,opt3}` - Dropdown select
-- `${checkbox:varname}` - Boolean checkbox
-
-**Usage**: Click template button near input → select template → fill variables (if any) → insert into message
-
-**Default templates**: Code Review, Bug Fix Request, Feature Implementation, Refactoring Request, Documentation Request
-
-## Claude Code Permissions
-
-Global permissions in `claudePermissions`:
-- `dangerouslySkipPermissions` - Skip ALL permission prompts (legacy, not recommended)
-- `defaultMode` - Permission mode: 'acceptEdits' | 'plan' (default: 'acceptEdits')
-- `allowRules` - Array of tool rules to auto-approve (e.g., "Read", "Bash(npm run:*)")
-- `denyRules` - Array of tool rules to block (e.g., "Read(./.env)", "Bash(rm -rf:*)")
-
-Per-project overrides in `permissionOverrides` (stored in project status.json):
-- `enabled` - Whether project overrides are active
-- `allowRules` - Additional allow rules for this project
-- `denyRules` - Additional deny rules for this project
-- `defaultMode` - Override default mode for this project
-
-Permission rules follow Claude Code CLI format: `Tool` or `Tool(specifier)`
+**Prompt Templates**: Reusable prompts (Settings > Templates). Syntax: `${type:name}` or `${type:name:options}`. Types: `text`, `textarea`, `select:opt1,opt2`, `checkbox`
 
 ## Mermaid.js Support
 
-Claudito supports rendering Mermaid.js diagrams in Claude's output. Simply use code blocks with the `mermaid` language:
-
-```markdown
-\`\`\`mermaid
-graph TD
-    A[Start] --> B{Decision}
-    B -->|Yes| C[Do this]
-    B -->|No| D[Do that]
-\`\`\`
-```
-
-- **Automatic rendering**: Mermaid diagrams render automatically in messages and plan content
-- **Dark theme**: Diagrams are styled to match Claudito's dark UI
-- **Claude skill**: Use `/mermaid` command or the mermaid skill via the bundled plugin
-- **Plugin**: The `claudito-plugin` directory contains a Claude Code plugin with a Mermaid diagram generation skill
-  - Load with: `claude --plugin-dir ./claudito-plugin`
-- **Supported types**: Flowcharts, sequence diagrams, class diagrams, state diagrams, ER diagrams, Gantt charts, and more
+Mermaid diagrams in ` ```mermaid ` code blocks render automatically in messages and plan content (dark theme). Use `/mermaid` skill via the bundled plugin (`claudito-plugin` directory, load with `claude --plugin-dir ./claudito-plugin`). See `doc/MERMAID_EXAMPLES.md` for syntax reference.
