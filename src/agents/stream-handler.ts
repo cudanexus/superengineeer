@@ -759,9 +759,14 @@ export class StreamHandler extends EventEmitter {
         this.emitResultMessage(cliEvent.result, true);
       }
     }
-    // Success results are already shown via handleAssistantMessage.
-    // Waiting state is determined by ask_question/AskUserQuestion events,
-    // not by result events (which fire after each turn, not only when truly idle).
+
+    if (!cliEvent.is_error) {
+      this.waitingVersion++;
+      this.emit('waitingForInput', {
+        isWaiting: true,
+        version: this.waitingVersion,
+      });
+    }
   }
 
   private handleResultErrors(errors: string[]): void {

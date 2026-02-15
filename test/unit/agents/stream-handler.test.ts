@@ -598,13 +598,14 @@ describe('StreamHandler', () => {
   });
 
   describe('result events', () => {
-    it('should not emit waitingForInput on success result (handled by ask_question events)', () => {
+    it('should emit waitingForInput on success result', () => {
       handler.processLine(JSON.stringify({
         type: 'result',
         subtype: 'success',
       }));
 
-      expect(waitingStatuses).toHaveLength(0);
+      expect(waitingStatuses).toHaveLength(1);
+      expect(waitingStatuses[0]).toEqual({ isWaiting: true, version: 1 });
     });
 
     it('should emit sessionNotFound for session errors', () => {
