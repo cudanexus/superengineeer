@@ -212,13 +212,18 @@
         </div>
       </div>
 
-      <!-- Add Project Button -->
-      <div class="p-2">
-        <button id="btn-add-project" class="w-full bg-purple-600 hover:bg-purple-700 text-white py-1.5 px-3 rounded flex items-center justify-center gap-1.5 text-sm transition-colors">
+      <!-- Add Project Buttons -->
+      <div class="p-2 flex gap-2">
+        <button id="btn-add-project" class="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-1.5 px-3 rounded flex items-center justify-center gap-1.5 text-sm transition-colors">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
           </svg>
-          Add Project
+          Add
+        </button>
+        <button id="btn-import-github" title="Import from GitHub" class="bg-gray-700 hover:bg-gray-600 text-white py-1.5 px-2 rounded flex items-center justify-center text-sm transition-colors">
+          <svg class="w-4 h-4" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+          </svg>
         </button>
       </div>
 
@@ -356,17 +361,15 @@
                   </svg>
                   History
                 </button>
-                <button id="btn-context-usage" class="bg-gray-700 hover:bg-gray-600 text-white py-1 px-2 rounded flex items-center gap-1 text-xs transition-colors" title="View context usage">
+                <button id="btn-optimizations-menu" class="bg-gray-700 hover:bg-gray-600 text-white py-1 px-2 rounded flex items-center gap-1 text-xs transition-colors relative" title="Optimizations menu">
                   <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
                   </svg>
-                  Context Usage
-                </button>
-                <button id="btn-claude-files" class="bg-gray-700 hover:bg-gray-600 text-white py-1 px-2 rounded flex items-center gap-1 text-xs transition-colors" title="View and edit CLAUDE.md files">
-                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                  Optimizations
+                  <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                   </svg>
-                  Claude Files
+                  <span id="optimizations-menu-badge" class="hidden absolute -top-1 -right-1 bg-yellow-500 text-black text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">!</span>
                 </button>
                 <button id="btn-quick-actions" class="bg-gray-700 hover:bg-gray-600 text-white py-1 px-2 rounded flex items-center gap-1 text-xs transition-colors" title="Quick Actions - Run templates with one click">
                   <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -384,13 +387,6 @@
                   Tasks
                   <span id="tasks-badge" class="hidden absolute -top-1 -right-1 bg-purple-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-medium">0</span>
                 </button>
-                <button id="btn-optimizations" class="bg-gray-700 hover:bg-gray-600 text-white py-1 px-2 rounded flex items-center gap-1 text-xs transition-colors relative" title="Check project optimizations">
-                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
-                  </svg>
-                  Optimizations
-                  <span id="optimizations-badge" class="hidden absolute -top-1 -right-1 bg-yellow-500 text-black text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">!</span>
-                </button>
                 <button id="btn-search" class="bg-gray-700 hover:bg-gray-600 text-white py-1 px-2 rounded flex items-center gap-1 text-xs transition-colors" title="Search conversation (Ctrl+F)">
                   <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
@@ -402,6 +398,22 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/>
                   </svg>
                   MCP Servers
+                </button>
+                <button id="btn-toggle-chrome" class="bg-gray-700 hover:bg-gray-600 text-white py-1 px-2 rounded flex items-center gap-1 text-xs transition-colors" title="Toggle Chrome browser usage for agents">
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3a9 9 0 016.36 2.64M12 12h9M12 12L5.64 5.64M12 12l-2.36 8.64"/>
+                  </svg>
+                  <span id="chrome-toggle-label">Chrome</span>
+                </button>
+                <button id="btn-github-menu" class="relative bg-gray-700 hover:bg-gray-600 text-white py-1 px-2 rounded flex items-center gap-1 text-xs transition-colors hidden" title="GitHub menu">
+                  <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/>
+                  </svg>
+                  GitHub
+                  <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                  </svg>
                 </button>
                 <button id="btn-ralph-loop" class="bg-teal-600 hover:bg-teal-700 text-white py-1 px-2 rounded flex items-center gap-1 text-xs transition-colors" title="Start Ralph Loop">
                   <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -444,6 +456,13 @@
                     <option value="claude-haiku-4-5-20251001" class="bg-gray-700 text-white">Haiku 4.5</option>
                   </select>
                 </div>
+                <span id="active-issue-indicator" class="hidden flex items-center gap-1 text-xs text-green-400">
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                  </svg>
+                  <span>Issue #<span id="active-issue-number"></span></span>
+                  <button id="btn-finish-issue-toolbar" class="bg-green-600 hover:bg-green-500 text-white text-xs px-2 py-0.5 rounded transition-colors">Finish</button>
+                </span>
                 <div class="border-r border-gray-600 h-4"></div>
                 <div id="agent-output-spinner" class="loading-spinner small hidden"></div>
                 <span id="agent-status-label" class="text-xs text-gray-400 hidden">Agent running...</span>
@@ -1045,6 +1064,26 @@
     </div>
   </div>
 
+  <!-- Confirm Permission Mode Change Modal -->
+  <div id="modal-confirm-mode-change" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-sm">
+        <div class="p-3 border-b border-gray-700">
+          <h3 class="font-semibold text-blue-400">Switch Permission Mode</h3>
+        </div>
+        <div class="p-3">
+          <p class="text-sm text-gray-300 mb-2">Switch to <strong id="mode-change-target-label" class="text-white"></strong> mode?</p>
+          <p class="text-xs text-gray-500">The agent will be restarted and will continue from where it left off.</p>
+        </div>
+        <div class="p-3 border-t border-gray-700 flex justify-end gap-2">
+          <button type="button" class="modal-close px-3 py-1.5 text-sm text-gray-300 hover:text-white transition-colors">Cancel</button>
+          <button type="button" id="btn-confirm-mode-change" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-sm transition-colors">Switch & Restart</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Confirm Delete Task Modal -->
   <div id="modal-confirm-delete-task" class="modal hidden">
     <div class="modal-backdrop"></div>
@@ -1197,6 +1236,12 @@
                   <span class="text-sm text-gray-300">Enable desktop notifications</span>
                 </label>
                 <p class="text-xs text-gray-500 ml-6">Get notified when an agent is waiting for your input</p>
+              </div>
+            </div>
+            <div class="border-t border-gray-700 pt-4 mt-4">
+              <label class="block text-xs font-medium text-gray-300 mb-2">GitHub Integration</label>
+              <div id="github-status-indicator" class="text-xs text-gray-400">
+                Checking...
               </div>
             </div>
           </div>
@@ -1404,6 +1449,43 @@
     </div>
     <div class="p-2 border-t border-gray-700 text-xs text-gray-400 text-center">
       Manage in Settings → Templates
+    </div>
+  </div>
+
+  <!-- Optimizations Dropdown -->
+  <div id="optimizations-dropdown" class="hidden fixed bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 w-56 overflow-hidden">
+    <div class="p-1">
+      <button id="btn-optimizations" class="w-full text-left px-3 py-2 text-xs text-gray-300 hover:bg-gray-700 rounded flex items-center gap-2 relative">
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+        </svg>
+        General Optimizations
+        <span id="optimizations-badge" class="hidden ml-auto bg-yellow-500 text-black text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">!</span>
+      </button>
+      <button id="btn-claude-files" class="w-full text-left px-3 py-2 text-xs text-gray-300 hover:bg-gray-700 rounded flex items-center gap-2">
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+        </svg>
+        Claude Files
+      </button>
+    </div>
+  </div>
+
+  <!-- GitHub Dropdown -->
+  <div id="github-dropdown" class="hidden fixed bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 w-48 overflow-hidden">
+    <div class="p-1">
+      <button id="btn-view-issues" class="w-full text-left px-3 py-2 text-xs text-gray-300 hover:bg-gray-700 rounded flex items-center gap-2">
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        Issues
+      </button>
+      <button id="btn-view-prs" class="w-full text-left px-3 py-2 text-xs text-gray-300 hover:bg-gray-700 rounded flex items-center gap-2">
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+        </svg>
+        Pull Requests
+      </button>
     </div>
   </div>
 
@@ -1775,32 +1857,6 @@
         <div id="optimizations-modal-content" class="p-4">
           <!-- Optimizations will be rendered here -->
           <div class="text-gray-500 text-center py-4">Loading optimizations...</div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Context Usage Modal -->
-  <div id="modal-context-usage" class="modal hidden">
-    <div class="modal-backdrop"></div>
-    <div class="modal-content">
-      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-lg">
-        <div class="p-3 border-b border-gray-700 flex items-center justify-between">
-          <div class="flex items-center gap-2">
-            <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
-            </svg>
-            <h3 class="font-semibold">Context Usage</h3>
-          </div>
-          <button class="modal-close text-gray-400 hover:text-white">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-            </svg>
-          </button>
-        </div>
-        <div id="context-usage-content" class="p-4">
-          <!-- Context usage will be rendered here -->
-          <div class="text-gray-500 text-center py-4">Loading...</div>
         </div>
       </div>
     </div>
@@ -2630,6 +2686,280 @@
     </div>
   </div>
 
+  <!-- GitHub Repository Browser Modal -->
+  <div id="modal-github-repos" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[80vh] flex flex-col">
+        <div class="p-3 border-b border-gray-700 flex items-center justify-between">
+          <h3 class="font-semibold">GitHub Repositories</h3>
+          <button class="modal-close text-gray-400 hover:text-white">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        <div class="p-3 border-b border-gray-700 flex flex-wrap gap-2 items-center">
+          <input type="text" id="github-repo-owner" placeholder="Owner (optional)" class="w-32 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs focus:outline-none focus:border-purple-500">
+          <input type="text" id="github-repo-language" placeholder="Language" class="w-28 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs focus:outline-none focus:border-purple-500">
+          <input type="text" id="github-repo-search" placeholder="Search repos..." class="flex-1 min-w-[150px] bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs focus:outline-none focus:border-purple-500">
+          <button id="btn-github-search" class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded text-xs transition-colors">Search</button>
+          <button id="btn-github-list" class="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1 rounded text-xs transition-colors">My Repos</button>
+        </div>
+        <div id="github-repos-list" class="flex-1 overflow-y-auto p-3 space-y-1 min-h-[200px]">
+          <div class="text-center text-gray-500 text-sm py-8">Click "My Repos" to list your repositories or use Search</div>
+        </div>
+        <div class="p-3 border-t border-gray-700 flex justify-end">
+          <button id="btn-github-clone-selected" disabled class="bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-4 py-1.5 rounded text-sm transition-colors">Clone Selected</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- GitHub Clone Options Modal -->
+  <div id="modal-github-clone" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-lg">
+        <div class="p-3 border-b border-gray-700 flex items-center justify-between">
+          <h3 class="font-semibold">Clone Repository</h3>
+          <button class="modal-close text-gray-400 hover:text-white">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        <div class="p-3 space-y-3">
+          <div>
+            <label class="block text-xs font-medium text-gray-300 mb-1">Repository</label>
+            <input type="text" id="github-clone-repo" readonly class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm text-gray-400">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-300 mb-1">Target Directory</label>
+            <div class="flex gap-2">
+              <input type="text" id="github-clone-target" class="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-purple-500" placeholder="Select a folder..." readonly>
+              <button type="button" id="btn-github-browse-target" class="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1.5 rounded text-sm transition-colors">Browse</button>
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-300 mb-1">Branch (optional)</label>
+            <input type="text" id="github-clone-branch" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-purple-500" placeholder="Default branch">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-300 mb-1">Project Name (optional)</label>
+            <input type="text" id="github-clone-name" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-purple-500" placeholder="Defaults to repo name">
+          </div>
+          <div id="github-clone-progress" class="hidden text-xs text-gray-400 p-2 bg-gray-900 rounded max-h-20 overflow-y-auto">
+          </div>
+        </div>
+        <div class="p-3 border-t border-gray-700 flex justify-end gap-2">
+          <button type="button" class="modal-close px-3 py-1.5 text-sm text-gray-300 hover:text-white transition-colors">Cancel</button>
+          <button id="btn-github-do-clone" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded text-sm transition-colors">Clone</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- GitHub Issues Modal -->
+  <div id="modal-github-issues" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+        <div class="flex items-center justify-between p-3 border-b border-gray-700">
+          <div class="flex items-center gap-2">
+            <h3 class="text-sm font-semibold">GitHub Issues</h3>
+            <span id="issues-repo-name" class="text-xs text-gray-400"></span>
+          </div>
+          <button class="modal-close text-gray-400 hover:text-white">&times;</button>
+        </div>
+        <div class="p-3 border-b border-gray-700">
+          <div class="flex gap-2 items-center flex-wrap">
+            <select id="issues-filter-state" class="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs">
+              <option value="open">Open</option>
+              <option value="closed">Closed</option>
+              <option value="all">All</option>
+            </select>
+            <input type="text" id="issues-filter-label" class="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs flex-1" placeholder="Filter by label...">
+            <input type="text" id="issues-filter-assignee" class="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs flex-1" placeholder="Assignee...">
+            <button id="btn-issues-refresh" class="bg-gray-600 hover:bg-gray-500 text-white px-2 py-1 rounded text-xs transition-colors">Refresh</button>
+          </div>
+        </div>
+        <div id="issues-list" class="p-2 overflow-y-auto flex-1">
+          <div class="text-center text-gray-500 text-sm py-8">Click "Issues" to load issues</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- GitHub Issue Detail Modal -->
+  <div id="modal-github-issue-detail" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+        <div class="flex items-center justify-between p-3 border-b border-gray-700">
+          <h3 id="issue-detail-title" class="text-sm font-semibold truncate"></h3>
+          <button class="modal-close text-gray-400 hover:text-white">&times;</button>
+        </div>
+        <div id="issue-detail-body" class="p-3 overflow-y-auto flex-1"></div>
+        <div class="p-3 border-t border-gray-700 flex justify-end gap-2">
+          <button id="btn-issue-detail-close-issue" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded text-xs transition-colors">Close Issue</button>
+          <button id="btn-issue-detail-finish" class="bg-green-600 hover:bg-green-500 text-white px-3 py-1.5 rounded text-xs transition-colors hidden">Finish Work</button>
+          <button id="btn-issue-detail-roadmap" class="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1.5 rounded text-xs transition-colors">Add to Roadmap</button>
+          <button id="btn-issue-detail-start" class="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded text-xs transition-colors">Start Working</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add to Roadmap Modal -->
+  <div id="modal-add-to-roadmap" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-md">
+        <div class="flex items-center justify-between p-3 border-b border-gray-700">
+          <h3 class="text-sm font-semibold">Add to Roadmap</h3>
+          <button class="modal-close text-gray-400 hover:text-white">&times;</button>
+        </div>
+        <div class="p-3 space-y-3">
+          <input type="hidden" id="add-to-roadmap-issue-number">
+          <div>
+            <label class="block text-xs text-gray-400 mb-1">Task Title</label>
+            <input type="text" id="add-to-roadmap-task-title" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm">
+          </div>
+          <div>
+            <label class="block text-xs text-gray-400 mb-1">Target Milestone</label>
+            <select id="add-to-roadmap-milestone" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm">
+              <option value="">Loading...</option>
+            </select>
+          </div>
+        </div>
+        <div class="p-3 border-t border-gray-700 flex justify-end gap-2">
+          <button class="modal-close px-3 py-1.5 text-sm text-gray-300 hover:text-white transition-colors">Cancel</button>
+          <button id="btn-add-to-roadmap-confirm" class="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded text-sm transition-colors">Add Task</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dirty Working Tree Warning -->
+  <div id="modal-issue-dirty-warning" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-md">
+        <div class="flex items-center justify-between p-3 border-b border-gray-700">
+          <h3 class="text-sm font-semibold text-yellow-400">Uncommitted Changes</h3>
+          <button class="modal-close text-gray-400 hover:text-white">&times;</button>
+        </div>
+        <div class="p-4">
+          <p class="text-sm text-gray-300 mb-2">
+            Your working tree has uncommitted changes. Please commit or stash your changes before starting work on a new issue.
+          </p>
+          <div id="dirty-warning-details" class="text-xs text-gray-500"></div>
+        </div>
+        <div class="p-3 border-t border-gray-700 flex justify-end">
+          <button class="modal-close bg-gray-600 hover:bg-gray-500 text-white px-3 py-1.5 rounded text-sm transition-colors">OK</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create PR Modal -->
+  <div id="modal-create-pr" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl">
+        <div class="flex items-center justify-between p-3 border-b border-gray-700">
+          <h3 class="text-sm font-semibold">Create Pull Request</h3>
+          <button class="modal-close text-gray-400 hover:text-white">&times;</button>
+        </div>
+        <div class="p-3 space-y-3">
+          <div>
+            <label class="block text-xs text-gray-400 mb-1">Title</label>
+            <input type="text" id="pr-create-title" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm" placeholder="feat: describe your change">
+          </div>
+          <div>
+            <label class="block text-xs text-gray-400 mb-1">Description</label>
+            <textarea id="pr-create-body" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm h-32 resize-y" placeholder="What does this PR do?"></textarea>
+          </div>
+          <div class="flex gap-3">
+            <div class="flex-1">
+              <label class="block text-xs text-gray-400 mb-1">Base Branch (optional)</label>
+              <input type="text" id="pr-create-base" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm" placeholder="main">
+            </div>
+            <div class="flex items-end pb-0.5">
+              <label class="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">
+                <input type="checkbox" id="pr-create-draft" class="rounded">
+                Draft
+              </label>
+            </div>
+          </div>
+        </div>
+        <div class="p-3 border-t border-gray-700 flex justify-between">
+          <button id="btn-pr-generate-description" class="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1.5 rounded text-sm transition-colors">
+            Auto-generate
+          </button>
+          <div class="flex gap-2">
+            <button class="modal-close px-3 py-1.5 text-sm text-gray-300 hover:text-white transition-colors">Cancel</button>
+            <button id="btn-pr-submit" class="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded text-sm transition-colors">Create PR</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PR List Modal -->
+  <div id="modal-pr-list" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+        <div class="flex items-center justify-between p-3 border-b border-gray-700">
+          <h3 class="text-sm font-semibold">Pull Requests</h3>
+          <div class="flex items-center gap-2">
+            <button id="btn-create-pr" class="bg-purple-600 hover:bg-purple-500 text-white px-2.5 py-1 rounded text-xs transition-colors flex items-center gap-1">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+              </svg>
+              Create PR
+            </button>
+            <button class="modal-close text-gray-400 hover:text-white">&times;</button>
+          </div>
+        </div>
+        <div id="pr-list-content" class="p-2 overflow-y-auto flex-1">
+          <div class="text-center text-gray-500 text-sm py-8">Loading...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PR Detail Modal -->
+  <div id="modal-pr-detail" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col relative">
+        <!-- Loading overlay for merge operations -->
+        <div id="pr-detail-loading" class="absolute inset-0 bg-gray-900/80 z-10 hidden flex items-center justify-center rounded-lg">
+          <div class="flex flex-col items-center gap-2">
+            <svg class="animate-spin h-6 w-6 text-green-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span id="pr-detail-loading-text" class="text-sm text-gray-300">Merging...</span>
+          </div>
+        </div>
+        <div class="flex items-center justify-between p-3 border-b border-gray-700">
+          <h3 id="pr-detail-title" class="text-sm font-semibold truncate"></h3>
+          <button class="modal-close text-gray-400 hover:text-white">&times;</button>
+        </div>
+        <div id="pr-detail-body" class="p-3 overflow-y-auto flex-1"></div>
+        <div class="p-3 border-t border-gray-700 flex justify-end gap-2">
+          <button id="btn-pr-open-github" class="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1.5 rounded text-xs transition-colors hidden">Open in GitHub</button>
+          <button id="btn-pr-merge" class="bg-green-600 hover:bg-green-500 text-white px-3 py-1.5 rounded text-xs transition-colors hidden">Merge</button>
+          <button id="btn-pr-fix-feedback" class="bg-orange-600 hover:bg-orange-500 text-white px-3 py-1.5 rounded text-xs transition-colors hidden">Fix PR Feedback</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Container -->
   <div id="toast-container" class="fixed bottom-4 right-4 space-y-2 z-50"></div>
 
@@ -2653,6 +2983,8 @@
 
   <script src="/js/modules/file-browser.js"></script>
   <script src="/js/modules/roadmap-module.js"></script>
+  <script src="/js/modules/github-issues-module.js"></script>
+  <script src="/js/modules/github-pr-module.js"></script>
   <script src="/js/modules/modals-module.js"></script>
   <script src="/js/modules/oneoff-toolbar-module.js"></script>
   <script src="/js/modules/oneoff-tabs-module.js"></script>

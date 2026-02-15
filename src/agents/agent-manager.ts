@@ -156,6 +156,8 @@ export interface AgentFactoryOptions {
   /** Claude model to use (e.g., 'claude-opus-4-6') */
   model?: string;
   mcpServers?: McpServerConfig[];
+  /** Enable Chrome browser usage */
+  chromeEnabled?: boolean;
 }
 
 export interface AgentFactory {
@@ -373,6 +375,7 @@ export class DefaultAgentManager implements AgentManager {
       isNewSession: sessionResult.isNewSession,
       model,
       mcpServers,
+      chromeEnabled: settings.chromeEnabled ?? false,
     });
 
     // Store agent
@@ -816,6 +819,7 @@ export class DefaultAgentManager implements AgentManager {
       mode: 'interactive',
       permissions: permissionConfig,
       model,
+      chromeEnabled: settings.chromeEnabled ?? false,
     });
 
     this.oneOffAgents.set(oneOffId, agent);
@@ -1016,6 +1020,7 @@ export class DefaultAgentManager implements AgentManager {
       isNewSession: false,
       model,
       mcpServers,
+      chromeEnabled: settings.chromeEnabled ?? false,
     });
 
     this.agents.set(projectId, agent);
@@ -1276,11 +1281,10 @@ export class DefaultAgentManager implements AgentManager {
       // Small delay to ensure clean shutdown
       await this.delay(500);
 
-      // Restart with acceptEdits mode and pass the plan content as the initial message
+      // Start a new session with acceptEdits mode and the plan as the first message
       await this.startInteractiveAgent(projectId, {
         initialMessage: pendingPlan.planContent || undefined,
-        sessionId: pendingPlan.sessionId || undefined,
-        isNewSession: false,
+        isNewSession: true,
         permissionMode: 'acceptEdits',
       });
 
@@ -1385,9 +1389,9 @@ export class DefaultAgentManager implements AgentManager {
     globalServers: McpServerConfig[],
     overrides: McpOverrides | null | undefined
   ): McpServerConfig[] {
-    // If no overrides, use all global servers
+    // If no overrides, no servers are enabled (explicit opt-in required)
     if (!overrides) {
-      return globalServers;
+      return [];
     }
 
     // If MCP is explicitly disabled for the project, return empty array
@@ -1395,11 +1399,10 @@ export class DefaultAgentManager implements AgentManager {
       return [];
     }
 
-    // Filter global servers based on project overrides
+    // Filter global servers based on project overrides (explicit opt-in)
     return globalServers.filter((server) => {
       const override = overrides.serverOverrides[server.id];
-      // If no specific override, default to enabled
-      return override?.enabled ?? true;
+      return override?.enabled === true;
     });
   }
 

@@ -85,6 +85,7 @@ export const DEFAULT_TEST_SETTINGS: GlobalSettings = {
     enabled: true,
     servers: [],
   },
+  chromeEnabled: false,
 };
 
 export const DEFAULT_CLAUDE_PERMISSIONS: ClaudePermissions = {
@@ -779,6 +780,8 @@ export function createMockGitService(): jest.Mocked<GitService> {
     createTag: jest.fn().mockResolvedValue(undefined),
     pushTag: jest.fn().mockResolvedValue('Tag pushed'),
     deleteTag: jest.fn().mockResolvedValue(undefined),
+    getRemoteUrl: jest.fn().mockResolvedValue('https://github.com/testuser/test-repo.git'),
+    getUserName: jest.fn().mockResolvedValue('Test User'),
   };
 }
 
@@ -827,6 +830,7 @@ export function createMockRoadmapEditor(): jest.Mocked<RoadmapEditor> {
     deleteTask: jest.fn().mockImplementation((content: string) => content),
     deleteMilestone: jest.fn().mockImplementation((content: string) => content),
     deletePhase: jest.fn().mockImplementation((content: string) => content),
+    addTask: jest.fn().mockImplementation((content: string) => content),
   };
 }
 
@@ -1003,6 +1007,96 @@ export function createMockAgentManager(): jest.Mocked<AgentManager> {
   };
 
   return mock;
+}
+
+// ============================================================================
+// GitHub CLI Service Mock
+// ============================================================================
+
+import { GitHubCLIService, GitHubCLIStatus, GitHubRepo, GitHubIssue, GitHubPullRequest, CommandRunner } from '../../../src/services/github-cli-service';
+
+export const sampleGitHubCLIStatus: GitHubCLIStatus = {
+  installed: true,
+  version: '2.45.0',
+  authenticated: true,
+  username: 'testuser',
+  error: null,
+};
+
+export const sampleGitHubRepo: GitHubRepo = {
+  name: 'test-repo',
+  fullName: 'testuser/test-repo',
+  description: 'A test repository',
+  url: 'https://github.com/testuser/test-repo',
+  isPrivate: false,
+  language: 'TypeScript',
+  updatedAt: '2024-06-01T00:00:00Z',
+  stargazerCount: 42,
+};
+
+export const sampleGitHubIssue: GitHubIssue = {
+  number: 42,
+  title: 'Test issue',
+  body: 'This is a test issue body',
+  state: 'OPEN',
+  url: 'https://github.com/testuser/test-repo/issues/42',
+  author: 'testuser',
+  labels: ['bug', 'help wanted'],
+  assignees: ['testuser'],
+  milestone: null,
+  createdAt: '2024-06-01T00:00:00Z',
+  updatedAt: '2024-06-02T00:00:00Z',
+  commentsCount: 2,
+};
+
+export const sampleGitHubPR: GitHubPullRequest = {
+  number: 10,
+  title: 'feat: add new feature',
+  body: 'This PR adds a new feature',
+  state: 'OPEN',
+  isDraft: false,
+  url: 'https://github.com/testuser/test-repo/pull/10',
+  author: 'testuser',
+  headBranch: 'feature-branch',
+  baseBranch: 'main',
+  labels: ['enhancement'],
+  reviewDecision: null,
+  createdAt: '2024-06-01T00:00:00Z',
+  updatedAt: '2024-06-02T00:00:00Z',
+};
+
+export function createMockGitHubCLIService(): jest.Mocked<GitHubCLIService> {
+  return {
+    getStatus: jest.fn().mockResolvedValue({ ...sampleGitHubCLIStatus }),
+    isAvailable: jest.fn().mockResolvedValue(true),
+    listRepos: jest.fn().mockResolvedValue([{ ...sampleGitHubRepo }]),
+    searchRepos: jest.fn().mockResolvedValue([{ ...sampleGitHubRepo }]),
+    cloneRepo: jest.fn().mockResolvedValue(undefined),
+    listIssues: jest.fn().mockResolvedValue([{ ...sampleGitHubIssue }]),
+    viewIssue: jest.fn().mockResolvedValue({
+      issue: { ...sampleGitHubIssue },
+      comments: [{ author: 'testuser', body: 'A comment', createdAt: '2024-06-02T00:00:00Z' }],
+    }),
+    closeIssue: jest.fn().mockResolvedValue(undefined),
+    commentOnIssue: jest.fn().mockResolvedValue(undefined),
+    commentOnPR: jest.fn().mockResolvedValue(undefined),
+    markPRReady: jest.fn().mockResolvedValue(undefined),
+    mergePR: jest.fn().mockResolvedValue(undefined),
+    createPR: jest.fn().mockResolvedValue({ ...sampleGitHubPR }),
+    listPRs: jest.fn().mockResolvedValue([{ ...sampleGitHubPR }]),
+    viewPR: jest.fn().mockResolvedValue({
+      pr: { ...sampleGitHubPR },
+      reviews: [{ author: 'reviewer', state: 'APPROVED', body: 'LGTM', submittedAt: '2024-06-02T00:00:00Z' }],
+      comments: [],
+    }),
+  };
+}
+
+export function createMockCommandRunner(): jest.Mocked<CommandRunner> {
+  return {
+    exec: jest.fn().mockResolvedValue({ stdout: '', stderr: '' }),
+    spawn: jest.fn().mockReturnValue(new EventEmitter() as any),
+  };
 }
 
 // ============================================================================

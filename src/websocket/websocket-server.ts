@@ -113,6 +113,11 @@ export interface OneOffWaitingData {
   version: number;
 }
 
+export interface GitHubCloneProgressData {
+  repo: string;
+  phase: 'cloning' | 'done' | 'error';
+  message: string;
+}
 
 export interface AgentMessageWithContext extends AgentMessage {
   contextUsage?: ContextUsage;
@@ -143,6 +148,7 @@ export type WebSocketMessageData =
   | OneOffMessageData
   | OneOffStatusData
   | OneOffWaitingData
+  | GitHubCloneProgressData
   | string; // Covers 'connected' messages and simple loop events
 
 export interface SessionRecoveryData {
@@ -176,6 +182,7 @@ export interface WebSocketMessage {
     | 'oneoff_message'
     | 'oneoff_status'
     | 'oneoff_waiting'
+    | 'github_clone_progress'
 ;
   projectId?: string;
   data?: WebSocketMessageData | SessionRecoveryData;
@@ -202,6 +209,7 @@ export interface WebSocketServerDependencies {
 
 export class DefaultWebSocketServer implements ProjectWebSocketServer {
   private wss: WebSocketServer | null = null;
+  private pingInterval: ReturnType<typeof setInterval> | null = null;
   private readonly agentManager: AgentManager;
   private readonly roadmapGenerator?: RoadmapGenerator;
   private readonly authService?: AuthService;
@@ -238,6 +246,26 @@ export class DefaultWebSocketServer implements ProjectWebSocketServer {
       verifyClient: (info, callback): void => this.verifyClient(info, callback),
     });
     this.wss.on('connection', (ws) => this.handleConnection(ws));
+    this.startHeartbeat();
+  }
+
+  private startHeartbeat(): void {
+    this.pingInterval = setInterval(() => {
+      if (!this.wss) return;
+
+      this.wss.clients.forEach((ws) => {
+        const client = ws as WebSocket & { isAlive?: boolean };
+
+        if (client.isAlive === false) {
+          this.logger.debug('Terminating unresponsive WebSocket client');
+          client.terminate();
+          return;
+        }
+
+        client.isAlive = false;
+        client.ping();
+      });
+    }, 30000);
   }
 
   private verifyClient(
@@ -292,6 +320,11 @@ export class DefaultWebSocketServer implements ProjectWebSocketServer {
   }
 
   close(): void {
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
+    }
+
     if (!this.wss) {
       return;
     }
@@ -314,6 +347,10 @@ export class DefaultWebSocketServer implements ProjectWebSocketServer {
   }
 
   private handleConnection(ws: WebSocket): void {
+    const client = ws as WebSocket & { isAlive?: boolean };
+    client.isAlive = true;
+    client.on('pong', () => { client.isAlive = true; });
+
     this.sendMessage(ws, { type: 'connected', data: 'Connected to Claudito WebSocket' });
 
     ws.on('message', (data) => this.handleMessage(ws, String(data)));

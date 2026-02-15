@@ -204,6 +204,9 @@ Access via the Ralph Loop tab when an agent is running.
 ### Project Management
 
 - **Add Projects**: Point to any directory with a codebase
+- **Import from GitHub**: Browse and search your GitHub repos, clone directly into Claudito as a project
+- **GitHub Issues**: Browse project issues with filters, "Start Working" sends issue as agent prompt, "Add to Roadmap" creates a task, close issues and add comments
+- **GitHub PRs**: Create PRs with auto-generated title/description from conversation history and diff, browse PRs with state filters, view PR detail with reviews and comments, "Fix PR Feedback" sends review feedback as agent prompt
 - **Multi-Project Support**: Manage multiple projects simultaneously
 - **Concurrent Execution**: Run multiple agents at once (configurable limit)
 - **Queue System**: Automatic queuing when at max capacity
@@ -416,6 +419,10 @@ Configure MCP servers to extend Claude's capabilities. Access via Settings > MCP
 }
 ```
 
+### Chrome Browser
+
+Toggle Chrome browser usage for Claude agents via the **Chrome** button in the conversation toolbar (next to MCP Servers). When enabled, passes `--chrome` to Claude CLI; when disabled, passes `--no-chrome`. The setting is saved globally and applies to all new agent sessions (interactive, one-off, and autonomous).
+
 ### Agent Prompt Template
 
 Customize how instructions are given to agents. Available variables:
@@ -450,6 +457,22 @@ All data is stored locally in your home directory:
 GET /api/health
 ```
 
+### Integrations
+
+```
+GET  /api/integrations/github/status              # GitHub CLI installation & auth status
+GET  /api/integrations/github/repos               # List repos (?owner=&language=&limit=)
+GET  /api/integrations/github/repos/search        # Search repos (?query=&language=&sort=&limit=)
+POST /api/integrations/github/clone               # Clone repo and register as project
+GET  /api/integrations/github/issues              # List issues (?repo=&state=&label=&assignee=&milestone=&limit=)
+GET  /api/integrations/github/issues/:num         # Issue detail with comments (?repo=)
+POST /api/integrations/github/issues/:num/close   # Close issue (?repo=)
+POST /api/integrations/github/issues/:num/comment # Add comment (?repo=, body: {body})
+POST /api/integrations/github/pr                  # Create PR (body: repo, title, body, base?, draft?)
+GET  /api/integrations/github/pulls               # List PRs (?repo=&state=&limit=)
+GET  /api/integrations/github/pulls/:num          # PR detail with reviews & comments (?repo=)
+```
+
 ### Projects
 
 ```
@@ -479,6 +502,7 @@ GET    /api/projects/:id/agent/context     # Get context usage
 GET    /api/projects/:id/roadmap           # Get roadmap
 POST   /api/projects/:id/roadmap/generate  # Generate roadmap
 PUT    /api/projects/:id/roadmap           # Modify roadmap
+POST   /api/projects/:id/roadmap/task      # Add a task to a milestone
 DELETE /api/projects/:id/roadmap/task      # Delete a task
 DELETE /api/projects/:id/roadmap/milestone # Delete a milestone
 DELETE /api/projects/:id/roadmap/phase     # Delete a phase
@@ -515,6 +539,7 @@ GET    /api/projects/:id/git/diff          # Get file diff
 GET    /api/projects/:id/git/tags          # List tags
 POST   /api/projects/:id/git/tags          # Create tag
 POST   /api/projects/:id/git/tags/push     # Push tag to remote
+POST   /api/projects/:id/git/generate-pr-description # Auto-generate PR title/body from conversation + diff
 ```
 
 ### File System
@@ -591,6 +616,7 @@ ws.send(JSON.stringify({ type: 'subscribe', projectId: 'your-project-id' }));
 // - agent_waiting: Agent waiting for input (with version for sync)
 // - queue_change: Queue updates
 // - roadmap_message: Roadmap generation output
+// - github_clone_progress: Clone progress updates (phase, message)
 // - session_recovery: Session couldn't be resumed, new conversation created
 // - shell_output: Shell terminal output
 // - shell_exit: Shell session exited

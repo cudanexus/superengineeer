@@ -72,10 +72,15 @@ describe('ApiClient', () => {
       expect(mockGet).toHaveBeenCalledWith('/api/projects');
     });
 
-    it('addProject should POST with data', () => {
+    it('addProject should POST with JSON data', () => {
       const data = { name: 'Test', path: '/test' };
       ApiClient.addProject(data);
-      expect(mockPost).toHaveBeenCalledWith('/api/projects', data);
+      expect(mockAjax).toHaveBeenCalledWith({
+        url: '/api/projects',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(data),
+      });
     });
 
     it('deleteProject should use DELETE method', () => {
@@ -202,11 +207,6 @@ describe('ApiClient', () => {
     it('getLoopStatus should GET correct endpoint', () => {
       ApiClient.getLoopStatus('proj-123');
       expect(mockGet).toHaveBeenCalledWith('/api/projects/proj-123/agent/loop');
-    });
-
-    it('getContextUsage should GET correct endpoint', () => {
-      ApiClient.getContextUsage('proj-123');
-      expect(mockGet).toHaveBeenCalledWith('/api/projects/proj-123/agent/context');
     });
 
     it('startInteractiveAgent should POST with message', () => {

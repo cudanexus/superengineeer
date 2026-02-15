@@ -76,7 +76,7 @@
     currentAgentMode: null, // mode of currently running agent
     currentConversationId: null,
     currentConversationStats: null, // { messageCount, toolCallCount, userMessageCount, durationMs, startedAt }
-    currentConversationMetadata: null, // { contextUsage: { totalTokens, inputTokens, outputTokens, ... } }
+    currentConversationMetadata: null,
     conversationHistoryOpen: false,
     queuedMessageCount: 0, // Number of messages waiting to be sent to agent
     sendWithCtrlEnter: true, // Configurable: true = Ctrl+Enter to send, false = Enter to send
@@ -160,7 +160,10 @@
     currentRalphLoopId: null, // Currently running Ralph Loop task ID
     isRalphLoopRunning: false, // Whether Ralph Loop is currently active
     hasUnsavedMcpChanges: false, // Track if MCP server changes haven't been saved
-    settings: null // Global settings object
+    chromeEnabled: false, // Chrome browser usage for agents
+    deferredPlanMessage: null, // Stores ExitPlanMode message when questions are pending
+    settings: null, // Global settings object
+    selectedGitHubRepo: null // Selected repo full name for GitHub clone
   };
 
   // Local storage keys - use module's KEYS
@@ -528,6 +531,30 @@
     }
   }
 
+  var TOOLBAR_DROPDOWNS = ['optimizations-dropdown', 'github-dropdown'];
+
+  function toggleToolbarDropdown(dropdownId, $btn) {
+    var $dropdown = $('#' + dropdownId);
+    var isOpen = !$dropdown.hasClass('hidden');
+
+    closeAllToolbarDropdowns();
+
+    if (!isOpen) {
+      var offset = $btn.offset();
+      $dropdown.css({
+        top: offset.top + $btn.outerHeight() + 4,
+        left: offset.left
+      });
+      $dropdown.removeClass('hidden');
+    }
+  }
+
+  function closeAllToolbarDropdowns() {
+    for (var i = 0; i < TOOLBAR_DROPDOWNS.length; i++) {
+      $('#' + TOOLBAR_DROPDOWNS[i]).addClass('hidden');
+    }
+  }
+
   function openToolDetailModal(toolData) {
     var $modal = $('#modal-tool-detail');
     var $content = $('#tool-detail-content');
@@ -820,20 +847,6 @@
     var isWaiting = project.isWaitingForInput || false;
     var waitingClass = isWaiting ? ' waiting-for-input' : '';
 
-    var contextInfo = '';
-
-    if (project.contextUsage) {
-      var percent = project.contextUsage.percentUsed || 0;
-      contextInfo = '<div class="mt-2 text-xs text-gray-500">' +
-        '<span class="inline-flex items-center gap-1">' +
-          '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
-            '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>' +
-          '</svg>' +
-          'Context: ' + percent.toFixed(0) + '%' +
-        '</span>' +
-      '</div>';
-    }
-
     var waitingIndicator = isWaiting ?
       '<span class="ml-2 text-yellow-400 text-xs">(waiting for input)</span>' : '';
 
@@ -876,7 +889,6 @@
         waitingIndicator +
         runningIndicator +
       '</div>' +
-      contextInfo +
     '</div>';
   }
 
@@ -1049,6 +1061,13 @@
         }
       }
 
+      // Defer ExitPlanMode message when questions are still pending
+      if (message.type === 'plan_mode' && message.planModeInfo && message.planModeInfo.action === 'exit' &&
+          state.activePromptType === 'askuser') {
+        state.deferredPlanMessage = message;
+        return;
+      }
+
       var $rendered = $(MessageRenderer.renderMessage(message));
       $conv.append($rendered);
 
@@ -1156,14 +1175,6 @@
       stats.durationMs = Math.max(0, endTime - startTime);
     }
 
-    // Update context usage from agent message if available
-    if (message.contextUsage) {
-      if (!state.currentConversationMetadata) {
-        state.currentConversationMetadata = {};
-      }
-      state.currentConversationMetadata.contextUsage = message.contextUsage;
-    }
-
     // Update the display
     ConversationHistoryModule.updateStats();
   }
@@ -1220,6 +1231,40 @@
 
     $('#btn-add-project').on('click', function() {
       openModal('modal-add-project');
+    });
+
+    $('#btn-import-github').on('click', function() {
+      openGitHubReposBrowser();
+    });
+
+    $('#btn-github-list').on('click', function() {
+      loadGitHubReposList();
+    });
+
+    $('#btn-github-search').on('click', function() {
+      searchGitHubRepos();
+    });
+
+    $('#github-repo-search').on('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        searchGitHubRepos();
+      }
+    });
+
+    $('#btn-github-clone-selected').on('click', function() {
+      openGitHubCloneDialog();
+    });
+
+    $('#btn-github-browse-target').on('click', function() {
+      state.folderBrowserCallback = function(selectedPath) {
+        $('#github-clone-target').val(selectedPath);
+      };
+      FolderBrowserModule.open();
+    });
+
+    $('#btn-github-do-clone').on('click', function() {
+      doGitHubClone();
     });
 
     // Project search input handler
@@ -1317,6 +1362,11 @@
 
     $('.modal-close').on('click', function() {
       var $modal = $(this).closest('.modal');
+
+      if ($modal.attr('id') === 'modal-roadmap-progress' && state.roadmapGenerating) {
+        return;
+      }
+
       if ($modal.attr('id') === 'modal-settings' && state.hasUnsavedMcpChanges) {
         checkUnsavedMcpChanges().then(function(shouldClose) {
           if (shouldClose) {
@@ -1330,6 +1380,11 @@
 
     $('.modal-backdrop').on('click', function() {
       var $modal = $(this).parent('.modal');
+
+      if ($modal.attr('id') === 'modal-roadmap-progress' && state.roadmapGenerating) {
+        return;
+      }
+
       if ($modal.attr('id') === 'modal-settings' && state.hasUnsavedMcpChanges) {
         checkUnsavedMcpChanges().then(function(shouldClose) {
           if (shouldClose) {
@@ -1557,10 +1612,64 @@
         $('#input-mcp-enabled').prop('checked', settings.mcp?.enabled !== false);
         McpSettingsModule.renderMcpServers();
 
+        // Chrome state
+        state.chromeEnabled = settings.chromeEnabled ?? false;
+        updateChromeToggleButton();
+
         openModal('modal-settings');
+        loadGitHubStatus();
       })
       .fail(function(xhr) {
         showErrorToast(xhr, 'Failed to load settings');
+      });
+  }
+
+  function loadGitHubStatus() {
+    var $indicator = $('#github-status-indicator');
+    $indicator.text('Checking...');
+
+    $.get('/api/integrations/github/status')
+      .done(function(status) {
+        $indicator.html(renderGitHubStatus(status));
+      })
+      .fail(function() {
+        $indicator.html(
+          '<span class="inline-block w-2 h-2 rounded-full bg-gray-500 mr-1.5 align-middle"></span>' +
+          '<span class="align-middle">Unable to check GitHub CLI status</span>'
+        );
+      });
+  }
+
+  function renderGitHubStatus(status) {
+    if (!status.installed) {
+      return '<span class="inline-block w-2 h-2 rounded-full bg-red-500 mr-1.5 align-middle"></span>' +
+        '<span class="align-middle">GitHub CLI not installed</span>' +
+        '<p class="text-gray-500 mt-1">Install from <code class="text-gray-400">https://cli.github.com</code></p>';
+    }
+
+    if (!status.authenticated) {
+      return '<span class="inline-block w-2 h-2 rounded-full bg-yellow-500 mr-1.5 align-middle"></span>' +
+        '<span class="align-middle">gh ' + status.version + ' &mdash; Not authenticated</span>' +
+        '<p class="text-gray-500 mt-1">Run <code class="text-gray-400">gh auth login</code> to authenticate</p>';
+    }
+
+    return '<span class="inline-block w-2 h-2 rounded-full bg-green-500 mr-1.5 align-middle"></span>' +
+      '<span class="align-middle">gh ' + status.version + ' &mdash; ' + status.username + '</span>';
+  }
+
+  function checkGitHubAvailable() {
+    var $ghButton = $('#btn-github-menu');
+
+    api.getGitHubStatus()
+      .done(function(status) {
+        if (status.installed && status.authenticated) {
+          $ghButton.removeClass('hidden');
+        } else {
+          $ghButton.addClass('hidden');
+        }
+      })
+      .fail(function() {
+        $ghButton.addClass('hidden');
       });
   }
 
@@ -1699,6 +1808,7 @@
         state.resourceStatus.maxConcurrent = updated.maxConcurrentAgents;
         state.sendWithCtrlEnter = updated.sendWithCtrlEnter !== false;
         state.historyLimit = updated.historyLimit || 25;
+        state.chromeEnabled = updated.chromeEnabled ?? false;
         state.settings = updated;
         state.hasUnsavedMcpChanges = false;
         $('#mcp-unsaved-warning').addClass('hidden');
@@ -1706,6 +1816,7 @@
         $('#btn-save-settings').removeClass('has-changes');
         updateRunningCount();
         updateInputHint();
+        updateChromeToggleButton();
 
         if (typeof PermissionModeModule !== 'undefined') {
           PermissionModeModule.updateSkipPermissionsWarning();
@@ -1751,6 +1862,20 @@
       $('#input-hint-image').html('• Long-press to paste or ' + attachLink);
     } else {
       $('#input-hint-image').html('• Paste images with Ctrl+V or ' + attachLink);
+    }
+  }
+
+  function updateChromeToggleButton() {
+    var $btn = $('#btn-toggle-chrome');
+
+    if (state.chromeEnabled) {
+      $btn.removeClass('bg-gray-700 hover:bg-gray-600').addClass('bg-blue-600 hover:bg-blue-700');
+      $('#chrome-toggle-label').text('Chrome');
+      $btn.attr('title', 'Chrome browser enabled - click to disable');
+    } else {
+      $btn.removeClass('bg-blue-600 hover:bg-blue-700').addClass('bg-gray-700 hover:bg-gray-600');
+      $('#chrome-toggle-label').text('Chrome');
+      $btn.attr('title', 'Chrome browser disabled - click to enable');
     }
   }
 
@@ -2092,14 +2217,30 @@
       startNewConversation();
     });
 
-    // Context usage button
-    $('#btn-context-usage').on('click', function() {
-      ModalsModule.openContextUsageModal();
+    // Optimizations dropdown
+    $('#btn-optimizations-menu').on('click', function(e) {
+      e.stopPropagation();
+      toggleToolbarDropdown('optimizations-dropdown', $(this));
     });
 
-    // Claude Files button
     $('#btn-claude-files').on('click', function() {
+      closeAllToolbarDropdowns();
       ModalsModule.openClaudeFilesModal();
+    });
+
+    $('#btn-optimizations').on('click', function() {
+      closeAllToolbarDropdowns();
+      TaskDisplayModule.openOptimizationsModal();
+    });
+
+    // GitHub dropdown
+    $('#btn-github-menu').on('click', function(e) {
+      e.stopPropagation();
+      toggleToolbarDropdown('github-dropdown', $(this));
+    });
+
+    $('#btn-view-issues, #btn-create-pr, #btn-view-prs').on('click', function() {
+      closeAllToolbarDropdowns();
     });
 
     // Quick Actions button
@@ -2125,6 +2266,10 @@
           !$(e.target).closest('#btn-quick-actions').length) {
         QuickActionsModule.closeQuickActions();
       }
+
+      if (!$(e.target).closest('#optimizations-dropdown, #btn-optimizations-menu, #github-dropdown, #btn-github-menu').length) {
+        closeAllToolbarDropdowns();
+      }
     });
 
     // Search button
@@ -2144,6 +2289,23 @@
           McpProjectModule.openProjectMcpModal(state.selectedProjectId, project.name);
         }
       }
+    });
+
+    $('#btn-toggle-chrome').on('click', function() {
+      state.chromeEnabled = !state.chromeEnabled;
+      updateChromeToggleButton();
+
+      api.updateSettings({ chromeEnabled: state.chromeEnabled })
+        .done(function(updated) {
+          state.settings = updated;
+          var label = state.chromeEnabled ? 'Chrome enabled' : 'Chrome disabled';
+          showToast(label + '. Restart the agent for changes to take effect.', 'info');
+        })
+        .fail(function(xhr) {
+          state.chromeEnabled = !state.chromeEnabled;
+          updateChromeToggleButton();
+          showErrorToast(xhr, 'Failed to update Chrome setting');
+        });
     });
 
     // Optimization action buttons (dynamically created, so use delegation)
@@ -2423,103 +2585,145 @@
         return;
       }
 
-      processAskUserAnswer($btn, toolId, questionIndex, optionLabel, $container);
+      selectQuestionOption($btn, toolId, questionIndex, optionLabel, $container);
+    });
+
+    // Submit answers button handler
+    $(document).on('click', '.ask-user-submit', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      var $btn = $(this);
+      var toolId = $btn.data('tool-id');
+      var $container = $btn.closest('.ask-user-question');
+
+      submitQuestionAnswers(toolId, $container);
     });
   }
 
   function handleAskUserOtherOption($btn, toolId, questionIndex, $container) {
-    var totalQuestions = countAskUserQuestions($container);
-    var isMulti = totalQuestions > 1;
-
     showPrompt('Custom Answer', 'Enter your response:', {
       placeholder: 'Type your answer...',
       submitText: 'Submit'
     }).then(function(customText) {
       if (!customText) return;
 
-      if (isMulti) {
-        // Update the Other button label to show the custom text
-        $btn.find('.font-medium').text('Other: ' + customText);
-        processAskUserAnswer($btn, toolId, questionIndex, customText, $container);
-      } else {
-        styleSelectedButton($btn, questionIndex, $container);
-        handleSingleQuestionAnswer(toolId, customText);
-      }
+      // Update the Other button label to show the custom text
+      $btn.find('.font-medium').text('Other: ' + customText);
+      selectQuestionOption($btn, toolId, questionIndex, customText, $container);
     });
   }
 
-  function processAskUserAnswer($btn, toolId, questionIndex, answerText, $container) {
+  function selectQuestionOption($btn, toolId, questionIndex, answerText, $container) {
     var totalQuestions = countAskUserQuestions($container);
+    var mqs = getMultiQuestionState();
 
-    styleSelectedButton($btn, questionIndex, $container);
-
-    if (totalQuestions > 1) {
-      handleMultiQuestionAnswer(toolId, questionIndex, answerText, totalQuestions, $container);
-    } else {
-      handleSingleQuestionAnswer(toolId, answerText);
+    // Initialize state if needed
+    if (!mqs.activeToolId) {
+      mqs.activeToolId = toolId;
+      mqs.totalQuestions = totalQuestions;
     }
+
+    // Highlight selected option (allow re-selection)
+    highlightSelectedOption($btn, questionIndex, $container);
+
+    // Store the answer
+    mqs.answers[questionIndex] = answerText;
+
+    // Show/hide submit button based on whether all questions are answered
+    updateQuestionSubmitButton($container);
   }
 
   function countAskUserQuestions($container) {
     return $container.find('div.flex[data-question-index]').length;
   }
 
-  function styleSelectedButton($btn, questionIndex, $container) {
+  function highlightSelectedOption($btn, questionIndex, $container) {
+    // Clear previous selection for this question
     $container.find('div.flex[data-question-index="' + questionIndex + '"]')
       .find('.ask-user-option')
-      .prop('disabled', true)
-      .addClass('opacity-50 cursor-not-allowed');
-    $btn.removeClass('opacity-50').addClass('bg-purple-600 ring-2 ring-purple-400');
+      .removeClass('bg-purple-600 ring-2 ring-purple-400')
+      .addClass('bg-gray-700');
+
+    // Highlight selected
+    $btn.removeClass('bg-gray-700').addClass('bg-purple-600 ring-2 ring-purple-400');
   }
 
-  function clearBlockingAfterAnswer() {
-    state.justAnsweredQuestion = true;
-    setPromptBlockingState(null);
-    setTimeout(function() {
-      state.justAnsweredQuestion = false;
-    }, 100);
-  }
-
-  function handleSingleQuestionAnswer(toolId, answerText) {
-    sendQuestionResponse(answerText);
-    clearBlockingAfterAnswer();
-    ToolRenderer.updateToolStatus(toolId, 'completed', 'User selected: ' + answerText);
-  }
-
-  function handleMultiQuestionAnswer(toolId, questionIndex, answerText, totalQuestions, $container) {
-    if (!state.multiQuestionState.activeToolId) {
-      state.multiQuestionState.activeToolId = toolId;
-      state.multiQuestionState.totalQuestions = totalQuestions;
-      state.multiQuestionState.isMultiQuestion = true;
-    }
-
-    state.multiQuestionState.answers[questionIndex] = answerText;
-
-    if (Object.keys(state.multiQuestionState.answers).length === totalQuestions) {
-      var parts = [];
-
-      for (var i = 0; i < totalQuestions; i++) {
-        if (state.multiQuestionState.answers[i]) {
-          parts.push('Q' + (i + 1) + ': ' + state.multiQuestionState.answers[i]);
-        }
-      }
-
-      var consolidatedResponse = parts.join(', ');
-      sendQuestionResponse(consolidatedResponse);
-      clearBlockingAfterAnswer();
-      ToolRenderer.updateToolStatus(toolId, 'completed', 'User selected: ' + consolidatedResponse);
-
+  function getMultiQuestionState() {
+    if (!state.multiQuestionState) {
       state.multiQuestionState = {
         activeToolId: null,
         totalQuestions: 0,
         answers: {},
         isMultiQuestion: false
       };
-
-      $('#multi-question-progress').remove();
-    } else {
-      updateMultiQuestionProgress();
     }
+
+    return state.multiQuestionState;
+  }
+
+  function updateQuestionSubmitButton($container) {
+    var mqs = getMultiQuestionState();
+    var totalQuestions = mqs.totalQuestions;
+    var answeredCount = Object.keys(mqs.answers).length;
+    var $submitBtn = $container.find('.ask-user-submit');
+
+    if (answeredCount >= totalQuestions) {
+      $submitBtn.removeClass('hidden');
+    } else {
+      $submitBtn.addClass('hidden');
+    }
+  }
+
+  function submitQuestionAnswers(toolId, $container) {
+    var mqs = getMultiQuestionState();
+    var totalQuestions = mqs.totalQuestions;
+    var parts = [];
+
+    for (var i = 0; i < totalQuestions; i++) {
+      if (mqs.answers[i]) {
+        parts.push(totalQuestions > 1
+          ? 'Q' + (i + 1) + ': ' + mqs.answers[i]
+          : mqs.answers[i]);
+      }
+    }
+
+    var response = parts.join(', ');
+
+    // Disable all buttons and submit after sending
+    $container.find('.ask-user-option')
+      .prop('disabled', true)
+      .addClass('opacity-50 cursor-not-allowed');
+    $container.find('.ask-user-submit').prop('disabled', true).addClass('opacity-50');
+
+    sendQuestionResponse(response);
+    clearBlockingAfterAnswer();
+    ToolRenderer.updateToolStatus(toolId, 'completed', 'User selected: ' + response);
+
+    state.multiQuestionState = {
+      activeToolId: null,
+      totalQuestions: 0,
+      answers: {},
+      isMultiQuestion: false
+    };
+
+    $('#multi-question-progress').remove();
+  }
+
+  function clearBlockingAfterAnswer() {
+    state.justAnsweredQuestion = true;
+    setPromptBlockingState(null);
+
+    // Send any deferred plan message now that the question is answered
+    if (state.deferredPlanMessage) {
+      var planMsg = state.deferredPlanMessage;
+      state.deferredPlanMessage = null;
+      appendMessage(state.selectedProjectId, planMsg);
+    }
+
+    setTimeout(function() {
+      state.justAnsweredQuestion = false;
+    }, 100);
   }
 
   function sendPlanModeResponse(response) {
@@ -2638,7 +2842,7 @@
   // Use module formatter functions
   var formatConversationDate = Formatters.formatConversationDate;
   var formatDuration = Formatters.formatDuration;
-  var formatTokenCount = Formatters.formatTokenCount;
+
 
   // Conversation history functions are now in ConversationHistoryModule
 
@@ -2656,8 +2860,9 @@
   }
 
   function updateMultiQuestionProgress() {
-    var answered = Object.keys(state.multiQuestionState.answers).length;
-    var total = state.multiQuestionState.totalQuestions;
+    var mqs = getMultiQuestionState();
+    var answered = Object.keys(mqs.answers).length;
+    var total = mqs.totalQuestions;
     var message = 'Answered ' + answered + ' of ' + total + ' questions';
 
     // Add progress message near input field
@@ -3179,15 +3384,22 @@
       if (typeof OneOffTabsModule !== 'undefined') {
         OneOffTabsModule.onProjectChanged(projectId);
       }
+
+      // Notify GitHubIssuesModule of project change
+      if (typeof GitHubIssuesModule !== 'undefined') {
+        GitHubIssuesModule.onProjectChanged(projectId);
+      }
     }
 
     state.selectedProjectId = projectId;
+
+    // Restore per-project permission mode
+    PermissionModeModule.onProjectChanged(projectId);
 
     // Restore input text for the new project
     var savedInput = state.projectInputs[projectId] || '';
     $('#input-message').val(savedInput).trigger('input');
     state.currentAgentMode = null; // Reset on project change
-    state.pendingPermissionMode = null; // Clear pending mode on project change
     setPromptBlockingState(null); // Clear any prompt blocking on project change
     var project = findProjectById(projectId);
 
@@ -3205,6 +3417,7 @@
     loadRalphLoopStatus(projectId);
     TaskDisplayModule.loadOptimizationsBadge(projectId);
     checkShellEnabled(projectId);
+    checkGitHubAvailable();
 
     // Restore saved tab preference and refresh tab content
     var savedTab = loadFromLocalStorage(LOCAL_STORAGE_KEYS.ACTIVE_TAB, 'agent-output');
@@ -3236,8 +3449,7 @@
 
         // Sync permission mode from server
         if (data.permissionMode) {
-          state.permissionMode = data.permissionMode;
-          PermissionModeModule.updateButtons();
+          PermissionModeModule.syncFromServer(data.permissionMode, projectId);
 
           if (typeof OneOffToolbarModule !== 'undefined' && OneOffToolbarModule) {
             OneOffToolbarModule.syncPermissionMode(state.permissionMode);
@@ -3275,11 +3487,13 @@
           stopAgentStatusPolling();
         }
 
+        updateStartStopButtons();
         updateInputArea();
         updateCancelButton();
         PermissionModeModule.updatePendingIndicator();
       })
       .fail(function() {
+        updateStartStopButtons();
         updateInputArea();
         showAgentRunningIndicator(false);
         state.queuedMessageCount = 0;
@@ -3493,17 +3707,200 @@
       });
   }
 
+  // =========================================================================
+  // GitHub Import
+  // =========================================================================
+
+  function openGitHubReposBrowser() {
+    api.getGitHubStatus()
+      .done(function(status) {
+        if (!status.installed) {
+          showToast('GitHub CLI is not installed. Install from https://cli.github.com', 'error');
+          return;
+        }
+
+        if (!status.authenticated) {
+          showToast('GitHub CLI is not authenticated. Run "gh auth login" first.', 'error');
+          return;
+        }
+
+        state.selectedGitHubRepo = null;
+        $('#github-repos-list').html(
+          '<div class="text-center text-gray-500 text-sm py-8">Click "My Repos" to list your repositories or use Search</div>'
+        );
+        $('#btn-github-clone-selected').prop('disabled', true);
+        openModal('modal-github-repos');
+      })
+      .fail(function() {
+        showToast('Failed to check GitHub CLI status', 'error');
+      });
+  }
+
+  function loadGitHubReposList() {
+    var params = {};
+    var owner = $('#github-repo-owner').val();
+    var language = $('#github-repo-language').val();
+
+    if (owner) params.owner = owner;
+
+    if (language) params.language = language;
+
+    params.limit = 50;
+
+    $('#github-repos-list').html('<div class="text-center text-gray-400 text-sm py-8">Loading...</div>');
+
+    api.getGitHubRepos(params)
+      .done(function(repos) {
+        renderGitHubReposList(repos);
+      })
+      .fail(function(xhr) {
+        showErrorToast(xhr, 'Failed to load repos');
+        $('#github-repos-list').html('<div class="text-center text-red-400 text-sm py-8">Failed to load repositories</div>');
+      });
+  }
+
+  function searchGitHubRepos() {
+    var query = $('#github-repo-search').val();
+
+    if (!query) {
+      showToast('Enter a search query', 'info');
+      return;
+    }
+
+    var params = { query: query, limit: 50 };
+    var language = $('#github-repo-language').val();
+
+    if (language) params.language = language;
+
+    $('#github-repos-list').html('<div class="text-center text-gray-400 text-sm py-8">Searching...</div>');
+
+    api.searchGitHubRepos(params)
+      .done(function(repos) {
+        renderGitHubReposList(repos);
+      })
+      .fail(function(xhr) {
+        showErrorToast(xhr, 'Failed to search repos');
+        $('#github-repos-list').html('<div class="text-center text-red-400 text-sm py-8">Search failed</div>');
+      });
+  }
+
+  function renderGitHubReposList(repos) {
+    if (!repos || repos.length === 0) {
+      $('#github-repos-list').html('<div class="text-center text-gray-500 text-sm py-8">No repositories found</div>');
+      return;
+    }
+
+    repos.sort(function(a, b) {
+      return a.fullName.toLowerCase().localeCompare(b.fullName.toLowerCase());
+    });
+
+    var html = repos.map(function(repo) {
+      var langBadge = repo.language
+        ? '<span class="text-xs bg-gray-700 px-1.5 py-0.5 rounded">' + escapeHtml(repo.language) + '</span>'
+        : '';
+      var visBadge = repo.isPrivate
+        ? '<span class="text-xs bg-yellow-900 text-yellow-300 px-1.5 py-0.5 rounded">Private</span>'
+        : '<span class="text-xs bg-green-900 text-green-300 px-1.5 py-0.5 rounded">Public</span>';
+
+      return '<div class="github-repo-item p-2 rounded cursor-pointer hover:bg-gray-700 border border-transparent transition-colors" data-repo="' + escapeHtml(repo.fullName) + '">' +
+        '<div class="flex items-center justify-between">' +
+          '<div class="flex items-center gap-2 min-w-0">' +
+            '<span class="text-sm font-medium text-white truncate">' + escapeHtml(repo.fullName) + '</span>' +
+            visBadge +
+            langBadge +
+          '</div>' +
+          '<span class="text-xs text-gray-500 flex-shrink-0">' + repo.stargazerCount + ' stars</span>' +
+        '</div>' +
+        (repo.description
+          ? '<p class="text-xs text-gray-400 mt-1 truncate">' + escapeHtml(repo.description) + '</p>'
+          : '') +
+      '</div>';
+    }).join('');
+
+    $('#github-repos-list').html(html);
+    state.selectedGitHubRepo = null;
+    $('#btn-github-clone-selected').prop('disabled', true);
+
+    $('#github-repos-list').off('click', '.github-repo-item').on('click', '.github-repo-item', function() {
+      $('.github-repo-item').removeClass('border-purple-500 bg-gray-700').addClass('border-transparent');
+      $(this).addClass('border-purple-500 bg-gray-700').removeClass('border-transparent');
+      state.selectedGitHubRepo = $(this).data('repo');
+      $('#btn-github-clone-selected').prop('disabled', false);
+    });
+  }
+
+  function openGitHubCloneDialog() {
+    if (!state.selectedGitHubRepo) return;
+
+    $('#github-clone-repo').val(state.selectedGitHubRepo);
+    $('#github-clone-target').val('');
+    $('#github-clone-branch').val('');
+    $('#github-clone-name').val('');
+    $('#github-clone-progress').addClass('hidden').html('');
+    $('#btn-github-do-clone').prop('disabled', false);
+    openModal('modal-github-clone');
+  }
+
+  function doGitHubClone() {
+    var repo = $('#github-clone-repo').val();
+    var targetDir = $('#github-clone-target').val();
+    var branch = $('#github-clone-branch').val();
+    var projectName = $('#github-clone-name').val();
+
+    if (!targetDir) {
+      showToast('Please select a target directory', 'info');
+      return;
+    }
+
+    var data = { repo: repo, targetDir: targetDir };
+
+    if (branch) data.branch = branch;
+
+    if (projectName) data.projectName = projectName;
+
+    $('#btn-github-do-clone').prop('disabled', true);
+    $('#github-clone-progress').removeClass('hidden').html('Cloning...');
+
+    api.cloneGitHubRepo(data)
+      .done(function(result) {
+        if (result.success && result.project) {
+          state.projects.push(result.project);
+          renderProjectList();
+          closeAllModals();
+          showToast('Repository cloned and added as project', 'success');
+          selectProject(result.project.id);
+        } else {
+          $('#github-clone-progress').html('<span class="text-red-400">' + escapeHtml(result.error || 'Clone failed') + '</span>');
+          $('#btn-github-do-clone').prop('disabled', false);
+        }
+      })
+      .fail(function(xhr) {
+        var msg = 'Clone failed';
+
+        try {
+          var body = JSON.parse(xhr.responseText);
+          msg = body.error || msg;
+        } catch (e) { /* ignore */ }
+
+        $('#github-clone-progress').html('<span class="text-red-400">' + escapeHtml(msg) + '</span>');
+        $('#btn-github-do-clone').prop('disabled', false);
+      });
+  }
+
   function loadAndShowRoadmap() {
     if (!state.selectedProjectId) return;
 
     api.getProjectRoadmap(state.selectedProjectId)
       .done(function(data) {
-        RoadmapModule.render(data);
-        openModal('modal-roadmap');
+        if (!data || !data.parsed) {
+          openModal('modal-create-roadmap');
+        } else {
+          RoadmapModule.render(data);
+          openModal('modal-roadmap');
+        }
       })
       .fail(function() {
-        RoadmapModule.render(null);
-        openModal('modal-roadmap');
+        openModal('modal-create-roadmap');
       });
   }
 
@@ -3528,6 +3925,7 @@
       .fail(function(xhr) {
         state.roadmapGenerating = false;
         $('#roadmap-progress-spinner').addClass('hidden');
+        $('#roadmap-progress-footer').removeClass('hidden');
         showErrorToast(xhr, 'Failed to generate roadmap');
       });
   }
@@ -3556,6 +3954,7 @@
         state.roadmapGenerating = false;
         $('#roadmap-progress-spinner').addClass('hidden');
         $('#roadmap-question-input').addClass('hidden');
+        $('#roadmap-progress-footer').removeClass('hidden');
         showErrorToast(xhr, 'Failed to modify roadmap');
       });
   }
@@ -4641,6 +5040,17 @@
           );
         }
         break;
+      case 'github_clone_progress':
+        if (message.data) {
+          var $progress = $('#github-clone-progress');
+
+          if (!$progress.hasClass('hidden')) {
+            var cls = message.data.phase === 'error' ? 'text-red-400' : 'text-gray-400';
+            $progress.append('<div class="' + cls + '">' + escapeHtml(message.data.message) + '</div>');
+            $progress.scrollTop($progress[0].scrollHeight);
+          }
+        }
+        break;
     }
   }
 
@@ -4810,8 +5220,7 @@
 
       // Sync permission mode from server if provided
       if (fullStatus && fullStatus.permissionMode) {
-        state.permissionMode = fullStatus.permissionMode;
-        PermissionModeModule.updateButtons();
+        PermissionModeModule.syncFromServer(fullStatus.permissionMode, projectId);
 
         if (typeof OneOffToolbarModule !== 'undefined' && OneOffToolbarModule) {
           OneOffToolbarModule.syncPermissionMode(state.permissionMode);
@@ -5073,6 +5482,8 @@
         state.settings = settings;
         state.hasUnsavedMcpChanges = false; // Reset on initial load
         state.sendWithCtrlEnter = settings.sendWithCtrlEnter !== false;
+        state.chromeEnabled = settings.chromeEnabled ?? false;
+        updateChromeToggleButton();
         updateInputHint();
 
         if (typeof PermissionModeModule !== 'undefined') {
@@ -5258,8 +5669,46 @@
       closeModal: closeModal,
       findProjectById: findProjectById,
       doSendMessage: doSendMessage,
-      startInteractiveAgentWithMessage: startInteractiveAgentWithMessage
+      startInteractiveAgentWithMessage: startInteractiveAgentWithMessage,
+      api: api,
+      updateProjectStatusById: updateProjectStatusById,
+      startAgentStatusPolling: startAgentStatusPolling,
+      appendMessage: appendMessage,
+      PermissionModeModule: PermissionModeModule
     });
+
+    // Initialize GitHubIssuesModule with dependencies
+    if (typeof GitHubIssuesModule !== 'undefined') {
+      GitHubIssuesModule.init({
+        state: state,
+        api: api,
+        escapeHtml: escapeHtml,
+        showToast: showToast,
+        openModal: openModal,
+        closeModal: closeModal,
+        doSendMessage: doSendMessage,
+        startInteractiveAgentWithMessage: startInteractiveAgentWithMessage,
+        findProjectById: findProjectById,
+        updateProjectStatusById: updateProjectStatusById,
+        startAgentStatusPolling: startAgentStatusPolling,
+        appendMessage: appendMessage
+      });
+    }
+
+    // Initialize GitHubPRModule with dependencies
+    if (typeof GitHubPRModule !== 'undefined') {
+      GitHubPRModule.init({
+        state: state,
+        api: api,
+        escapeHtml: escapeHtml,
+        showToast: showToast,
+        openModal: openModal,
+        closeModal: closeModal,
+        doSendMessage: doSendMessage,
+        startInteractiveAgentWithMessage: startInteractiveAgentWithMessage,
+        findProjectById: findProjectById,
+      });
+    }
 
     // Initialize ModalsModule with dependencies
     ModalsModule.init({
@@ -5326,7 +5775,6 @@
       truncateString: truncateString,
       formatConversationDate: Formatters.formatConversationDate,
       formatDuration: Formatters.formatDuration,
-      formatTokenCount: Formatters.formatTokenCount,
       renderConversation: renderConversation,
       setPromptBlockingState: setPromptBlockingState,
       SearchModule: SearchModule
@@ -5366,7 +5814,9 @@
       updateProjectStatusById: updateProjectStatusById,
       startAgentStatusPolling: startAgentStatusPolling,
       appendMessage: appendMessage,
-      renderProjectList: renderProjectList
+      renderProjectList: renderProjectList,
+      openModal: openModal,
+      closeModal: closeModal
     });
 
     FolderBrowserModule.init({

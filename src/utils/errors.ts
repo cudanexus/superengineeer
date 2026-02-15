@@ -39,6 +39,12 @@ export class GitError extends AppError {
   }
 }
 
+export class GitHubCLIError extends AppError {
+  constructor(message: string) {
+    super(message, 500, 'GITHUB_CLI_ERROR');
+  }
+}
+
 export interface ErrorResponse {
   error: string;
   code?: string;

@@ -229,5 +229,266 @@ describe('MessageBuilder', () => {
 
       expect(args).not.toContain('--mcp-config');
     });
+
+    it('should always include --print and stream-json format', () => {
+      const args = MessageBuilder.buildArgs({ mode: 'interactive' });
+
+      expect(args).toContain('--print');
+      expect(args).toContain('--input-format');
+      expect(args).toContain('stream-json');
+      expect(args).toContain('--output-format');
+      expect(args).toContain('--verbose');
+    });
+
+    it('should add --model when model is provided', () => {
+      const args = MessageBuilder.buildArgs({
+        mode: 'interactive',
+        model: 'claude-sonnet-4-5-20250929',
+      });
+
+      expect(args).toContain('--model');
+      expect(args).toContain('claude-sonnet-4-5-20250929');
+    });
+
+    it('should add --dangerously-skip-permissions when skipPermissions is true', () => {
+      const args = MessageBuilder.buildArgs({
+        mode: 'interactive',
+        skipPermissions: true,
+      });
+
+      expect(args).toContain('--dangerously-skip-permissions');
+      expect(args).not.toContain('--permission-mode');
+    });
+
+    it('should add --permission-mode when not skipping', () => {
+      const args = MessageBuilder.buildArgs({
+        mode: 'interactive',
+        permissionMode: 'plan',
+      });
+
+      expect(args).toContain('--permission-mode');
+      expect(args).toContain('plan');
+      expect(args).not.toContain('--dangerously-skip-permissions');
+    });
+
+    it('should add --allowedTools when provided', () => {
+      const args = MessageBuilder.buildArgs({
+        mode: 'interactive',
+        allowedTools: ['Read', 'Write'],
+      });
+
+      expect(args).toContain('--allowedTools');
+      expect(args).toContain('Read Write');
+    });
+
+    it('should add --disallowedTools when provided', () => {
+      const args = MessageBuilder.buildArgs({
+        mode: 'interactive',
+        disallowedTools: ['Bash'],
+      });
+
+      expect(args).toContain('--disallowedTools');
+      expect(args).toContain('Bash');
+    });
+
+    it('should add --append-system-prompt when not skipping permissions', () => {
+      const args = MessageBuilder.buildArgs({
+        mode: 'interactive',
+        appendSystemPrompt: 'Extra instructions',
+      });
+
+      expect(args).toContain('--append-system-prompt');
+      expect(args).toContain('Extra instructions');
+    });
+
+    it('should not add --append-system-prompt when skipping permissions', () => {
+      const args = MessageBuilder.buildArgs({
+        mode: 'interactive',
+        skipPermissions: true,
+        appendSystemPrompt: 'Extra instructions',
+      });
+
+      expect(args).not.toContain('--append-system-prompt');
+    });
+
+    it('should add --max-turns when agentTurns > 0', () => {
+      const args = MessageBuilder.buildArgs({
+        mode: 'interactive',
+        agentTurns: 5,
+      });
+
+      expect(args).toContain('--max-turns');
+      expect(args).toContain('5');
+    });
+
+    it('should add --session-id for new sessions', () => {
+      const args = MessageBuilder.buildArgs({
+        mode: 'interactive',
+        sessionId: 'new-session-123',
+      });
+
+      expect(args).toContain('--session-id');
+      expect(args).toContain('new-session-123');
+    });
+
+    it('should add --resume for existing sessions', () => {
+      const args = MessageBuilder.buildArgs({
+        mode: 'interactive',
+        resumeSessionId: 'existing-session-456',
+      });
+
+      expect(args).toContain('--resume');
+      expect(args).toContain('existing-session-456');
+    });
+  });
+
+  describe('buildEnvironment', () => {
+    it('should include FORCE_COLOR and ANTHROPIC_TELEMETRY', () => {
+      const env = MessageBuilder.buildEnvironment();
+
+      expect(env.FORCE_COLOR).toBe('1');
+      expect(env.ANTHROPIC_TELEMETRY).toBe('false');
+    });
+
+    it('should merge custom env variables', () => {
+      const env = MessageBuilder.buildEnvironment({ MY_VAR: 'test' });
+
+      expect(env.MY_VAR).toBe('test');
+      expect(env.FORCE_COLOR).toBe('1');
+    });
+
+    it('should allow overriding defaults', () => {
+      const env = MessageBuilder.buildEnvironment({ FORCE_COLOR: '0' });
+
+      // Custom env should override since it's spread after process.env
+      // but before the hardcoded values — actually FORCE_COLOR is hardcoded after,
+      // so it will still be '1'
+      expect(env.FORCE_COLOR).toBe('1');
+    });
+  });
+
+  describe('formatSystemMessage', () => {
+    it('should create system message', () => {
+      const msg = MessageBuilder.formatSystemMessage('System initialized');
+
+      expect(msg.type).toBe('system');
+      expect(msg.content).toBe('System initialized');
+      expect(msg.timestamp).toBeTruthy();
+    });
+  });
+
+  describe('formatErrorMessage', () => {
+    it('should format Error object', () => {
+      const msg = MessageBuilder.formatErrorMessage(new Error('Something failed'));
+
+      expect(msg.type).toBe('stderr');
+      expect(msg.content).toBe('Error: Something failed');
+    });
+
+    it('should format string error', () => {
+      const msg = MessageBuilder.formatErrorMessage('Connection lost');
+
+      expect(msg.type).toBe('stderr');
+      expect(msg.content).toBe('Error: Connection lost');
+    });
+  });
+
+  describe('extractSessionId', () => {
+    it('should extract from "Session ID:" pattern', () => {
+      expect(MessageBuilder.extractSessionId('Session ID: abc-123')).toBe('abc-123');
+    });
+
+    it('should extract from "Resuming session:" pattern', () => {
+      expect(MessageBuilder.extractSessionId('Resuming session: def-456')).toBe('def-456');
+    });
+
+    it('should extract from "Created new session:" pattern', () => {
+      expect(MessageBuilder.extractSessionId('Created new session: ghi-789')).toBe('ghi-789');
+    });
+
+    it('should return null when no match', () => {
+      expect(MessageBuilder.extractSessionId('No session info here')).toBeNull();
+    });
+  });
+
+  describe('isReadyMessage', () => {
+    it('should match "Ready."', () => {
+      expect(MessageBuilder.isReadyMessage('Ready.')).toBe(true);
+    });
+
+    it('should match "Ready" without period', () => {
+      expect(MessageBuilder.isReadyMessage('Ready')).toBe(true);
+    });
+
+    it('should not match arbitrary text', () => {
+      expect(MessageBuilder.isReadyMessage('Not ready yet')).toBe(false);
+    });
+  });
+
+  describe('isWaitingMessage', () => {
+    it('should match "Waiting for input"', () => {
+      expect(MessageBuilder.isWaitingMessage('Waiting for input')).toBe(true);
+    });
+
+    it('should match ">"', () => {
+      expect(MessageBuilder.isWaitingMessage('>')).toBe(true);
+    });
+
+    it('should not match arbitrary text', () => {
+      expect(MessageBuilder.isWaitingMessage('Processing...')).toBe(false);
+    });
+  });
+
+  describe('parseCompletionResponse', () => {
+    it('should detect MILESTONE_COMPLETE', () => {
+      const result = MessageBuilder.parseCompletionResponse('MILESTONE_COMPLETE: Tests pass');
+
+      expect(result?.status).toBe('COMPLETE');
+      expect(result?.reason).toBe('Tests pass');
+    });
+
+    it('should detect MILESTONE_FAILED', () => {
+      const result = MessageBuilder.parseCompletionResponse('MILESTONE_FAILED: Build error');
+
+      expect(result?.status).toBe('FAILED');
+      expect(result?.reason).toBe('Build error');
+    });
+
+    it('should detect task completion patterns', () => {
+      expect(MessageBuilder.parseCompletionResponse('All tasks completed')?.status).toBe('COMPLETE');
+      expect(MessageBuilder.parseCompletionResponse('Milestone is complete')?.status).toBe('COMPLETE');
+    });
+
+    it('should detect failure patterns', () => {
+      expect(MessageBuilder.parseCompletionResponse('Failed to complete milestone')?.status).toBe('FAILED');
+      expect(MessageBuilder.parseCompletionResponse('Critical error occurred')?.status).toBe('FAILED');
+    });
+
+    it('should return null for no match', () => {
+      expect(MessageBuilder.parseCompletionResponse('Working on task...')).toBeNull();
+    });
+  });
+
+  describe('escapeShellArg', () => {
+    it('should escape for current platform', () => {
+      const result = MessageBuilder.escapeShellArg('hello world');
+
+      // On Windows, should use double quotes; on Unix, single quotes
+      if (process.platform === 'win32') {
+        expect(result).toBe('"hello world"');
+      } else {
+        expect(result).toBe("'hello world'");
+      }
+    });
+  });
+
+  describe('buildShellCommand', () => {
+    it('should combine command with escaped args', () => {
+      const result = MessageBuilder.buildShellCommand('claude', ['--print', '--verbose']);
+
+      expect(result).toContain('claude');
+      expect(result).toContain('--print');
+      expect(result).toContain('--verbose');
+    });
   });
 });

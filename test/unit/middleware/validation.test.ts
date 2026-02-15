@@ -55,6 +55,17 @@ describe('Validation Middleware', () => {
       const error = (next as jest.Mock).mock.calls[0][0];
       expect(error.message).toContain('age: Invalid input');
     });
+
+    it('should forward non-ZodError errors', () => {
+      const throwingSchema = {
+        parse: () => { throw new TypeError('unexpected'); },
+      } as unknown as z.ZodSchema;
+      const middleware = validateBody(throwingSchema);
+
+      middleware(req as Request, res as Response, next);
+
+      expect(next).toHaveBeenCalledWith(expect.any(TypeError));
+    });
   });
 
   describe('validateQuery', () => {
@@ -91,6 +102,17 @@ describe('Validation Middleware', () => {
 
       expect(next).toHaveBeenCalledWith(expect.any(ValidationError));
     });
+
+    it('should forward non-ZodError errors', () => {
+      const throwingSchema = {
+        parse: () => { throw new RangeError('unexpected'); },
+      } as unknown as z.ZodSchema;
+      const middleware = validateQuery(throwingSchema);
+
+      middleware(req as Request, res as Response, next);
+
+      expect(next).toHaveBeenCalledWith(expect.any(RangeError));
+    });
   });
 
   describe('validateParams', () => {
@@ -114,6 +136,19 @@ describe('Validation Middleware', () => {
       middleware(req as Request, res as Response, next);
 
       expect(next).toHaveBeenCalledWith(expect.any(ValidationError));
+    });
+
+    it('should forward non-ZodError errors', () => {
+      const throwingSchema = {
+        parse: () => { throw new Error('unexpected'); },
+      } as unknown as z.ZodSchema;
+      const middleware = validateParams(throwingSchema);
+
+      middleware(req as Request, res as Response, next);
+
+      expect(next).toHaveBeenCalledWith(expect.any(Error));
+      const error = (next as jest.Mock).mock.calls[0][0];
+      expect(error).not.toBeInstanceOf(ValidationError);
     });
   });
 

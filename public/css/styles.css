@@ -247,6 +247,10 @@ body {
   justify-content: center;
 }
 
+#modal-folder-browser {
+  z-index: 45;
+}
+
 /* Status badges */
 .status-badge {
   display: inline-flex;

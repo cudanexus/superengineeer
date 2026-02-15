@@ -117,6 +117,8 @@ export interface ClaudeAgentConfig {
   model?: string;
   /** MCP (Model Context Protocol) servers to connect */
   mcpServers?: McpServerConfig[];
+  /** Enable Chrome browser usage */
+  chromeEnabled?: boolean;
 }
 
 export interface ClaudeAgentStartOptions {
@@ -151,7 +153,7 @@ export class DefaultClaudeAgent implements ClaudeAgent {
   private _lastCommand: string | null = null;
   private _collectedOutput: string = '';
   private lineBuffer: string = '';
-  private isProcessing = false;
+  private lastActivityTimestamp = 0;
   private inputQueue: string[] = [];
   private _waitingVersion = 0;
   private _sessionId: string | null = null;
@@ -159,6 +161,7 @@ export class DefaultClaudeAgent implements ClaudeAgent {
   private readonly _isNewSession: boolean = true;
   private readonly _model: string | undefined;
   private readonly _mcpServers: McpServerConfig[];
+  private readonly _chromeEnabled: boolean;
   private _sessionError: string | null = null;
   private _ralphLoopPhase: 'worker' | 'reviewer' | undefined;
   private _mcpConfigPath: string | null = null;
@@ -178,6 +181,7 @@ export class DefaultClaudeAgent implements ClaudeAgent {
     this._isNewSession = config.isNewSession ?? true;
     this._model = config.model;
     this._mcpServers = config.mcpServers || [];
+    this._chromeEnabled = config.chromeEnabled ?? false;
 
     // Initialize process manager
     this.processManager = new ProcessManager(this.logger, config.processSpawner);
@@ -376,7 +380,6 @@ export class DefaultClaudeAgent implements ClaudeAgent {
     this.logger.info('sendInput called', {
       inputLength: input.length,
       isRunning: this.processManager.isRunning(),
-      isProcessing: this.isProcessing,
       queueLength: this.inputQueue.length,
     });
 
@@ -386,11 +389,7 @@ export class DefaultClaudeAgent implements ClaudeAgent {
 
     // Queue the input
     this.inputQueue.push(input);
-
-    // Process immediately if not already processing
-    if (!this.isProcessing) {
-      this.processNextQueuedInput();
-    }
+    this.processNextQueuedInput();
   }
 
   removeQueuedMessage(index: number): boolean {
@@ -419,6 +418,8 @@ export class DefaultClaudeAgent implements ClaudeAgent {
   private setupHandlers(): void {
     // Forward stream handler events
     this.streamHandler.on('message', (message: AgentMessage) => {
+      this.lastActivityTimestamp = Date.now();
+
       // Apply ralph loop phase if set
       if (this._ralphLoopPhase && message.type === 'stdout') {
         message.ralphLoopPhase = this._ralphLoopPhase;
@@ -580,7 +581,7 @@ export class DefaultClaudeAgent implements ClaudeAgent {
   }
 
   private processNextQueuedInput(): void {
-    if (this.inputQueue.length === 0 || this.isProcessing) {
+    if (this.inputQueue.length === 0) {
       return;
     }
 
@@ -589,14 +590,7 @@ export class DefaultClaudeAgent implements ClaudeAgent {
       return;
     }
 
-    this.isProcessing = true;
     this.sendInputInternal(input);
-
-    // Allow next input after a short delay
-    setTimeout(() => {
-      this.isProcessing = false;
-      this.processNextQueuedInput();
-    }, 100);
   }
 
   private sendInputInternal(input: string): void {
@@ -658,6 +652,7 @@ export class DefaultClaudeAgent implements ClaudeAgent {
       skipPermissions: this._permissions.skipPermissions,
       message,
       mcpConfigPath: this._mcpConfigPath || undefined,
+      chromeEnabled: this._chromeEnabled,
     });
   }
 
@@ -670,8 +665,9 @@ export class DefaultClaudeAgent implements ClaudeAgent {
   }
 
   private getWaitingStatus(): WaitingStatus {
+    const recentActivity = (Date.now() - this.lastActivityTimestamp) < 3000;
     return {
-      isWaiting: this.mode === 'interactive' && this._status === 'running' && !this.isProcessing,
+      isWaiting: this.mode === 'interactive' && this._status === 'running' && !recentActivity,
       version: this._waitingVersion,
     };
   }
@@ -690,7 +686,7 @@ export class DefaultClaudeAgent implements ClaudeAgent {
   private reset(): void {
     this._collectedOutput = '';
     this.lineBuffer = '';
-    this.isProcessing = false;
+    this.lastActivityTimestamp = 0;
     this.inputQueue = [];
     this._sessionError = null;
     this._ralphLoopPhase = undefined;

@@ -8,6 +8,7 @@ import {
   DeleteTaskBody,
   DeleteMilestoneBody,
   DeletePhaseBody,
+  AddTaskBody,
   RoadmapRespondBody,
   NextItemBody
 } from './types';
@@ -21,6 +22,7 @@ import {
   deleteTaskSchema,
   deleteMilestoneSchema,
   deletePhaseSchema,
+  addTaskSchema,
   nextItemSchema
 } from './schemas';
 
@@ -187,6 +189,33 @@ export function createRoadmapRouter(deps: ProjectRouterDependencies): Router {
 
     roadmapGenerator.sendResponse(id, response!);
     res.json({ success: true });
+  }));
+
+  // Add a task to a milestone in the roadmap
+  router.post('/task', validateBody(addTaskSchema), validateProjectExists(projectRepository), asyncHandler(async (req: Request, res: Response) => {
+    const project = req.project!;
+    const body = req.body as AddTaskBody;
+    const { phaseId, milestoneId, taskTitle } = body;
+
+    const roadmapPath = path.join((project).path, 'doc', 'ROADMAP.md');
+
+    let content: string;
+
+    try {
+      content = await fs.promises.readFile(roadmapPath, 'utf-8');
+    } catch {
+      throw new NotFoundError('Roadmap');
+    }
+
+    const updatedContent = roadmapEditor.addTask(content, {
+      phaseId: phaseId!,
+      milestoneId: milestoneId!,
+      taskTitle: taskTitle!,
+    });
+    await fs.promises.writeFile(roadmapPath, updatedContent, 'utf-8');
+
+    const parsed = roadmapParser.parse(updatedContent);
+    res.json({ content: updatedContent, parsed });
   }));
 
   // Set next item to work on

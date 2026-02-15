@@ -86,9 +86,12 @@
     }
 
     var html = '';
+    var hasOverrides = projectOverrides && projectOverrides.enabled;
+
     globalServers.forEach(function(server) {
-      var isEnabled = projectOverrides?.enabled &&
-                     (projectOverrides.serverOverrides[server.id]?.enabled ?? true);
+      var isEnabled = hasOverrides
+        ? (projectOverrides.serverOverrides[server.id]?.enabled === true)
+        : false;
       var typeLabel = server.type === 'stdio' ? 'Local' : 'Remote';
       var description = server.type === 'stdio'
         ? (server.command || '')

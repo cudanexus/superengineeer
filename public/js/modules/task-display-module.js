@@ -470,11 +470,14 @@
    */
   function updateOptimizationsBadge(count) {
     var $badge = $('#optimizations-badge');
+    var $menuBadge = $('#optimizations-menu-badge');
 
     if (count > 0) {
       $badge.text('!').removeClass('hidden');
+      $menuBadge.text('!').removeClass('hidden');
     } else {
       $badge.addClass('hidden');
+      $menuBadge.addClass('hidden');
     }
   }
 
@@ -514,10 +517,6 @@
       openTasksModal();
     });
 
-    // Optimizations button click
-    $('#btn-optimizations').on('click', function() {
-      openOptimizationsModal();
-    });
   }
 
   // Public API

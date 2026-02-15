@@ -45,16 +45,6 @@ describe('ModalsModule', () => {
     };
 
     mockApi = {
-      getContextUsage: jest.fn().mockReturnValue({
-        done: jest.fn().mockImplementation(function(cb) {
-          this._doneCb = cb;
-          return this;
-        }),
-        fail: jest.fn().mockImplementation(function(cb) {
-          this._failCb = cb;
-          return this;
-        })
-      }),
       getClaudeFiles: jest.fn().mockReturnValue({
         done: jest.fn().mockImplementation(function(cb) {
           this._doneCb = cb;
@@ -112,89 +102,6 @@ describe('ModalsModule', () => {
     delete global.$;
     delete global.marked;
     delete global.hljs;
-  });
-
-  describe('openContextUsageModal', () => {
-    it('should show loading message', () => {
-      ModalsModule.openContextUsageModal();
-
-      expect(global.$).toHaveBeenCalledWith('#context-usage-content');
-      expect(global.$().html).toHaveBeenCalledWith(expect.stringContaining('Loading...'));
-    });
-
-    it('should open the context usage modal', () => {
-      ModalsModule.openContextUsageModal();
-
-      expect(mockOpenModal).toHaveBeenCalledWith('modal-context-usage');
-    });
-
-    it('should show no project message when no project selected', () => {
-      mockState.selectedProjectId = null;
-
-      ModalsModule.openContextUsageModal();
-
-      expect(global.$().html).toHaveBeenCalledWith(expect.stringContaining('No project selected'));
-    });
-
-    it('should call API to get context usage', () => {
-      ModalsModule.openContextUsageModal();
-
-      expect(mockApi.getContextUsage).toHaveBeenCalledWith('project-123');
-    });
-
-    it('should render context usage on success', () => {
-      const mockUsage = {
-        contextUsage: {
-          percentUsed: 45,
-          totalTokens: 50000,
-          maxContextTokens: 100000,
-          inputTokens: 30000,
-          outputTokens: 20000,
-          cacheCreationInputTokens: 5000,
-          cacheReadInputTokens: 2000
-        }
-      };
-
-      mockApi.getContextUsage.mockReturnValue({
-        done: jest.fn().mockImplementation(function(cb) {
-          cb(mockUsage);
-          return this;
-        }),
-        fail: jest.fn().mockReturnThis()
-      });
-
-      ModalsModule.openContextUsageModal();
-
-      expect(global.$().html).toHaveBeenCalled();
-    });
-
-    it('should show error on API failure', () => {
-      mockApi.getContextUsage.mockReturnValue({
-        done: jest.fn().mockReturnThis(),
-        fail: jest.fn().mockImplementation(function(cb) {
-          cb();
-          return this;
-        })
-      });
-
-      ModalsModule.openContextUsageModal();
-
-      expect(global.$().html).toHaveBeenCalledWith(expect.stringContaining('Failed to load'));
-    });
-
-    it('should show no data message when usage is null', () => {
-      mockApi.getContextUsage.mockReturnValue({
-        done: jest.fn().mockImplementation(function(cb) {
-          cb({ contextUsage: null });
-          return this;
-        }),
-        fail: jest.fn().mockReturnThis()
-      });
-
-      ModalsModule.openContextUsageModal();
-
-      expect(global.$().html).toHaveBeenCalledWith(expect.stringContaining('No context usage data'));
-    });
   });
 
   describe('openClaudeFilesModal', () => {
@@ -499,33 +406,6 @@ describe('ModalsModule', () => {
 
       expect(global.$).toHaveBeenCalledWith('#btn-toggle-claude-preview');
       expect(global.$().on).toHaveBeenCalledWith('click', expect.any(Function));
-    });
-  });
-
-  describe('color coding for percent usage', () => {
-    it('should render green for low usage', () => {
-      const mockUsage = {
-        contextUsage: {
-          percentUsed: 25,
-          totalTokens: 25000,
-          maxContextTokens: 100000,
-          inputTokens: 15000,
-          outputTokens: 10000
-        }
-      };
-
-      mockApi.getContextUsage.mockReturnValue({
-        done: jest.fn().mockImplementation(function(cb) {
-          cb(mockUsage);
-          return this;
-        }),
-        fail: jest.fn().mockReturnThis()
-      });
-
-      ModalsModule.openContextUsageModal();
-
-      // The HTML should contain green color classes
-      expect(global.$().html).toHaveBeenCalled();
     });
   });
 

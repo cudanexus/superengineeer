@@ -17,6 +17,7 @@ import {
   createMockInstructionGenerator,
   sampleProject,
 } from '../helpers/mock-factories';
+import { ProjectDiscoveryService } from '../../../src/services/project-discovery';
 import { createErrorHandler } from '../../../src/utils';
 
 // Mock fs module
@@ -819,7 +820,7 @@ describe('Projects Routes', () => {
 
       const response = await request(app)
         .post(`/api/projects/${sampleProject.id}/agent/send`)
-        .send({ images: ['data:image/png;base64,abc123'] });
+        .send({ images: [{ type: 'image/png', data: 'abc123' }] });
 
       expect(response.status).toBe(200);
     });
@@ -1454,7 +1455,22 @@ describe('Projects Routes', () => {
         expect(deps.gitService.pull).toHaveBeenCalledWith(
           sampleProject.path,
           'origin',
-          'main'
+          'main',
+          undefined
+        );
+      });
+
+      it('should pull with rebase when specified', async () => {
+        const response = await request(app)
+          .post(`/api/projects/${sampleProject.id}/git/pull`)
+          .send({ remote: 'origin', branch: 'main', rebase: true });
+
+        expect(response.status).toBe(200);
+        expect(deps.gitService.pull).toHaveBeenCalledWith(
+          sampleProject.path,
+          'origin',
+          'main',
+          true
         );
       });
     });
@@ -1549,6 +1565,327 @@ describe('Projects Routes', () => {
           'origin'
         );
       });
+    });
+
+    describe('DELETE /:id/git/tags/:name', () => {
+      it('should delete tag', async () => {
+        const response = await request(app)
+          .delete(`/api/projects/${sampleProject.id}/git/tags/v1.0.0`);
+
+        expect(response.status).toBe(200);
+        expect(deps.gitService.deleteTag).toHaveBeenCalledWith(
+          sampleProject.path,
+          'v1.0.0'
+        );
+      });
+    });
+  });
+
+  describe('POST /discover', () => {
+    function createMockDiscoveryService(): jest.Mocked<ProjectDiscoveryService> {
+      return {
+        autoRegisterProject: jest.fn().mockResolvedValue(null),
+        scanForProjects: jest.fn().mockResolvedValue([]),
+      };
+    }
+
+    function setupWithDiscovery(discoveryService?: ProjectDiscoveryService | null): void {
+      deps.projectDiscoveryService = discoveryService;
+      app = express();
+      app.use(express.json());
+      app.use('/api/projects', createProjectsRouter(deps));
+      app.use(createErrorHandler());
+    }
+
+    it('should return 400 when searchPath is missing', async () => {
+      setupWithDiscovery(createMockDiscoveryService());
+
+      const response = await request(app)
+        .post('/api/projects/discover')
+        .send({});
+
+      expect(response.status).toBe(400);
+    });
+
+    it('should return 400 when searchPath is not a string', async () => {
+      setupWithDiscovery(createMockDiscoveryService());
+
+      const response = await request(app)
+        .post('/api/projects/discover')
+        .send({ searchPath: 123 });
+
+      expect(response.status).toBe(400);
+    });
+
+    it('should return 400 when searchPath does not exist', async () => {
+      (fs.existsSync as jest.Mock).mockReturnValue(false);
+      setupWithDiscovery(createMockDiscoveryService());
+
+      const response = await request(app)
+        .post('/api/projects/discover')
+        .send({ searchPath: '/nonexistent/path' });
+
+      expect(response.status).toBe(400);
+    });
+
+    it('should return 404 when discovery service is not available', async () => {
+      (fs.existsSync as jest.Mock).mockReturnValue(true);
+      setupWithDiscovery(null);
+
+      const response = await request(app)
+        .post('/api/projects/discover')
+        .send({ searchPath: '/existing/path' });
+
+      expect(response.status).toBe(404);
+    });
+
+    it('should discover and register new projects', async () => {
+      (fs.existsSync as jest.Mock).mockReturnValue(true);
+      const mockDiscovery = createMockDiscoveryService();
+      mockDiscovery.scanForProjects.mockResolvedValue(['/path/to/new-project']);
+      setupWithDiscovery(mockDiscovery);
+
+      const response = await request(app)
+        .post('/api/projects/discover')
+        .send({ searchPath: '/search/path' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.discovered).toBe(1);
+      expect(response.body.registered).toBe(1);
+    });
+
+    it('should report already registered projects', async () => {
+      (fs.existsSync as jest.Mock).mockReturnValue(true);
+      const mockDiscovery = createMockDiscoveryService();
+      mockDiscovery.scanForProjects.mockResolvedValue([sampleProject.path]);
+      setupWithDiscovery(mockDiscovery);
+
+      // The mock repo already has sampleProject, so findById will find it
+      deps.projectRepository.findById = jest.fn().mockResolvedValue(sampleProject);
+
+      // Re-create app with updated deps
+      app = express();
+      app.use(express.json());
+      app.use('/api/projects', createProjectsRouter(deps));
+      app.use(createErrorHandler());
+
+      const response = await request(app)
+        .post('/api/projects/discover')
+        .send({ searchPath: '/search/path' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.alreadyRegistered).toBe(1);
+      expect(response.body.registered).toBe(0);
+    });
+
+    it('should handle registration failures', async () => {
+      (fs.existsSync as jest.Mock).mockReturnValue(true);
+      const mockDiscovery = createMockDiscoveryService();
+      mockDiscovery.scanForProjects.mockResolvedValue(['/path/to/fail']);
+      setupWithDiscovery(mockDiscovery);
+
+      deps.projectRepository.findById = jest.fn().mockResolvedValue(null);
+      deps.projectRepository.create = jest.fn().mockRejectedValue(new Error('DB error'));
+
+      app = express();
+      app.use(express.json());
+      app.use('/api/projects', createProjectsRouter(deps));
+      app.use(createErrorHandler());
+
+      const response = await request(app)
+        .post('/api/projects/discover')
+        .send({ searchPath: '/search/path' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.failed).toBe(1);
+    });
+  });
+
+  describe('GET /:id/model', () => {
+    it('should return model info with no override', async () => {
+      const response = await request(app)
+        .get(`/api/projects/${sampleProject.id}/model`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.projectModel).toBeNull();
+      expect(response.body.defaultModel).toBeDefined();
+      expect(response.body.availableModels).toBeDefined();
+      expect(Array.isArray(response.body.availableModels)).toBe(true);
+    });
+
+    it('should return model info with override', async () => {
+      deps.projectRepository.findById = jest.fn().mockResolvedValue({
+        ...sampleProject,
+        modelOverride: 'claude-sonnet-4-5-20250929',
+      });
+
+      const response = await request(app)
+        .get(`/api/projects/${sampleProject.id}/model`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.effectiveModel).toBe('claude-sonnet-4-5-20250929');
+    });
+  });
+
+  describe('PUT /:id/model', () => {
+    it('should set model override', async () => {
+      const response = await request(app)
+        .put(`/api/projects/${sampleProject.id}/model`)
+        .send({ model: 'claude-sonnet-4-5-20250929' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.updated).toBe(true);
+      expect(response.body.projectModel).toBe('claude-sonnet-4-5-20250929');
+      expect(deps.projectRepository.updateModelOverride).toHaveBeenCalledWith(
+        sampleProject.id,
+        'claude-sonnet-4-5-20250929'
+      );
+    });
+
+    it('should clear model override with null', async () => {
+      const response = await request(app)
+        .put(`/api/projects/${sampleProject.id}/model`)
+        .send({ model: null });
+
+      expect(response.status).toBe(200);
+      expect(deps.projectRepository.updateModelOverride).toHaveBeenCalledWith(
+        sampleProject.id,
+        null
+      );
+    });
+
+    it('should return 400 for invalid model', async () => {
+      const response = await request(app)
+        .put(`/api/projects/${sampleProject.id}/model`)
+        .send({ model: 'invalid-model' });
+
+      expect(response.status).toBe(400);
+    });
+  });
+
+  describe('GET /:id/mcp-overrides', () => {
+    it('should return empty overrides when none set', async () => {
+      const response = await request(app)
+        .get(`/api/projects/${sampleProject.id}/mcp-overrides`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.enabled).toBe(false);
+    });
+
+    it('should return existing overrides', async () => {
+      deps.projectRepository.findById = jest.fn().mockResolvedValue({
+        ...sampleProject,
+        mcpOverrides: { enabled: true, serverOverrides: { server1: { enabled: false } } },
+      });
+
+      const response = await request(app)
+        .get(`/api/projects/${sampleProject.id}/mcp-overrides`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.enabled).toBe(true);
+    });
+  });
+
+  describe('PUT /:id/mcp-overrides', () => {
+    it('should clear overrides when disabled with no server overrides', async () => {
+      const response = await request(app)
+        .put(`/api/projects/${sampleProject.id}/mcp-overrides`)
+        .send({ enabled: false });
+
+      expect(response.status).toBe(200);
+      expect(deps.projectRepository.updateMcpOverrides).toHaveBeenCalledWith(
+        sampleProject.id,
+        null
+      );
+    });
+
+    it('should restart agent when running and clearing overrides', async () => {
+      deps.agentManager.getAgentStatus = jest.fn().mockReturnValue('running');
+
+      const response = await request(app)
+        .put(`/api/projects/${sampleProject.id}/mcp-overrides`)
+        .send({ enabled: false });
+
+      expect(response.status).toBe(200);
+      expect(response.body.agentRestarted).toBe(true);
+      expect(deps.agentManager.restartProjectAgent).toHaveBeenCalledWith(sampleProject.id);
+    });
+
+    it('should save overrides when enabled', async () => {
+      const overrides = {
+        enabled: true,
+        serverOverrides: { server1: { enabled: false } },
+      };
+
+      const response = await request(app)
+        .put(`/api/projects/${sampleProject.id}/mcp-overrides`)
+        .send(overrides);
+
+      expect(response.status).toBe(200);
+      expect(deps.projectRepository.updateMcpOverrides).toHaveBeenCalledWith(
+        sampleProject.id,
+        { enabled: true, serverOverrides: { server1: { enabled: false } } }
+      );
+    });
+
+    it('should restart agent when running and saving overrides', async () => {
+      deps.agentManager.getAgentStatus = jest.fn().mockReturnValue('running');
+
+      const response = await request(app)
+        .put(`/api/projects/${sampleProject.id}/mcp-overrides`)
+        .send({ enabled: true, serverOverrides: { s1: { enabled: true } } });
+
+      expect(response.status).toBe(200);
+      expect(response.body.agentRestarted).toBe(true);
+      expect(deps.agentManager.restartProjectAgent).toHaveBeenCalledWith(sampleProject.id);
+    });
+
+    it('should not restart agent when not running', async () => {
+      deps.agentManager.getAgentStatus = jest.fn().mockReturnValue('stopped');
+
+      const response = await request(app)
+        .put(`/api/projects/${sampleProject.id}/mcp-overrides`)
+        .send({ enabled: true, serverOverrides: {} });
+
+      expect(response.status).toBe(200);
+      expect(response.body.agentRestarted).toBe(false);
+      expect(deps.agentManager.restartProjectAgent).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('PUT /:id/claude-files (extended)', () => {
+    it('should reject non-CLAUDE.md files', async () => {
+      const response = await request(app)
+        .put(`/api/projects/${sampleProject.id}/claude-files`)
+        .send({
+          filePath: `${sampleProject.path}/README.md`,
+          content: '# Test',
+        });
+
+      expect(response.status).toBe(400);
+    });
+
+    it('should save .claude/CLAUDE.md within project', async () => {
+      const response = await request(app)
+        .put(`/api/projects/${sampleProject.id}/claude-files`)
+        .send({
+          filePath: `${sampleProject.path}/.claude/CLAUDE.md`,
+          content: '# Project Local CLAUDE',
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+    });
+
+    it('should reject CLAUDE.md outside project and not global', async () => {
+      const response = await request(app)
+        .put(`/api/projects/${sampleProject.id}/claude-files`)
+        .send({
+          filePath: '/other/project/CLAUDE.md',
+          content: '# Wrong',
+        });
+
+      expect(response.status).toBe(400);
     });
   });
 });

@@ -12,6 +12,11 @@ describe('RoadmapModule', () => {
   let mockFindProjectById;
   let mockDoSendMessage;
   let mockStartInteractiveAgentWithMessage;
+  let mockApi;
+  let mockUpdateProjectStatusById;
+  let mockStartAgentStatusPolling;
+  let mockAppendMessage;
+  let mockPermissionModeModule;
 
   beforeEach(() => {
     // Clear localStorage
@@ -39,7 +44,10 @@ describe('RoadmapModule', () => {
 
     // Setup mocks
     mockState = {
-      selectedProjectId: 'test-project-id'
+      selectedProjectId: 'test-project-id',
+      permissionMode: 'acceptEdits',
+      pendingPermissionMode: null,
+      currentSessionId: null
     };
 
     mockEscapeHtml = jest.fn((str) => str);
@@ -48,6 +56,18 @@ describe('RoadmapModule', () => {
     mockFindProjectById = jest.fn();
     mockDoSendMessage = jest.fn();
     mockStartInteractiveAgentWithMessage = jest.fn();
+    mockApi = {
+      stopAgent: jest.fn(),
+      startInteractiveAgent: jest.fn()
+    };
+    mockUpdateProjectStatusById = jest.fn();
+    mockStartAgentStatusPolling = jest.fn();
+    mockAppendMessage = jest.fn();
+    mockPermissionModeModule = {
+      updateButtons: jest.fn(),
+      updatePendingIndicator: jest.fn(),
+      setSwitchingState: jest.fn()
+    };
 
     // Initialize module
     RoadmapModule.init({
@@ -57,7 +77,12 @@ describe('RoadmapModule', () => {
       closeModal: mockCloseModal,
       findProjectById: mockFindProjectById,
       doSendMessage: mockDoSendMessage,
-      startInteractiveAgentWithMessage: mockStartInteractiveAgentWithMessage
+      startInteractiveAgentWithMessage: mockStartInteractiveAgentWithMessage,
+      api: mockApi,
+      updateProjectStatusById: mockUpdateProjectStatusById,
+      startAgentStatusPolling: mockStartAgentStatusPolling,
+      appendMessage: mockAppendMessage,
+      PermissionModeModule: mockPermissionModeModule
     });
   });
 
@@ -175,6 +200,7 @@ describe('RoadmapModule', () => {
       expect(renderedHtml).toContain('Phase 1');
       expect(renderedHtml).toContain('Milestone 1');
       expect(renderedHtml).toContain('2/4');
+      expect(renderedHtml).toContain('roadmap-select-phase');
     });
 
     it('should use escapeHtml for phase and milestone titles', () => {
@@ -227,18 +253,58 @@ describe('RoadmapModule', () => {
 
       RoadmapModule.clearSelection();
 
-      expect(global.$).toHaveBeenCalledWith('.roadmap-select-milestone, .roadmap-select-task');
+      expect(global.$).toHaveBeenCalledWith('.roadmap-select-phase, .roadmap-select-milestone, .roadmap-select-task');
       expect(mockProp).toHaveBeenCalledWith('checked', false);
     });
   });
 
+  // Helper: creates a $ mock that handles phase/milestone/task selectors
+  // selectors: { phases: [elements], milestones: [elements], tasks: [elements] }
+  function createSelectionMock(selectors) {
+    var phases = selectors.phases || [];
+    var milestones = selectors.milestones || [];
+    var tasks = selectors.tasks || [];
+
+    return jest.fn((selector) => {
+      if (typeof selector === 'object') {
+        return selector;
+      }
+
+      if (selector === '.roadmap-select-phase:checked') {
+        return {
+          each: (cb) => { phases.forEach((el, i) => cb.call(el, i, el)); }
+        };
+      }
+
+      if (selector === '.roadmap-select-milestone:checked') {
+        return {
+          each: (cb) => { milestones.forEach((el, i) => cb.call(el, i, el)); }
+        };
+      }
+
+      if (selector === '.roadmap-select-task:checked:not(:disabled)') {
+        return {
+          each: (cb) => { tasks.forEach((el, i) => cb.call(el, i, el)); }
+        };
+      }
+
+      return {
+        removeClass: jest.fn().mockReturnThis(),
+        addClass: jest.fn().mockReturnThis(),
+        text: jest.fn().mockReturnThis(),
+        prop: jest.fn().mockReturnThis(),
+        each: jest.fn()
+      };
+    });
+  }
+
+  function mockElement(dataMap) {
+    return { data: jest.fn((key) => dataMap[key]) };
+  }
+
   describe('convertToTasks', () => {
     it('should show warning toast when no items selected', () => {
-      global.$ = jest.fn().mockReturnValue({
-        each: jest.fn(),
-        removeClass: jest.fn().mockReturnThis(),
-        addClass: jest.fn().mockReturnThis()
-      });
+      global.$ = createSelectionMock({});
 
       RoadmapModule.convertToTasks();
 
@@ -246,40 +312,10 @@ describe('RoadmapModule', () => {
     });
 
     it('should send message to running agent', () => {
-      // Create mock element with data
-      const mockMilestoneElement = {
-        data: jest.fn((key) => {
-          if (key === 'phase-id') return 'phase1';
-          if (key === 'milestone-id') return 'milestone1';
-          if (key === 'milestone-title') return 'Test Milestone';
-        })
-      };
-
-      global.$ = jest.fn((selector) => {
-        // When $(this) is called inside each callback, return the mock element
-        if (selector === mockMilestoneElement || typeof selector === 'object') {
-          return mockMilestoneElement;
-        }
-
-        if (selector === '.roadmap-select-milestone:checked') {
-          return {
-            each: (cb) => {
-              cb.call(mockMilestoneElement, 0, mockMilestoneElement);
-            }
-          };
-        }
-
-        if (selector === '.roadmap-select-task:checked:not(:disabled)') {
-          return { each: jest.fn() };
-        }
-
-        return {
-          removeClass: jest.fn().mockReturnThis(),
-          addClass: jest.fn().mockReturnThis(),
-          text: jest.fn().mockReturnThis(),
-          prop: jest.fn().mockReturnThis(),
-          each: jest.fn()
-        };
+      global.$ = createSelectionMock({
+        milestones: [mockElement({
+          'phase-id': 'phase1', 'milestone-id': 'milestone1', 'milestone-title': 'Test Milestone'
+        })]
       });
 
       mockFindProjectById.mockReturnValue({ status: 'running' });
@@ -291,39 +327,48 @@ describe('RoadmapModule', () => {
       expect(mockStartInteractiveAgentWithMessage).not.toHaveBeenCalled();
     });
 
+    it('should switch to acceptEdits when agent is running in plan mode', () => {
+      global.$ = createSelectionMock({
+        milestones: [mockElement({
+          'phase-id': 'phase1', 'milestone-id': 'milestone1', 'milestone-title': 'Test Milestone'
+        })]
+      });
+
+      mockState.permissionMode = 'plan';
+      mockState.currentSessionId = 'session-123';
+      mockFindProjectById.mockReturnValue({ status: 'running' });
+      mockApi.stopAgent.mockReturnValue({ done: jest.fn((cb) => { cb(); return { fail: jest.fn() }; }) });
+
+      RoadmapModule.convertToTasks();
+
+      expect(mockCloseModal).toHaveBeenCalledWith('modal-roadmap');
+      expect(mockPermissionModeModule.setSwitchingState).toHaveBeenCalledWith(true);
+      expect(mockApi.stopAgent).toHaveBeenCalledWith('test-project-id');
+      expect(mockDoSendMessage).not.toHaveBeenCalled();
+    });
+
+    it('should set acceptEdits when starting agent not running', () => {
+      global.$ = createSelectionMock({
+        milestones: [mockElement({
+          'phase-id': 'phase1', 'milestone-id': 'milestone1', 'milestone-title': 'Test Milestone'
+        })]
+      });
+
+      mockState.permissionMode = 'plan';
+      mockFindProjectById.mockReturnValue({ status: 'stopped' });
+
+      RoadmapModule.convertToTasks();
+
+      expect(mockState.permissionMode).toBe('acceptEdits');
+      expect(mockStartInteractiveAgentWithMessage).toHaveBeenCalled();
+      expect(mockPermissionModeModule.updateButtons).toHaveBeenCalled();
+    });
+
     it('should start interactive agent when not running', () => {
-      const mockMilestoneElement = {
-        data: jest.fn((key) => {
-          if (key === 'phase-id') return 'phase1';
-          if (key === 'milestone-id') return 'milestone1';
-          if (key === 'milestone-title') return 'Test Milestone';
-        })
-      };
-
-      global.$ = jest.fn((selector) => {
-        if (selector === mockMilestoneElement || typeof selector === 'object') {
-          return mockMilestoneElement;
-        }
-
-        if (selector === '.roadmap-select-milestone:checked') {
-          return {
-            each: (cb) => {
-              cb.call(mockMilestoneElement, 0, mockMilestoneElement);
-            }
-          };
-        }
-
-        if (selector === '.roadmap-select-task:checked:not(:disabled)') {
-          return { each: jest.fn() };
-        }
-
-        return {
-          removeClass: jest.fn().mockReturnThis(),
-          addClass: jest.fn().mockReturnThis(),
-          text: jest.fn().mockReturnThis(),
-          prop: jest.fn().mockReturnThis(),
-          each: jest.fn()
-        };
+      global.$ = createSelectionMock({
+        milestones: [mockElement({
+          'phase-id': 'phase1', 'milestone-id': 'milestone1', 'milestone-title': 'Test Milestone'
+        })]
       });
 
       mockFindProjectById.mockReturnValue({ status: 'stopped' });
@@ -337,41 +382,32 @@ describe('RoadmapModule', () => {
   });
 
   describe('prompt generation', () => {
-    it('should generate correct prompt for milestone items', () => {
-      const mockMilestoneElement = {
-        data: jest.fn((key) => {
-          if (key === 'phase-id') return 'phase1';
-          if (key === 'milestone-id') return 'milestone1';
-          if (key === 'milestone-title') return 'Setup Database';
-        })
-      };
-
+    it('should generate correct prompt for phase items', () => {
       let capturedPrompt = '';
 
-      global.$ = jest.fn((selector) => {
-        if (selector === mockMilestoneElement || typeof selector === 'object') {
-          return mockMilestoneElement;
-        }
+      global.$ = createSelectionMock({
+        phases: [mockElement({
+          'phase-id': 'phase1', 'phase-title': 'Core Infrastructure'
+        })]
+      });
 
-        if (selector === '.roadmap-select-milestone:checked') {
-          return {
-            each: (cb) => {
-              cb.call(mockMilestoneElement, 0, mockMilestoneElement);
-            }
-          };
-        }
+      mockFindProjectById.mockReturnValue({ status: 'stopped' });
+      mockStartInteractiveAgentWithMessage.mockImplementation((prompt) => {
+        capturedPrompt = prompt;
+      });
 
-        if (selector === '.roadmap-select-task:checked:not(:disabled)') {
-          return { each: jest.fn() };
-        }
+      RoadmapModule.convertToTasks();
 
-        return {
-          removeClass: jest.fn().mockReturnThis(),
-          addClass: jest.fn().mockReturnThis(),
-          text: jest.fn().mockReturnThis(),
-          prop: jest.fn().mockReturnThis(),
-          each: jest.fn()
-        };
+      expect(capturedPrompt).toContain('**Phase**: Core Infrastructure');
+    });
+
+    it('should generate correct prompt for milestone items', () => {
+      let capturedPrompt = '';
+
+      global.$ = createSelectionMock({
+        milestones: [mockElement({
+          'phase-id': 'phase1', 'milestone-id': 'milestone1', 'milestone-title': 'Setup Database'
+        })]
       });
 
       mockFindProjectById.mockReturnValue({ status: 'stopped' });
@@ -388,41 +424,12 @@ describe('RoadmapModule', () => {
     });
 
     it('should generate correct prompt for task items', () => {
-      const mockTaskElement = {
-        data: jest.fn((key) => {
-          if (key === 'phase-id') return 'phase1';
-          if (key === 'milestone-id') return 'milestone1';
-          if (key === 'task-index') return 0;
-          if (key === 'task-title') return 'Create user table';
-        })
-      };
-
       let capturedPrompt = '';
 
-      global.$ = jest.fn((selector) => {
-        if (selector === mockTaskElement || typeof selector === 'object') {
-          return mockTaskElement;
-        }
-
-        if (selector === '.roadmap-select-milestone:checked') {
-          return { each: jest.fn() };
-        }
-
-        if (selector === '.roadmap-select-task:checked:not(:disabled)') {
-          return {
-            each: (cb) => {
-              cb.call(mockTaskElement, 0, mockTaskElement);
-            }
-          };
-        }
-
-        return {
-          removeClass: jest.fn().mockReturnThis(),
-          addClass: jest.fn().mockReturnThis(),
-          text: jest.fn().mockReturnThis(),
-          prop: jest.fn().mockReturnThis(),
-          each: jest.fn()
-        };
+      global.$ = createSelectionMock({
+        tasks: [mockElement({
+          'phase-id': 'phase1', 'milestone-id': 'milestone1', 'task-index': 0, 'task-title': 'Create user table'
+        })]
       });
 
       mockFindProjectById.mockReturnValue({ status: 'stopped' });
@@ -435,54 +442,62 @@ describe('RoadmapModule', () => {
       expect(capturedPrompt).toContain('**Task**: Create user table');
     });
 
-    it('should skip tasks when their milestone is selected', () => {
-      const mockMilestoneElement = {
-        data: jest.fn((key) => {
-          if (key === 'phase-id') return 'phase1';
-          if (key === 'milestone-id') return 'milestone1';
-          if (key === 'milestone-title') return 'Database Setup';
-        })
-      };
-
-      const mockTaskElement = {
-        data: jest.fn((key) => {
-          if (key === 'phase-id') return 'phase1';
-          if (key === 'milestone-id') return 'milestone1'; // Same milestone
-          if (key === 'task-index') return 0;
-          if (key === 'task-title') return 'Create user table';
-        })
-      };
-
+    it('should skip milestones when their phase is selected', () => {
       let capturedPrompt = '';
 
-      global.$ = jest.fn((selector) => {
-        if (typeof selector === 'object') {
-          return selector; // Return the element itself when wrapped
-        }
+      global.$ = createSelectionMock({
+        phases: [mockElement({
+          'phase-id': 'phase1', 'phase-title': 'Core Infrastructure'
+        })],
+        milestones: [mockElement({
+          'phase-id': 'phase1', 'milestone-id': 'milestone1', 'milestone-title': 'Setup Database'
+        })]
+      });
 
-        if (selector === '.roadmap-select-milestone:checked') {
-          return {
-            each: (cb) => {
-              cb.call(mockMilestoneElement, 0, mockMilestoneElement);
-            }
-          };
-        }
+      mockFindProjectById.mockReturnValue({ status: 'stopped' });
+      mockStartInteractiveAgentWithMessage.mockImplementation((prompt) => {
+        capturedPrompt = prompt;
+      });
 
-        if (selector === '.roadmap-select-task:checked:not(:disabled)') {
-          return {
-            each: (cb) => {
-              cb.call(mockTaskElement, 0, mockTaskElement);
-            }
-          };
-        }
+      RoadmapModule.convertToTasks();
 
-        return {
-          removeClass: jest.fn().mockReturnThis(),
-          addClass: jest.fn().mockReturnThis(),
-          text: jest.fn().mockReturnThis(),
-          prop: jest.fn().mockReturnThis(),
-          each: jest.fn()
-        };
+      expect(capturedPrompt).toContain('**Phase**: Core Infrastructure');
+      expect(capturedPrompt).not.toContain('**Milestone**: Setup Database');
+    });
+
+    it('should skip tasks when their phase is selected', () => {
+      let capturedPrompt = '';
+
+      global.$ = createSelectionMock({
+        phases: [mockElement({
+          'phase-id': 'phase1', 'phase-title': 'Core Infrastructure'
+        })],
+        tasks: [mockElement({
+          'phase-id': 'phase1', 'milestone-id': 'milestone1', 'task-index': 0, 'task-title': 'Create user table'
+        })]
+      });
+
+      mockFindProjectById.mockReturnValue({ status: 'stopped' });
+      mockStartInteractiveAgentWithMessage.mockImplementation((prompt) => {
+        capturedPrompt = prompt;
+      });
+
+      RoadmapModule.convertToTasks();
+
+      expect(capturedPrompt).toContain('**Phase**: Core Infrastructure');
+      expect(capturedPrompt).not.toContain('**Task**: Create user table');
+    });
+
+    it('should skip tasks when their milestone is selected', () => {
+      let capturedPrompt = '';
+
+      global.$ = createSelectionMock({
+        milestones: [mockElement({
+          'phase-id': 'phase1', 'milestone-id': 'milestone1', 'milestone-title': 'Database Setup'
+        })],
+        tasks: [mockElement({
+          'phase-id': 'phase1', 'milestone-id': 'milestone1', 'task-index': 0, 'task-title': 'Create user table'
+        })]
       });
 
       mockFindProjectById.mockReturnValue({ status: 'stopped' });

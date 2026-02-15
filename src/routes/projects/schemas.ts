@@ -54,6 +54,12 @@ export const deletePhaseSchema = z.object({
   phaseId: z.string().min(1),
 });
 
+export const addTaskSchema = z.object({
+  phaseId: z.string().min(1),
+  milestoneId: z.string().min(1),
+  taskTitle: z.string().min(1, 'Task title is required'),
+});
+
 export const nextItemSchema = z.object({
   phaseId: z.string().nullable().optional(),
   milestoneId: z.string().nullable().optional(),
@@ -62,16 +68,21 @@ export const nextItemSchema = z.object({
 });
 
 // Agent schemas
+const imageSchema = z.object({
+  type: z.string(),
+  data: z.string(),
+});
+
 export const agentMessageSchema = z.object({
   message: z.string().optional(),
-  images: z.array(z.string()).optional(),
+  images: z.array(imageSchema).optional(),
   sessionId: z.string().optional(),
   permissionMode: z.enum(['acceptEdits', 'plan']).optional(),
 });
 
 export const agentSendMessageSchema = z.object({
   message: z.string().min(1, 'Message is required').optional(),
-  images: z.array(z.string()).optional(),
+  images: z.array(imageSchema).optional(),
 }).refine((data) => data.message || (data.images && data.images.length > 0), {
   message: 'Either message or images must be provided',
 });
@@ -130,6 +141,7 @@ export const gitPushSchema = z.object({
 export const gitPullSchema = z.object({
   remote: z.string().default('origin'),
   branch: z.string().optional(),
+  rebase: z.boolean().optional(),
 });
 
 export const gitTagSchema = z.object({

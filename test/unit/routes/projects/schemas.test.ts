@@ -111,7 +111,7 @@ describe('Project Route Schemas', () => {
     it('should validate agent message', () => {
       const valid = {
         message: 'Hello Claude',
-        images: ['base64imagedata'],
+        images: [{ type: 'image/png', data: 'base64imagedata' }],
         sessionId: '123e4567-e89b-12d3-a456-426614174000',
         permissionMode: 'plan',
       };
@@ -131,7 +131,7 @@ describe('Project Route Schemas', () => {
     it('should require message', () => {
       const valid = {
         message: 'Hello Claude',
-        images: ['base64imagedata'],
+        images: [{ type: 'image/png', data: 'base64imagedata' }],
       };
 
       const result = agentSendMessageSchema.safeParse(valid);

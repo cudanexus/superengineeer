@@ -2,244 +2,199 @@
 
 ## Progress Summary
 
-- **Phase 1: Ralph Loop Implementation** ✅ Completed
-- **Phase 2: Model Selection** ✅ Completed
-- **Phase 3: Critical Security & Architecture Fixes** ✅ Completed
-- **Phase 4: Code Quality Improvements** ✅ Completed
-- **Phase 5: Frontend Improvements** 🔄 Not Started
-- **Phase 6: Documentation & Testing** 🔄 Not Started
+- **Phase 1: GitHub Integration** ✅ Complete
+- **Phase 2: GitLab & Jira Integration** 🔄 Not Started
+- **Phase 3: Docker Sandboxed Execution** 🔄 Not Started
+- **Phase 4: Advanced Agent Orchestration** 🔄 Not Started
+- **Phase 5: Collaboration & Sharing** 🔄 Not Started
+- **Phase 6: Observability & Analytics** 🔄 Not Started
 
 ---
 
-## Phase 1: Ralph Loop Implementation (Completed)
+## Phase 1: GitHub Integration (via GitHub CLI)
 
-Implement the Ralph Loop pattern based on Geoffrey Huntley's Ralph Wiggum technique - an iterative development pattern that solves context accumulation by starting each iteration with fresh context and using cross-model review.
+Integrate with GitHub using the `gh` CLI tool to browse repositories, clone projects, and work on issues directly from the Claudito UI. Requires `gh` to be installed and authenticated on the host machine.
 
-### Milestone 1.1: Ralph Loop Core Architecture
+### Milestone 1.1: GitHub CLI Detection & Service Layer
 
-- [x] Design RalphLoop service interface with worker/reviewer model separation
-- [x] Create iteration state persistence layer (summary files, feedback files)
-- [x] Implement fresh context initialization for each iteration
-- [x] Add iteration tracking with configurable max turns
-- [x] Create RalphLoopConfig interface (maxTurns, workerModel, reviewerModel, taskDescription)
+- [x] Create `GitHubCLIService` interface wrapping `gh` CLI commands via `child_process`
+- [x] Implement `gh` availability detection (`gh --version`) with clear error messaging when missing
+- [x] Detect authentication status via `gh auth status` and surface login instructions in Settings UI
+- [x] Add `GET /api/integrations/github/status` endpoint returning CLI version and auth state
+- [x] Add GitHub connection status indicator in Settings UI (installed, authenticated, username/org)
 
-### Milestone 1.2: Worker Agent Implementation
+### Milestone 1.2: Repository Browser & Project Import
 
-- [x] Create WorkerAgent class that reads previous iteration summaries
-- [x] Implement task execution with summary generation after each iteration
-- [x] Add structured output format for iteration results
-- [x] Create file persistence for worker summaries (`.claudito/ralph/{taskId}/worker-summary.json`)
-- [x] Implement worker completion detection (success/failure/needs-review)
+- [x] Add `GET /api/integrations/github/repos` endpoint using `gh repo list` with owner/type/language filters
+- [x] Create repository browser modal with org/user filtering, search (`gh search repos`), and sorting
+- [x] Implement `POST /api/integrations/github/clone` using `gh repo clone` and register as Claudito project
+- [x] Support selecting target directory and branch during clone (`gh repo clone -- --branch`)
+- [x] Show clone progress via WebSocket events (`github_clone_progress`) by streaming `gh` stdout
 
-### Milestone 1.3: Reviewer Agent Implementation
+### Milestone 1.3: GitHub Issues Integration
 
-- [x] Create ReviewerAgent class that reads worker output and previous feedback
-- [x] Implement code review logic with structured feedback format
-- [x] Add review criteria configuration (correctness, completeness, code quality)
-- [x] Create file persistence for reviewer feedback (`.claudito/ralph/{taskId}/reviewer-feedback.json`)
-- [x] Implement review decision output (approve/reject with specific feedback)
+- [x] Add `GET /api/integrations/github/issues` endpoint using `gh issue list` with JSON output (`--json`)
+- [x] Create issues panel in project view with label/milestone/assignee filters via `gh issue list --label --milestone --assignee`
+- [x] Implement "Start Working" action: fetch issue detail via `gh issue view --json` and generate agent prompt from body and comments
+- [x] Implement "Add to Roadmap" action: convert issue into roadmap task with `gh` issue URL link back
+- [x] Sync issue status via `gh issue close` on task completion and `gh issue comment` for progress updates
 
-### Milestone 1.4: Ralph Loop Orchestration
+### Milestone 1.4: Pull Request Workflow
 
-- [x] Implement RalphLoopManager to coordinate worker/reviewer cycles
-- [x] Add loop termination conditions (max turns, approval, critical failure)
-- [x] Create WebSocket events for loop progress (iteration_start, worker_complete, review_complete)
-- [x] Implement graceful loop interruption and resume capability
-- [x] Add loop history and metrics tracking
+- [x] Add `POST /api/integrations/github/pr` using `gh pr create` from current branch with title and body
+- [x] Auto-generate PR title and description from conversation history and diff
+- [x] Fetch PR review comments via `gh pr view --json reviews,comments` and show in agent output tab
+- [x] Add "Fix PR Feedback" action: parse review comments from `gh pr diff` and feed as agent prompt
 
-### Milestone 1.5: Ralph Loop API & WebSocket
+## Phase 2: GitLab & Jira Integration
 
-- [x] Add REST API endpoints for Ralph Loop operations (start, stop, pause, resume, list, get, delete)
-- [x] Add WebSocket message types for real-time updates (status, iteration, output, complete)
-- [x] Integrate RalphLoopService with WebSocketServer
-- [x] Add Ralph Loop API client methods in frontend
-- [x] Add backend route tests
-- [x] Add WebSocket integration tests
+Extend the integration framework to support GitLab and Jira, enabling multi-platform issue tracking and project management.
 
-### Milestone 1.6: Ralph Loop Frontend UI
+### Milestone 2.1: Integration Provider Framework
 
-- [x] Create ralph-loop-module.js frontend module
-- [x] Add Ralph Loop tab to project view
-- [x] Implement task configuration form (description, max turns, model selection)
-- [x] Add Start/Pause/Resume/Stop controls
-- [x] Display real-time iteration progress
-- [x] Show worker and reviewer output streams
-- [x] Create Ralph Loop history view with delete functionality
-- [x] Add comprehensive frontend tests
+- [ ] Create `IntegrationProvider` interface (authenticate, listRepos, listIssues, createPR)
+- [ ] Refactor GitHub service to implement `IntegrationProvider`
+- [ ] Build provider registry with per-project provider selection
+- [ ] Create shared integration settings UI (add/remove/configure providers)
 
-## Phase 2: Model Selection (Completed)
+### Milestone 2.2: GitLab Integration
 
-Allow users to choose which Claude model to use for agents, with proper session management.
+- [ ] Implement `GitLabService` with personal access token and OAuth authentication
+- [ ] Add GitLab repository browser with group/subgroup navigation
+- [ ] Implement GitLab issue listing with label and milestone filters
+- [ ] Add merge request creation with auto-generated description
+- [ ] Support GitLab CI pipeline status display in project view
 
-### Milestone 2.1: Model Configuration Backend
+### Milestone 2.3: Jira Integration
 
-- [x] Add model selection to SettingsRepository (default model preference)
-- [x] Add per-project model override in ProjectRepository
-- [x] Create model validation (supported models list from Claude API)
-- [x] Update ClaudeAgent to accept model parameter via `--model` flag
-- [x] Implement agent restart when model changes mid-session
+- [ ] Implement `JiraService` with API token authentication (Cloud and Server)
+- [ ] Add Jira board/backlog browser with project and sprint filters
+- [ ] Implement "Start Working" action from Jira ticket (summary, description, acceptance criteria)
+- [ ] Add "Add to Roadmap" action: import Jira ticket as roadmap task with bidirectional link
+- [ ] Update Jira ticket status and add work log comments on task completion
 
-### Milestone 2.2: Model Selection UI
+### Milestone 2.4: Unified Issue Dashboard
 
-- [x] Add model dropdown in global settings
-- [x] Add model override option in project settings (header selector)
-- [x] Display current model in agent status area (tooltip shows effective model)
-- [x] Add model indicator in project header
-- [x] Show toast notification when model changes
+- [ ] Create cross-provider issue dashboard aggregating GitHub, GitLab, and Jira
+- [ ] Add priority-based sorting and custom saved filters
+- [ ] Implement bulk "Add to Roadmap" for multiple selected issues
+- [ ] Show linked integration source (icon + link) on roadmap tasks
 
-## Phase 3: Critical Security & Architecture Fixes (Completed)
+## Phase 3: Docker Sandboxed Execution
 
-Address critical security vulnerabilities and architectural improvements identified through comprehensive code quality analysis.
+Run Claude Code agents inside Docker containers with the project directory mounted, eliminating risk of unintended host modifications.
 
-### Milestone 3.1: Security Vulnerability Fixes (Completed)
+### Milestone 3.1: Docker Runtime Configuration
 
-- [x] Fix path traversal vulnerability in src/routes/projects.ts
-- [x] Fix shell command injection in src/agents/claude-agent.ts and Ralph Loop agents
-- [x] Create comprehensive input validation middleware
-- [x] Create project validation middleware for common patterns
+- [ ] Create `DockerService` interface for container lifecycle management
+- [ ] Add Docker settings in UI: enable/disable, base image, resource limits (CPU, memory)
+- [ ] Implement Docker availability detection with fallback to host execution
+- [ ] Create `Dockerfile.claudito-agent` with Claude Code CLI, Node.js, and common dev tools
+- [ ] Add `GET /api/settings/docker` and `PUT /api/settings/docker` endpoints
 
-### Milestone 3.2: Split Large Files (Completed)
+### Milestone 3.2: Container Lifecycle Management
 
-Break down files exceeding 1000 lines to improve maintainability and adhere to CLAUDE.md guidelines.
+- [ ] Implement container creation with project directory bind-mount (read-write)
+- [ ] Pass environment variables, Git config, and SSH keys into container securely
+- [ ] Implement container start/stop/restart aligned with agent lifecycle
+- [ ] Add container health checks and automatic restart on crash
+- [ ] Track container resource usage and expose via `GET /api/agents/containers`
 
-- [x] Split src/agents/agent-manager.ts (1307 lines) into 5 focused modules:
-  - [x] agent-manager.ts - Core lifecycle only (1011 lines, close to target)
-  - [x] agent-queue.ts - Queue management
-  - [x] session-manager.ts - Session handling
-  - [x] autonomous-loop-orchestrator.ts - Loop logic
-  - [x] process-tracker.ts - PID tracking
-- [x] Split src/agents/claude-agent.ts (1714 lines) - Extract stream handling (now 642 lines)
-- [x] Split src/routes/projects.ts (1979 lines) into 7 sub-routers:
-  - [x] projects/index.ts - Router aggregator
-  - [x] projects/core.ts - Core operations
-  - [x] projects/roadmap.ts - Roadmap operations
-  - [x] projects/agent.ts - Agent operations
-  - [x] projects/conversation.ts - Conversation operations
-  - [x] projects/ralph-loop.ts - Ralph Loop operations
-  - [x] projects/shell.ts - Shell operations
-  - [x] projects/git.ts - Git operations (18 routes discovered during refactoring)
+### Milestone 3.3: Sandboxed Agent Execution
 
-### Milestone 3.3: Apply Validation Middleware ✓
+- [ ] Modify `ClaudeAgent` to optionally spawn inside Docker container via `docker exec`
+- [ ] Stream agent stdout/stderr from container through existing WebSocket pipeline
+- [ ] Implement file sync strategy for `.claudito/` metadata (conversations, status)
+- [ ] Add per-project Docker override (some projects sandboxed, others on host)
+- [ ] Create network isolation options (no network, host network, custom bridge)
 
-Integrate the new validation middleware throughout the application.
+### Milestone 3.4: Docker Image Management
 
-- [x] Apply request validators to all POST/PUT endpoints
-- [x] Apply project validator middleware to reduce duplication
-- [x] Apply numeric parameter validation where needed
-- [x] Add rate limiting middleware for expensive operations
-- [x] Create comprehensive test suite for validation, project, and rate-limiting middleware
-- [x] Create integration tests for route validation
+- [ ] Add UI for managing custom agent images (list, build, remove)
+- [ ] Support per-project Dockerfile for project-specific toolchains
+- [ ] Implement image layer caching for fast container startup
+- [ ] Add pre-built image variants (Node.js, Python, Rust, Go, Java)
 
-## Phase 4: Code Quality Improvements (Completed)
+## Phase 4: Advanced Agent Orchestration
 
-Refactor code to meet quality standards and improve maintainability.
+Enhance agent capabilities with multi-agent collaboration, scheduled execution, and intelligent context management.
 
-### Milestone 4.1: Refactor Large Functions ✓
+### Milestone 4.1: Multi-Agent Collaboration
 
-Break down functions exceeding 50 lines as per CLAUDE.md guidelines.
+- [ ] Implement agent-to-agent message passing for collaborative workflows
+- [ ] Create `PipelineService` for sequential multi-agent task chains
+- [ ] Add pipeline builder UI with drag-and-drop agent step ordering
+- [ ] Implement shared context store for agents working on the same project
 
-- [x] Refactor handleStreamEvent in stream-handler.ts (159 lines)
-  - [x] Create handler map pattern
-  - [x] Extract each event type to its own method
-- [x] Refactor startWithOptions() method in claude-agent.ts (60 lines)
-  - [x] Extract validation logic into validateStart()
-  - [x] Extract initialization logic into initializeForStart()
-  - [x] Extract command preparation into prepareCommand()
-  - [x] Extract process spawning logic into spawnClaudeProcess()
-  - [x] Extract post-start tasks into handlePostStart()
-- [x] Refactor Ralph Loop service methods exceeding 50 lines
-  - [x] runWorkerPhase (95 lines) - split into validation, creation, and handler methods
-  - [x] runReviewerPhase (95 lines) - split into validation, creation, and handler methods
-  - [x] cleanupOldLoops (52 lines) - split into limit retrieval, filtering, and deletion
+### Milestone 4.2: Scheduled & Triggered Execution
 
-### Milestone 4.2: Extract Reusable Functions ✓
+- [ ] Create `SchedulerService` with cron-based task scheduling
+- [ ] Add webhook triggers for external event-driven execution
+- [ ] Implement file-watcher triggers (run agent on file changes)
+- [ ] Add schedule management UI with enable/disable and execution history
+- [ ] Support Git hook integration (pre-commit, post-push agent tasks)
 
-Eliminate code duplication by creating utility functions.
+### Milestone 4.3: Context Budget Management
 
-- [x] Create json-utils.ts - Safe JSON parsing/stringifying with error handling
-- [x] Create file-system-utils.ts - Atomic writes, directory operations
-- [x] Create path-utils.ts - Home directory resolution, cache keys, path building
-- [x] Create operation-tracking.ts - PendingOperationsTracker and WriteQueueManager classes
-- [x] Create timestamp.ts - ISO timestamp generation and formatting
-- [x] Refactor conversation.ts repository to use new utilities
-- [x] Update imports and exports in utils/index.ts
+- [ ] Implement context usage prediction before sending messages
+- [ ] Add automatic conversation summarization when context approaches limit
+- [ ] Create context budget allocation across concurrent agents
+- [ ] Show real-time context budget visualization per agent in UI
 
-### Milestone 4.3: Create Repository Interfaces ✓
+## Phase 5: Collaboration & Sharing
 
-Establish proper interfaces for all repositories following CLAUDE.md guidelines.
+Enable team workflows with shared projects, session sharing, and export/import capabilities.
 
-- [x] Create interfaces.ts with all repository interfaces
-  - [x] IProjectRepository
-  - [x] IConversationRepository
-  - [x] ISettingsRepository
-  - [x] IRalphLoopRepository
-  - [x] Consolidate duplicate ProjectPathResolver interfaces
-- [x] Create factories.ts with repository factory implementations
-  - [x] FileRepositoryFactory for production
-  - [x] InMemoryRepositoryFactory for testing
-  - [x] createMockRepositoryFactory helper for Jest
-- [x] Fix circular dependencies and duplicate exports
-- [x] Update repository index.ts exports
+### Milestone 5.1: Session Export & Import
 
-## Phase 5: Frontend Improvements
+- [ ] Create `ExportService` for serializing conversations to portable JSON/Markdown
+- [ ] Implement conversation export with tool call results and file diffs included
+- [ ] Add import functionality to resume exported sessions in new environments
+- [ ] Support selective export (date range, specific conversations)
 
-Enhance frontend code quality, fix memory leaks, and add proper testing.
+### Milestone 5.2: Project Templates
 
-### Milestone 5.1: Fix Memory Leaks
+- [ ] Create template system for bootstrapping new projects with pre-configured settings
+- [ ] Add built-in templates (Node.js API, React app, Python CLI, Rust library)
+- [ ] Implement custom template creation from existing project configuration
+- [ ] Add template browser UI with preview and one-click project creation
 
-Address memory leaks in frontend JavaScript code.
+### Milestone 5.3: Notification System
 
-- [ ] Track and cleanup event handlers in file-browser.js
-- [ ] Fix WebSocket reconnection memory accumulation
-- [ ] Implement proper cleanup for dynamic DOM elements
-- [ ] Add cleanup for deeply nested file trees
+- [ ] Create `NotificationService` interface with pluggable providers
+- [ ] Implement desktop notifications for agent completion and errors
+- [ ] Add optional Slack/Discord webhook notifications for long-running tasks
+- [ ] Create notification preferences UI (per-event granularity)
 
-### Milestone 5.2: Add Frontend Type Safety ✓
+### Milestone 5.4: Multi-User Support
 
-Improve frontend code maintainability with type definitions.
+- [ ] Implement JWT-based authentication with user accounts
+- [ ] Add role-based access control (admin, developer, viewer)
+- [ ] Create project sharing with per-user permission levels
+- [ ] Add audit log for tracking user actions across shared projects
 
-- [x] Create TypeScript definitions for all modules
-- [x] Add JSDoc comments to all public functions
-- [x] Document module dependencies and interfaces
-- [x] Create type definitions for API responses
+## Phase 6: Observability & Analytics
 
-### Milestone 5.3: Frontend Testing
+Provide deep insights into agent performance, cost tracking, and system health.
 
-Establish comprehensive frontend testing infrastructure.
+### Milestone 6.1: Cost & Token Analytics
 
-- [ ] Set up Jest for frontend testing
-- [ ] Create unit tests for all modules (target 60% coverage)
+- [ ] Create `AnalyticsService` for aggregating token usage across agents and projects
+- [ ] Implement per-project and per-conversation cost estimation (model-aware pricing)
+- [ ] Add analytics dashboard with charts (daily usage, cost trends, model breakdown)
+- [ ] Create budget alerts with configurable thresholds and notifications
 
-## Phase 6: Documentation & Testing
+### Milestone 6.2: Agent Performance Metrics
 
-Complete documentation and establish comprehensive testing coverage.
+- [ ] Track task completion rates, average duration, and iteration counts
+- [ ] Measure tool call success/failure rates per agent session
+- [ ] Create performance comparison view across models (speed, quality, cost)
+- [ ] Add Ralph Loop efficiency metrics (iterations to approval, rejection reasons)
 
-### Milestone 6.1: Documentation
+### Milestone 6.3: System Health Monitoring
 
-Create and update documentation to reflect current state.
-
-- [ ] Create ARCHITECTURE.md with system diagrams
-- [ ] Create SECURITY.md with security considerations
-- [ ] Update README.md with current features
-- [ ] Add JSDoc comments to complex functions
-- [ ] Create API documentation
-- [ ] Document testing procedures
-
-### Milestone 6.2: Backend Testing
-
-Enhance backend test coverage to 80%+.
-
-- [ ] Add missing unit tests for untested services
-- [ ] Create integration tests for WebSocket communication
-- [ ] Add tests for error handling paths
-- [ ] Create performance benchmarks for critical paths
-
-### Milestone 6.3: Monitoring & Metrics
-
-Implement monitoring for production stability.
-
-- [ ] Add performance metrics collection
-- [ ] Implement error rate monitoring
-- [ ] Create health check endpoints
-- [ ] Add resource usage tracking
-- [ ] Implement alerting for critical failures
+- [ ] Implement structured health checks for all services (Docker, Git, filesystem)
+- [ ] Add process memory and CPU tracking with historical graphs
+- [ ] Create system status dashboard with dependency health indicators
+- [ ] Implement log aggregation with searchable log viewer and level filtering
+- [ ] Add alerting for resource exhaustion (disk space, memory, container limits)

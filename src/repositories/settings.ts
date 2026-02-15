@@ -266,6 +266,8 @@ export interface GlobalSettings {
   ralphLoop: RalphLoopSettings;
   /** MCP (Model Context Protocol) server configurations */
   mcp: McpSettings;
+  /** Enable Chrome browser usage in Claude agents */
+  chromeEnabled: boolean;
 }
 
 const DEFAULT_SETTINGS: GlobalSettings = {
@@ -273,7 +275,7 @@ const DEFAULT_SETTINGS: GlobalSettings = {
   claudePermissions: {
     dangerouslySkipPermissions: false,
     allowedTools: [],
-    allowRules: [],
+    allowRules: ['WebSearch'],
     askRules: [],
     denyRules: [],
     defaultMode: 'plan',
@@ -341,6 +343,7 @@ Your goal is to ensure high-quality deliverables. Be thorough but fair in your a
     enabled: true,
     servers: [],
   },
+  chromeEnabled: false,
 };
 
 // Update type that allows partial nested objects for incremental updates
@@ -358,6 +361,7 @@ export interface SettingsUpdate {
   promptTemplates?: PromptTemplate[];
   ralphLoop?: Partial<RalphLoopSettings>;
   mcp?: Partial<McpSettings>;
+  chromeEnabled?: boolean;
 }
 
 export interface SettingsRepository {
@@ -482,6 +486,7 @@ export class FileSettingsRepository implements SettingsRepository {
         enabled: parsedMcp?.enabled ?? DEFAULT_SETTINGS.mcp.enabled,
         servers: parsedMcp?.servers ?? DEFAULT_SETTINGS.mcp.servers,
       },
+      chromeEnabled: parsed.chromeEnabled ?? DEFAULT_SETTINGS.chromeEnabled,
     };
   }
 
@@ -577,6 +582,10 @@ export class FileSettingsRepository implements SettingsRepository {
         ...this.settings.mcp,
         ...updates.mcp,
       };
+    }
+
+    if (updates.chromeEnabled !== undefined) {
+      this.settings.chromeEnabled = updates.chromeEnabled;
     }
 
     this.saveToFile();

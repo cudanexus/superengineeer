@@ -43,7 +43,7 @@ export interface GitService {
   createBranch(projectPath: string, name: string, checkout?: boolean): Promise<void>;
   checkout(projectPath: string, branch: string): Promise<void>;
   push(projectPath: string, remote?: string, branch?: string, setUpstream?: boolean): Promise<string>;
-  pull(projectPath: string, remote?: string, branch?: string): Promise<string>;
+  pull(projectPath: string, remote?: string, branch?: string, rebase?: boolean): Promise<string>;
   getDiff(projectPath: string, staged?: boolean): Promise<string>;
   getFileDiff(projectPath: string, filePath: string, staged?: boolean): Promise<FileDiffResult>;
   discardChanges(projectPath: string, paths: string[]): Promise<void>;
@@ -52,6 +52,8 @@ export interface GitService {
   createTag(projectPath: string, name: string, message?: string): Promise<void>;
   pushTag(projectPath: string, name: string, remote?: string): Promise<string>;
   deleteTag(projectPath: string, name: string): Promise<void>;
+  getRemoteUrl(projectPath: string, remote?: string): Promise<string | null>;
+  getUserName(projectPath: string): Promise<string | null>;
 }
 
 export class SimpleGitService implements GitService {
@@ -244,8 +246,14 @@ export class SimpleGitService implements GitService {
     return await this.getGit(projectPath).raw(args);
   }
 
-  async pull(projectPath: string, remote = 'origin', branch?: string): Promise<string> {
-    const args = ['pull', remote];
+  async pull(projectPath: string, remote = 'origin', branch?: string, rebase = false): Promise<string> {
+    const args = ['pull'];
+
+    if (rebase) {
+      args.push('--rebase');
+    }
+
+    args.push(remote);
 
     if (branch) {
       args.push(branch);
@@ -338,6 +346,25 @@ export class SimpleGitService implements GitService {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       throw new GitError(`Failed to delete tag: ${message}`);
+    }
+  }
+
+  async getRemoteUrl(projectPath: string, remote = 'origin'): Promise<string | null> {
+    try {
+      const remotes = await this.getGit(projectPath).getRemotes(true);
+      const match = remotes.find(r => r.name === remote);
+      return match?.refs?.fetch || null;
+    } catch {
+      return null;
+    }
+  }
+
+  async getUserName(projectPath: string): Promise<string | null> {
+    try {
+      const result = await this.getGit(projectPath).getConfig('user.name');
+      return result.value || null;
+    } catch {
+      return null;
     }
   }
 }

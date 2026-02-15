@@ -6,3 +6,4 @@ export * from './permission-generator';
 export * from './auth-service';
 export * from './shell-service';
 export * from './claude-optimization-service';
+export * from './github-cli-service';

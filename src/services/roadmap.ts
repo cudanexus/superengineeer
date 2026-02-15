@@ -43,10 +43,17 @@ export interface DeletePhaseParams {
   phaseId: string;
 }
 
+export interface AddTaskParams {
+  phaseId: string;
+  milestoneId: string;
+  taskTitle: string;
+}
+
 export interface RoadmapEditor {
   deleteTask(content: string, params: DeleteTaskParams): string;
   deleteMilestone(content: string, params: DeleteMilestoneParams): string;
   deletePhase(content: string, params: DeletePhaseParams): string;
+  addTask(content: string, params: AddTaskParams): string;
 }
 
 interface ParserContext {
@@ -110,6 +117,23 @@ export class MarkdownRoadmapEditor implements RoadmapEditor {
     return this.removePhaseFromContent(content, phase.title);
   }
 
+  addTask(content: string, params: AddTaskParams): string {
+    const parsed = this.parser.parse(content);
+    const phase = this.findPhaseById(parsed.phases, params.phaseId);
+
+    if (!phase) {
+      throw new Error(`Phase not found: ${params.phaseId}`);
+    }
+
+    const milestone = this.findMilestoneById(phase.milestones, params.milestoneId);
+
+    if (!milestone) {
+      throw new Error(`Milestone not found: ${params.milestoneId}`);
+    }
+
+    return this.appendTaskToMilestone(content, phase.title, milestone.title, params.taskTitle);
+  }
+
   private findPhaseById(phases: RoadmapPhase[], phaseId: string): RoadmapPhase | null {
     return phases.find(p => p.id === phaseId) || null;
   }
@@ -119,6 +143,49 @@ export class MarkdownRoadmapEditor implements RoadmapEditor {
     milestoneId: string
   ): RoadmapMilestone | null {
     return milestones.find(m => m.id === milestoneId) || null;
+  }
+
+  private appendTaskToMilestone(
+    content: string,
+    phaseTitle: string,
+    milestoneTitle: string,
+    taskTitle: string
+  ): string {
+    const lines = content.split('\n');
+    const result: string[] = [];
+    let inTargetPhase = false;
+    let inTargetMilestone = false;
+    let lastTaskLineIndex = -1;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]!;
+
+      if (this.isPhaseHeader(line)) {
+        if (inTargetMilestone && lastTaskLineIndex >= 0) {
+          result.splice(lastTaskLineIndex + 1, 0, `- [ ] ${taskTitle}`);
+          return result.concat(lines.slice(i)).join('\n');
+        }
+        inTargetPhase = line.includes(phaseTitle);
+        inTargetMilestone = false;
+      } else if (this.isMilestoneHeader(line)) {
+        if (inTargetMilestone && lastTaskLineIndex >= 0) {
+          result.splice(lastTaskLineIndex + 1, 0, `- [ ] ${taskTitle}`);
+          return result.concat(lines.slice(i)).join('\n');
+        }
+        inTargetMilestone = inTargetPhase && line.includes(milestoneTitle);
+        lastTaskLineIndex = -1;
+      } else if (this.isTaskLine(line) && inTargetMilestone) {
+        lastTaskLineIndex = result.length;
+      }
+
+      result.push(line);
+    }
+
+    if (inTargetMilestone && lastTaskLineIndex >= 0) {
+      result.splice(lastTaskLineIndex + 1, 0, `- [ ] ${taskTitle}`);
+    }
+
+    return result.join('\n');
   }
 
   private removeTaskFromContent(

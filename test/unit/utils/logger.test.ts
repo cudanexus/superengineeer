@@ -4,6 +4,7 @@ import {
   LogEntry,
   initializeLogger,
   getLogger,
+  getLogStore,
   getProjectLogs,
   clearProjectLogs,
   getGlobalLogs,
@@ -153,6 +154,20 @@ describe('Logger', () => {
 
       expect(consoleSpy.info.mock.calls[0][0]).toContain('15:30:45');
     });
+
+    it('should handle timestamp without T separator', () => {
+      const output = new ConsoleLogOutput();
+      const entry: LogEntry = {
+        level: 'info',
+        message: 'Test message',
+        timestamp: 'no-t-separator',
+      };
+
+      output.write(entry);
+
+      expect(consoleSpy.info).toHaveBeenCalled();
+    });
+
   });
 
   describe('DefaultLogger', () => {
@@ -678,6 +693,45 @@ describe('Logger', () => {
       logger.info('Message with "quotes" and\nnewlines\tand\ttabs');
 
       expect(mockOutput.write).toHaveBeenCalled();
+    });
+  });
+
+  describe('LogStore frontend_error event', () => {
+    it('should emit frontend_error when context type is frontend', () => {
+      const logStore = getLogStore();
+      const listener = jest.fn();
+      logStore.on('frontend_error', listener);
+
+      try {
+        const mockOutput = createMockOutput();
+        const logger = new DefaultLogger({ level: 'info', projectId: 'fe-test' }, mockOutput);
+        logger.error('Frontend error occurred', { type: 'frontend', details: 'test' });
+
+        expect(listener).toHaveBeenCalledWith(
+          expect.objectContaining({
+            message: 'Frontend error occurred',
+            context: expect.objectContaining({ type: 'frontend' }),
+          })
+        );
+      } finally {
+        logStore.removeListener('frontend_error', listener);
+      }
+    });
+
+    it('should not emit frontend_error for non-frontend context', () => {
+      const logStore = getLogStore();
+      const listener = jest.fn();
+      logStore.on('frontend_error', listener);
+
+      try {
+        const mockOutput = createMockOutput();
+        const logger = new DefaultLogger({ level: 'info' }, mockOutput);
+        logger.error('Backend error', { type: 'backend' });
+
+        expect(listener).not.toHaveBeenCalled();
+      } finally {
+        logStore.removeListener('frontend_error', listener);
+      }
     });
   });
 });

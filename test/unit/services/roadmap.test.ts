@@ -231,4 +231,69 @@ describe('MarkdownRoadmapEditor', () => {
       expect(result.trim()).toBe('# Project Roadmap');
     });
   });
+
+  describe('addTask', () => {
+    it('should add a task to the end of a milestone', () => {
+      const result = editor.addTask(sampleRoadmap, {
+        phaseId: 'phase-1',
+        milestoneId: 'milestone-1.1',
+        taskTitle: 'New task added',
+      });
+
+      expect(result).toContain('- [ ] New task added');
+      // The new task should appear after the last task in milestone 1.1
+      const lines = result.split('\n');
+      const setupTestingIdx = lines.findIndex(l => l.includes('Setup testing'));
+      const newTaskIdx = lines.findIndex(l => l.includes('New task added'));
+      expect(newTaskIdx).toBe(setupTestingIdx + 1);
+    });
+
+    it('should add a task to a different milestone', () => {
+      const result = editor.addTask(sampleRoadmap, {
+        phaseId: 'phase-2',
+        milestoneId: 'milestone-2.1',
+        taskTitle: 'User deletion',
+      });
+
+      expect(result).toContain('- [ ] User deletion');
+      const lines = result.split('\n');
+      const profileIdx = lines.findIndex(l => l.includes('User profile'));
+      const newIdx = lines.findIndex(l => l.includes('User deletion'));
+      expect(newIdx).toBe(profileIdx + 1);
+    });
+
+    it('should throw error for invalid phase', () => {
+      expect(() =>
+        editor.addTask(sampleRoadmap, {
+          phaseId: 'phase-99',
+          milestoneId: 'milestone-1.1',
+          taskTitle: 'Test',
+        })
+      ).toThrow('Phase not found: phase-99');
+    });
+
+    it('should throw error for invalid milestone', () => {
+      expect(() =>
+        editor.addTask(sampleRoadmap, {
+          phaseId: 'phase-1',
+          milestoneId: 'milestone-99.99',
+          taskTitle: 'Test',
+        })
+      ).toThrow('Milestone not found: milestone-99.99');
+    });
+
+    it('should preserve existing content', () => {
+      const result = editor.addTask(sampleRoadmap, {
+        phaseId: 'phase-1',
+        milestoneId: 'milestone-1.1',
+        taskTitle: 'Extra task',
+      });
+
+      expect(result).toContain('Initialize project');
+      expect(result).toContain('Configure linting');
+      expect(result).toContain('Setup testing');
+      expect(result).toContain('Phase 2: Features');
+      expect(result).toContain('Phase 3: Polish');
+    });
+  });
 });

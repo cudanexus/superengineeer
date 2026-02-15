@@ -14,6 +14,8 @@ describe('PermissionModeModule', () => {
   let mockStartAgentStatusPolling;
   let mockAppendMessage;
   let mockRenderProjectList;
+  let mockOpenModal;
+  let mockCloseModal;
 
   function createMockJQuery() {
     const mockElement = {
@@ -22,7 +24,8 @@ describe('PermissionModeModule', () => {
       removeClass: jest.fn().mockReturnThis(),
       prop: jest.fn().mockReturnThis(),
       on: jest.fn().mockReturnThis(),
-      attr: jest.fn().mockReturnThis()
+      attr: jest.fn().mockReturnThis(),
+      data: jest.fn().mockReturnThis(),
     };
 
     return jest.fn().mockReturnValue(mockElement);
@@ -36,7 +39,8 @@ describe('PermissionModeModule', () => {
       currentSessionId: null,
       isModeSwitching: false,
       currentAgentMode: null,
-      waitingVersion: 0
+      waitingVersion: 0,
+      settings: null,
     };
 
     mockApi = {
@@ -45,19 +49,19 @@ describe('PermissionModeModule', () => {
           this._doneCb = cb;
           return this;
         }),
-        fail: jest.fn().mockReturnThis()
+        fail: jest.fn().mockReturnThis(),
       }),
       startInteractiveAgent: jest.fn().mockReturnValue({
         done: jest.fn().mockReturnThis(),
-        fail: jest.fn().mockReturnThis()
+        fail: jest.fn().mockReturnThis(),
       }),
       sendAgentMessage: jest.fn().mockReturnValue({
         done: jest.fn().mockImplementation(function(cb) {
           if (cb) cb();
           return this;
         }),
-        fail: jest.fn().mockReturnThis()
-      })
+        fail: jest.fn().mockReturnThis(),
+      }),
     };
 
     mockShowToast = jest.fn();
@@ -67,6 +71,8 @@ describe('PermissionModeModule', () => {
     mockStartAgentStatusPolling = jest.fn();
     mockAppendMessage = jest.fn();
     mockRenderProjectList = jest.fn();
+    mockOpenModal = jest.fn();
+    mockCloseModal = jest.fn();
 
     global.$ = createMockJQuery();
 
@@ -79,7 +85,9 @@ describe('PermissionModeModule', () => {
       updateProjectStatusById: mockUpdateProjectStatusById,
       startAgentStatusPolling: mockStartAgentStatusPolling,
       appendMessage: mockAppendMessage,
-      renderProjectList: mockRenderProjectList
+      renderProjectList: mockRenderProjectList,
+      openModal: mockOpenModal,
+      closeModal: mockCloseModal,
     });
   });
 
@@ -193,67 +201,106 @@ describe('PermissionModeModule', () => {
   });
 
   describe('setMode', () => {
-    it('should do nothing if mode is same as effective current mode', () => {
+    it('should do nothing if mode is same as current', () => {
       mockState.permissionMode = 'acceptEdits';
 
       PermissionModeModule.setMode('acceptEdits');
 
       expect(mockShowToast).not.toHaveBeenCalled();
+      expect(mockOpenModal).not.toHaveBeenCalled();
     });
 
-    it('should cancel pending change if clicking original mode', () => {
-      mockState.permissionMode = 'acceptEdits';
-      mockState.pendingPermissionMode = 'plan';
-
-      PermissionModeModule.setMode('acceptEdits');
-
-      expect(mockState.pendingPermissionMode).toBeNull();
-      expect(mockShowToast).toHaveBeenCalledWith('Pending mode change cancelled', 'info');
-    });
-
-    it('should queue change if agent is running and busy', () => {
-      mockState.permissionMode = 'acceptEdits';
-      mockState.currentSessionId = 'session-123';
-      mockFindProjectById.mockReturnValue({
-        status: 'running',
-        isWaitingForInput: false
-      });
-
-      PermissionModeModule.setMode('plan');
-
-      expect(mockState.pendingPermissionMode).toBe('plan');
-      expect(mockShowToast).toHaveBeenCalledWith(
-        'Mode change to Plan will apply when Claude finishes current operation',
-        'info'
-      );
-    });
-
-    it('should apply mode immediately if agent not running', () => {
+    it('should apply immediately if agent not running', () => {
       mockState.permissionMode = 'acceptEdits';
       mockFindProjectById.mockReturnValue(null);
 
       PermissionModeModule.setMode('plan');
 
       expect(mockState.permissionMode).toBe('plan');
-      expect(mockState.pendingPermissionMode).toBeNull();
       expect(mockShowToast).toHaveBeenCalledWith(
-        'Permission mode set to Plan (will apply on next agent start)',
+        'Permission mode set to Plan',
         'info'
       );
+      expect(mockOpenModal).not.toHaveBeenCalled();
     });
 
-    it('should restart agent if running and waiting', () => {
+    it('should show confirmation modal if agent is running', () => {
       mockState.permissionMode = 'acceptEdits';
       mockState.currentSessionId = 'session-123';
-      mockFindProjectById.mockReturnValue({
-        status: 'running',
-        isWaitingForInput: true
-      });
+      mockFindProjectById.mockReturnValue({ status: 'running' });
+
+      PermissionModeModule.setMode('plan');
+
+      expect(mockOpenModal).toHaveBeenCalledWith('modal-confirm-mode-change');
+      expect(mockState.permissionMode).toBe('acceptEdits');
+    });
+
+    it('should apply immediately if agent exists but not running', () => {
+      mockState.permissionMode = 'acceptEdits';
+      mockFindProjectById.mockReturnValue({ status: 'stopped' });
 
       PermissionModeModule.setMode('plan');
 
       expect(mockState.permissionMode).toBe('plan');
+      expect(mockOpenModal).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('restartWithMode', () => {
+    it('should stop agent and restart with target mode', () => {
+      mockState.currentSessionId = 'session-123';
+
+      PermissionModeModule.restartWithMode('plan');
+
       expect(mockApi.stopAgent).toHaveBeenCalledWith('test-project-id');
+      expect(mockShowToast).toHaveBeenCalledWith(
+        'Restarting agent in Plan mode...',
+        'info'
+      );
+    });
+
+    it('should do nothing if no project selected', () => {
+      mockState.selectedProjectId = null;
+
+      PermissionModeModule.restartWithMode('plan');
+
+      expect(mockApi.stopAgent).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getModeForProject', () => {
+    it('should return default mode if no per-project mode saved', () => {
+      mockState.permissionMode = 'acceptEdits';
+
+      const result = PermissionModeModule.getModeForProject('unknown-project');
+
+      expect(result).toBe('acceptEdits');
+    });
+  });
+
+  describe('onProjectChanged', () => {
+    it('should clear pending mode', () => {
+      mockState.pendingPermissionMode = 'plan';
+
+      PermissionModeModule.onProjectChanged('new-project');
+
+      expect(mockState.pendingPermissionMode).toBeNull();
+    });
+  });
+
+  describe('syncFromServer', () => {
+    it('should update state and buttons', () => {
+      PermissionModeModule.syncFromServer('plan', 'test-project-id');
+
+      expect(mockState.permissionMode).toBe('plan');
+    });
+
+    it('should do nothing if mode is null', () => {
+      mockState.permissionMode = 'acceptEdits';
+
+      PermissionModeModule.syncFromServer(null);
+
+      expect(mockState.permissionMode).toBe('acceptEdits');
     });
   });
 
@@ -269,7 +316,7 @@ describe('PermissionModeModule', () => {
     it('should clear pending if project not running', () => {
       mockState.pendingPermissionMode = 'plan';
       mockFindProjectById.mockReturnValue({
-        status: 'stopped'
+        status: 'stopped',
       });
 
       PermissionModeModule.applyPendingIfNeeded();
@@ -282,7 +329,7 @@ describe('PermissionModeModule', () => {
       mockState.pendingPermissionMode = 'plan';
       mockState.currentSessionId = 'session-123';
       mockFindProjectById.mockReturnValue({
-        status: 'running'
+        status: 'running',
       });
 
       PermissionModeModule.applyPendingIfNeeded();
@@ -293,31 +340,8 @@ describe('PermissionModeModule', () => {
     });
   });
 
-  describe('restartAgent', () => {
-    it('should stop agent and start with new mode', () => {
-      mockState.currentSessionId = 'session-123';
-      mockState.permissionMode = 'plan';
-
-      PermissionModeModule.restartAgent();
-
-      expect(mockApi.stopAgent).toHaveBeenCalledWith('test-project-id');
-      expect(mockShowToast).toHaveBeenCalledWith(
-        'Stopping agent to switch to Plan mode...',
-        'info'
-      );
-    });
-
-    it('should do nothing if no project selected', () => {
-      mockState.selectedProjectId = null;
-
-      PermissionModeModule.restartAgent();
-
-      expect(mockApi.stopAgent).not.toHaveBeenCalled();
-    });
-  });
-
   describe('approvePlanAndSwitch', () => {
-    it('should set mode to acceptEdits and stop agent', () => {
+    it('should set mode to acceptEdits and send yes', () => {
       mockState.currentSessionId = 'session-123';
 
       PermissionModeModule.approvePlanAndSwitch();
@@ -325,14 +349,6 @@ describe('PermissionModeModule', () => {
       expect(mockApi.sendAgentMessage).toHaveBeenCalledWith('test-project-id', 'yes');
       expect(mockState.permissionMode).toBe('acceptEdits');
       expect(mockState.pendingPermissionMode).toBeNull();
-    });
-
-    it('should do nothing if no project selected', () => {
-      mockState.selectedProjectId = null;
-
-      PermissionModeModule.approvePlanAndSwitch();
-
-      expect(mockApi.sendAgentMessage).toHaveBeenCalledWith(null, 'yes');
     });
   });
 
@@ -352,6 +368,15 @@ describe('PermissionModeModule', () => {
       PermissionModeModule.setupHandlers();
 
       expect(global.$).toHaveBeenCalledWith('#btn-perm-plan');
+      expect(mockBtn.on).toHaveBeenCalledWith('click', expect.any(Function));
+    });
+
+    it('should register confirm mode change button handler', () => {
+      const mockBtn = global.$();
+
+      PermissionModeModule.setupHandlers();
+
+      expect(global.$).toHaveBeenCalledWith('#btn-confirm-mode-change');
       expect(mockBtn.on).toHaveBeenCalledWith('click', expect.any(Function));
     });
   });

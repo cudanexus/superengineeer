@@ -218,11 +218,16 @@
     var selected = state.folderBrowser.currentPath;
 
     if (selected) {
-      $('#input-project-path').val(selected);
-      var folderName = extractFolderName(selected);
+      if (typeof state.folderBrowserCallback === 'function') {
+        state.folderBrowserCallback(selected);
+        state.folderBrowserCallback = null;
+      } else {
+        $('#input-project-path').val(selected);
+        var folderName = extractFolderName(selected);
 
-      if (folderName && !$('#input-project-name').val()) {
-        $('#input-project-name').val(folderName);
+        if (folderName && !$('#input-project-name').val()) {
+          $('#input-project-name').val(folderName);
+        }
       }
 
       closeModal('modal-folder-browser');

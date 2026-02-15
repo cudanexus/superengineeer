@@ -53,6 +53,7 @@ export class MessageBuilder {
     message?: string;
     env?: Record<string, string>;
     mcpConfigPath?: string;
+    chromeEnabled?: boolean;
   }): string[] {
     const args: string[] = [];
 
@@ -108,6 +109,13 @@ export class MessageBuilder {
     // Add MCP config file if provided
     if (options.mcpConfigPath) {
       args.push('--mcp-config', options.mcpConfigPath);
+    }
+
+    // Chrome browser usage
+    if (options.chromeEnabled) {
+      args.push('--chrome');
+    } else {
+      args.push('--no-chrome');
     }
 
     return args;

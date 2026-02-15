@@ -1,6 +1,6 @@
 /**
  * Permission Mode Module
- * Handles permission mode switching, pending mode states, and agent restarts
+ * Handles permission mode switching with confirmation, per-project state, and agent restarts
  */
 (function(root, factory) {
   if (typeof module === 'object' && module.exports) {
@@ -21,11 +21,15 @@
   var startAgentStatusPolling;
   var appendMessage;
   var renderProjectList;
+  var openModal;
+  var closeModal;
 
-  /**
-   * Initialize the module with dependencies
-   * @param {Object} deps - Dependencies object
-   */
+  // Per-project permission mode map: { projectId: 'acceptEdits' | 'plan' }
+  var projectModes = {};
+
+  // Pending mode change target (set when modal is shown)
+  var pendingModeTarget = null;
+
   function init(deps) {
     state = deps.state;
     api = deps.api;
@@ -36,13 +40,10 @@
     startAgentStatusPolling = deps.startAgentStatusPolling;
     appendMessage = deps.appendMessage;
     renderProjectList = deps.renderProjectList;
+    openModal = deps.openModal;
+    closeModal = deps.closeModal;
   }
 
-  /**
-   * Get display label for permission mode
-   * @param {string} mode - Permission mode
-   * @returns {string} Display label
-   */
   function getModeLabel(mode) {
     switch (mode) {
       case 'plan': return 'Plan';
@@ -52,12 +53,22 @@
   }
 
   /**
-   * Update permission mode button active states
+   * Get the permission mode for a specific project
    */
+  function getModeForProject(projectId) {
+    return projectModes[projectId] || state.permissionMode || 'plan';
+  }
+
+  /**
+   * Set the permission mode for a specific project
+   */
+  function setModeForProject(projectId, mode) {
+    projectModes[projectId] = mode;
+  }
+
   function updateButtons() {
     $('.perm-btn').removeClass('perm-active');
 
-    // Show the pending mode as active if there is one, otherwise show the current mode
     var displayMode = state.pendingPermissionMode || state.permissionMode;
 
     switch (displayMode) {
@@ -73,9 +84,6 @@
     updateSkipPermissionsWarning();
   }
 
-  /**
-   * Update the skip permissions warning icon on the Accept Edits button
-   */
   function updateSkipPermissionsWarning() {
     var skipEnabled = state.settings &&
       state.settings.claudePermissions &&
@@ -93,9 +101,6 @@
     }
   }
 
-  /**
-   * Update pending mode indicator visibility and text
-   */
   function updatePendingIndicator() {
     var $indicator = $('#pending-mode-label');
 
@@ -106,22 +111,14 @@
     }
   }
 
-  /**
-   * Set UI state during mode switching
-   * @param {boolean} isSwitching - Whether mode is being switched
-   */
   function setSwitchingState(isSwitching) {
     state.isModeSwitching = isSwitching;
 
-    // Disable/enable permission mode buttons
     $('#btn-perm-accept, #btn-perm-plan').prop('disabled', isSwitching);
-
-    // Disable/enable input and send button
     $('#input-message').prop('disabled', isSwitching);
     $('#btn-send-message').prop('disabled', isSwitching);
     $('#btn-cancel-agent').prop('disabled', isSwitching);
 
-    // Add visual feedback
     if (isSwitching) {
       $('#permission-mode-selector').addClass('opacity-50 pointer-events-none');
       $('#form-send-message').addClass('opacity-50');
@@ -132,53 +129,39 @@
   }
 
   /**
-   * Restart agent with new permission mode
+   * Restart agent with the given permission mode and send a continue message
    */
-  function restartAgent() {
+  function restartWithMode(targetMode) {
     var projectId = state.selectedProjectId;
 
     if (!projectId) return;
 
     var sessionId = state.currentSessionId;
-    var targetMode = state.permissionMode;
 
-    // Disable UI during mode switch
     setSwitchingState(true);
+    showToast('Restarting agent in ' + getModeLabel(targetMode) + ' mode...', 'info');
 
-    showToast('Stopping agent to switch to ' + getModeLabel(targetMode) + ' mode...', 'info');
+    var continueMessage = 'You are now in ' + getModeLabel(targetMode) + ' mode. Please continue where you left off.';
 
-    // Stop the current agent
     api.stopAgent(projectId)
       .done(function() {
         updateProjectStatusById(projectId, 'stopped');
 
-        // Wait 1 second before restarting to avoid "session already in use" errors
         setTimeout(function() {
-          // Check if mode was changed back while we were waiting
-          if (state.permissionMode !== targetMode) {
-            showToast('Mode change cancelled - mode was changed again', 'info');
-            setSwitchingState(false);
-            return;
-          }
-
-          showToast('Starting agent with ' + getModeLabel(targetMode) + ' mode...', 'info');
-
-          // Start the agent again with the same session ID and new permission mode
-          api.startInteractiveAgent(projectId, '', [], sessionId, targetMode)
+          api.startInteractiveAgent(projectId, continueMessage, [], sessionId, targetMode)
             .done(function(response) {
               state.currentAgentMode = 'interactive';
               updateProjectStatusById(projectId, 'running');
               startAgentStatusPolling(projectId);
               setSwitchingState(false);
 
-              // Update session ID if returned (may be different if backend retried with fresh session)
               if (response && response.sessionId) {
                 state.currentSessionId = response.sessionId;
               }
 
               appendMessage(projectId, {
                 type: 'system',
-                content: 'Agent restarted with ' + getModeLabel(targetMode) + ' mode',
+                content: 'Agent restarted in ' + getModeLabel(targetMode) + ' mode',
                 timestamp: new Date().toISOString()
               });
             })
@@ -195,52 +178,53 @@
   }
 
   /**
-   * Set permission mode with validation and agent restart if needed
-   * @param {string} mode - New permission mode
+   * Show confirmation modal for mode change when agent is running,
+   * or apply immediately when agent is not running
    */
   function setMode(mode) {
     var project = findProjectById(state.selectedProjectId);
     var isRunning = project && project.status === 'running';
-    var isWaiting = project && project.isWaitingForInput;
+    var currentMode = state.permissionMode;
 
-    // Determine the effective current mode (pending mode takes precedence if set)
-    var effectiveCurrentMode = state.pendingPermissionMode || state.permissionMode;
+    if (currentMode === mode) return;
 
-    // If clicking the mode that's already set or pending, do nothing
-    if (effectiveCurrentMode === mode) {
-      return;
+    if (isRunning && state.currentSessionId) {
+      // Agent is running - show confirmation modal
+      pendingModeTarget = mode;
+      $('#mode-change-target-label').text(getModeLabel(mode));
+      openModal('modal-confirm-mode-change');
+    } else {
+      // Agent not running - apply immediately
+      applyModeChange(mode);
+      showToast('Permission mode set to ' + getModeLabel(mode), 'info');
     }
+  }
 
-    // If there's a pending change and user clicks the original mode, cancel the pending change
-    if (state.pendingPermissionMode && mode === state.permissionMode) {
-      state.pendingPermissionMode = null;
-      updatePendingIndicator();
-      updateButtons();
-      showToast('Pending mode change cancelled', 'info');
-      return;
-    }
+  /**
+   * Called when user confirms the mode change in the modal
+   */
+  function confirmModeChange() {
+    if (!pendingModeTarget) return;
 
-    // If agent is running and busy (not waiting), queue the change
-    if (isRunning && state.currentSessionId && !isWaiting) {
-      state.pendingPermissionMode = mode;
-      updatePendingIndicator();
-      updateButtons();
-      showToast('Mode change to ' + getModeLabel(mode) + ' will apply when Claude finishes current operation', 'info');
-      return;
-    }
+    var targetMode = pendingModeTarget;
+    pendingModeTarget = null;
+    closeModal('modal-confirm-mode-change');
 
-    // Apply the mode change
+    applyModeChange(targetMode);
+    restartWithMode(targetMode);
+  }
+
+  /**
+   * Apply a mode change to state and per-project map
+   */
+  function applyModeChange(mode) {
     state.permissionMode = mode;
     state.pendingPermissionMode = null;
     updatePendingIndicator();
     updateButtons();
 
-    // If agent is running and waiting, restart with new mode
-    if (isRunning && state.currentSessionId && isWaiting) {
-      restartAgent();
-    } else {
-      // Show feedback that mode will be used on next agent start
-      showToast('Permission mode set to ' + getModeLabel(mode) + ' (will apply on next agent start)', 'info');
+    if (state.selectedProjectId) {
+      setModeForProject(state.selectedProjectId, mode);
     }
   }
 
@@ -259,36 +243,62 @@
       return;
     }
 
-    // Apply the pending mode change
     var pendingMode = state.pendingPermissionMode;
-    state.permissionMode = pendingMode;
-    state.pendingPermissionMode = null;
-    updatePendingIndicator();
-    updateButtons();
-    restartAgent();
+    applyModeChange(pendingMode);
+    restartWithMode(pendingMode);
   }
 
   /**
-   * Approve plan and switch to Accept Edits mode
+   * Called when the user switches to a different project.
+   * Restores the per-project permission mode.
    */
+  function onProjectChanged(projectId) {
+    var savedMode = projectModes[projectId];
+
+    if (savedMode) {
+      state.permissionMode = savedMode;
+    }
+
+    state.pendingPermissionMode = null;
+    updatePendingIndicator();
+    updateButtons();
+  }
+
+  /**
+   * Sync mode from server (e.g. from agent status response).
+   * Also saves it per-project.
+   */
+  function syncFromServer(mode, projectId) {
+    if (!mode) return;
+
+    state.permissionMode = mode;
+
+    var pid = projectId || state.selectedProjectId;
+
+    if (pid) {
+      setModeForProject(pid, mode);
+    }
+
+    updateButtons();
+  }
+
   function approvePlanAndSwitch() {
-    // Simply send "yes" as a message - the backend will handle the rest
     api.sendAgentMessage(state.selectedProjectId, 'yes')
       .done(function() {
-        // Update mode to reflect the expected state after approval
         state.permissionMode = 'acceptEdits';
         state.pendingPermissionMode = null;
         updatePendingIndicator();
         updateButtons();
+
+        if (state.selectedProjectId) {
+          setModeForProject(state.selectedProjectId, 'acceptEdits');
+        }
       })
       .fail(function(xhr) {
         showErrorToast(xhr, 'Failed to send plan approval');
       });
   }
 
-  /**
-   * Setup event handlers for permission mode buttons
-   */
   function setupHandlers() {
     $('#btn-perm-accept').on('click', function() {
       setMode('acceptEdits');
@@ -297,20 +307,26 @@
     $('#btn-perm-plan').on('click', function() {
       setMode('plan');
     });
+
+    $('#btn-confirm-mode-change').on('click', function() {
+      confirmModeChange();
+    });
   }
 
-  // Public API
   return {
     init: init,
     getModeLabel: getModeLabel,
+    getModeForProject: getModeForProject,
     updateButtons: updateButtons,
     updatePendingIndicator: updatePendingIndicator,
     setSwitchingState: setSwitchingState,
-    restartAgent: restartAgent,
+    restartWithMode: restartWithMode,
     setMode: setMode,
     applyPendingIfNeeded: applyPendingIfNeeded,
     approvePlanAndSwitch: approvePlanAndSwitch,
     updateSkipPermissionsWarning: updateSkipPermissionsWarning,
+    onProjectChanged: onProjectChanged,
+    syncFromServer: syncFromServer,
     setupHandlers: setupHandlers
   };
 }));

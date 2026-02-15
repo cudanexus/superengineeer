@@ -86,6 +86,8 @@ export class StreamHandler extends EventEmitter {
   private emittedToolIds = new Set<string>();
   private hasEmittedExitPlanMode = false;
   private hasEmittedEnterPlanMode = false;
+  private hasEmittedAskUserQuestion = false;
+  private askUserQuestionToolIds = new Set<string>();
   private lastEmittedQuestion = '';
 
   constructor(
@@ -253,6 +255,8 @@ export class StreamHandler extends EventEmitter {
     this.emittedToolIds.clear();
     this.hasEmittedExitPlanMode = false;
     this.hasEmittedEnterPlanMode = false;
+    this.hasEmittedAskUserQuestion = false;
+    this.askUserQuestionToolIds.clear();
     this.lastEmittedQuestion = '';
   }
 
@@ -406,6 +410,10 @@ export class StreamHandler extends EventEmitter {
       return;
     }
 
+    // Mark that AskUserQuestion tool was emitted to suppress duplicate question messages
+    this.hasEmittedAskUserQuestion = true;
+    this.askUserQuestionToolIds.add(toolId);
+
     // Emit as a tool_use message so the frontend can render it properly
     this.emitToolMessage('AskUserQuestion', input, toolId);
 
@@ -479,9 +487,17 @@ export class StreamHandler extends EventEmitter {
     // Process tool results
     for (const block of message.content) {
       if (block.type === 'tool_result') {
+        const toolUseId = block.tool_use_id || 'unknown';
+
+        // Skip AskUserQuestion tool results — the frontend manages its own lifecycle
+        // (CLI sends is_error:true as normal "waiting for input" signal)
+        if (this.askUserQuestionToolIds.has(toolUseId)) {
+          continue;
+        }
+
         const status = block.is_error ? 'failed' : 'completed';
         this.emitToolResultWithId(
-          block.tool_use_id || 'unknown',
+          toolUseId,
           status,
           typeof block.content === 'string' ? block.content : JSON.stringify(block.content || '')
         );
@@ -602,11 +618,23 @@ export class StreamHandler extends EventEmitter {
       version: this.waitingVersion,
     });
 
-    // Emit the question message if available
-    if (event.text || event.content) {
+    // Skip question message if AskUserQuestion tool already rendered the interactive UI
+    if (this.hasEmittedAskUserQuestion) {
+      return;
+    }
+
+    // Deduplicate repeated assistant_event ask_question emissions
+    const questionContent = event.text || event.content || '';
+
+    if (questionContent && questionContent === this.lastEmittedQuestion) {
+      return;
+    }
+
+    if (questionContent) {
+      this.lastEmittedQuestion = questionContent;
       this.emitMessage({
         type: 'question',
-        content: event.text || event.content || 'Assistant is asking a question',
+        content: questionContent,
         timestamp: new Date().toISOString(),
       });
     }
@@ -730,15 +758,10 @@ export class StreamHandler extends EventEmitter {
       } else if (cliEvent.result) {
         this.emitResultMessage(cliEvent.result, true);
       }
-    } else if (cliEvent.subtype === 'success') {
-      // Success result means Claude is now waiting for input
-      this.waitingVersion++;
-      this.emit('waitingForInput', {
-        isWaiting: true,
-        version: this.waitingVersion,
-      });
     }
-    // Success results are already shown via handleAssistantMessage
+    // Success results are already shown via handleAssistantMessage.
+    // Waiting state is determined by ask_question/AskUserQuestion events,
+    // not by result events (which fire after each turn, not only when truly idle).
   }
 
   private handleResultErrors(errors: string[]): void {
@@ -865,16 +888,31 @@ export class StreamHandler extends EventEmitter {
   }
 
   private emitQuestionMessage(input: Record<string, unknown>): void {
-    const questionInfo: QuestionInfo = {
-      question: input.question as string || 'Unknown question',
-      options: this.extractQuestionOptions(input),
-    };
-
+    // Always emit waiting state (idempotent)
     this.waitingVersion++;
     this.emit('waitingForInput', {
       isWaiting: true,
       version: this.waitingVersion,
     });
+
+    // Skip if AskUserQuestion tool already rendered the interactive UI
+    if (this.hasEmittedAskUserQuestion) {
+      return;
+    }
+
+    const questionInfo: QuestionInfo = {
+      question: input.question as string || 'Unknown question',
+      options: this.extractQuestionOptions(input),
+    };
+
+    // Deduplicate repeated question emissions
+    const questionKey = questionInfo.question;
+
+    if (questionKey === this.lastEmittedQuestion) {
+      return;
+    }
+
+    this.lastEmittedQuestion = questionKey;
 
     this.emitMessage({
       type: 'question',

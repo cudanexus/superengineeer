@@ -16,6 +16,7 @@ interface UpdateSettingsBody {
     enabled?: boolean;
     servers?: McpServerConfig[];
   };
+  chromeEnabled?: boolean;
 }
 
 export interface SettingsChangeEvent {
@@ -83,7 +84,7 @@ export function createSettingsRouter(deps: SettingsRouterDependencies): Router {
 
   router.put('/', asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const body = req.body as UpdateSettingsBody;
-    const { maxConcurrentAgents, claudePermissions, agentPromptTemplate, sendWithCtrlEnter, historyLimit, enableDesktopNotifications, appendSystemPrompt, promptTemplates, mcp } = body;
+    const { maxConcurrentAgents, claudePermissions, agentPromptTemplate, sendWithCtrlEnter, historyLimit, enableDesktopNotifications, appendSystemPrompt, promptTemplates, mcp, chromeEnabled } = body;
 
     if (maxConcurrentAgents !== undefined && (typeof maxConcurrentAgents !== 'number' || maxConcurrentAgents < 1)) {
       throw new ValidationError('maxConcurrentAgents must be a positive number');
@@ -121,6 +122,7 @@ export function createSettingsRouter(deps: SettingsRouterDependencies): Router {
       appendSystemPrompt,
       promptTemplates,
       mcp,
+      chromeEnabled,
     });
 
     // Notify about settings changes

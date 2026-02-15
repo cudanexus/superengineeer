@@ -60,7 +60,6 @@ declare module 'api-client' {
     active: boolean;
     currentMilestone?: string;
   }>;
-  export function getContextUsage(id: string): JQuery.Promise<Claudito.API.ContextUsage>;
   export function startInteractiveAgent(
     id: string,
     message?: string,
@@ -168,6 +167,7 @@ declare module 'api-client' {
     local: Array<string>;
     remote: Array<string>;
   }>;
+  export function getGitUserName(projectId: string): JQuery.Promise<{ name: string | null }>;
   export function getGitDiff(projectId: string, staged: boolean): JQuery.Promise<string>;
   export function getGitFileDiff(
     projectId: string,

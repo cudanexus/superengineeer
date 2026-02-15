@@ -502,6 +502,30 @@ describe('SettingsRouter', () => {
       });
     });
 
+    describe('chromeEnabled', () => {
+      it('should forward chromeEnabled=true to repository', async () => {
+        const response = await request(app)
+          .put('/settings')
+          .send({ chromeEnabled: true });
+
+        expect(response.status).toBe(200);
+        expect(mockRepository.update).toHaveBeenCalledWith(
+          expect.objectContaining({ chromeEnabled: true })
+        );
+      });
+
+      it('should forward chromeEnabled=false to repository', async () => {
+        const response = await request(app)
+          .put('/settings')
+          .send({ chromeEnabled: false });
+
+        expect(response.status).toBe(200);
+        expect(mockRepository.update).toHaveBeenCalledWith(
+          expect.objectContaining({ chromeEnabled: false })
+        );
+      });
+    });
+
     describe('MCP validation', () => {
       it('should accept valid MCP configuration', async () => {
         const response = await request(app)

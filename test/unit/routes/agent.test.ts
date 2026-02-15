@@ -53,7 +53,7 @@ describe('Agent Router - One-off endpoints', () => {
     });
 
     it('should accept images with message', async () => {
-      const images = [{ id: 'img1', dataUrl: 'data:image/png;base64,abc' }];
+      const images = [{ type: 'image/png', data: 'abc' }];
       const response = await request(app)
         .post('/agent/oneoff/oneoff-123/send')
         .send({ message: 'with image', images });

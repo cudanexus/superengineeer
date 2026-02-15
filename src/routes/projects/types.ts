@@ -64,6 +64,12 @@ export interface DeletePhaseBody {
   phaseId?: string;
 }
 
+export interface AddTaskBody {
+  phaseId?: string;
+  milestoneId?: string;
+  taskTitle?: string;
+}
+
 export interface RoadmapRespondBody {
   response?: string;
 }
@@ -133,6 +139,7 @@ export interface GitPushBody {
 export interface GitPullBody {
   remote?: string;
   branch?: string;
+  rebase?: boolean;
 }
 
 export interface GitTagBody {

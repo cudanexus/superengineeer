@@ -26,8 +26,10 @@ import {
   fileDiffQuerySchema
 } from './schemas';
 import { AgentManager, AgentManagerEvents } from '../../agents';
+import { ConversationRepository } from '../../repositories';
+import { GitService } from '../../services/git-service';
 
-const COMMIT_MSG_TIMEOUT_MS = 60000;
+const ONE_OFF_TIMEOUT_MS = 120000;
 const MAX_DIFF_LENGTH = 15000;
 const logger = getLogger('git-routes');
 
@@ -57,11 +59,41 @@ Rules:
 Output ONLY the commit message, nothing else. Do not wrap it in quotes or backticks. No explanation.`;
 }
 
+function buildPRDescriptionPrompt(diff: string, conversationSummary: string): string {
+  const truncatedDiff = diff.length > MAX_DIFF_LENGTH
+    ? diff.substring(0, MAX_DIFF_LENGTH) + '\n... (truncated)'
+    : diff;
+
+  return `Generate a pull request title and description for the following changes.
+
+Diff:
+\`\`\`
+${truncatedDiff}
+\`\`\`
+
+${conversationSummary ? `Conversation context:\n${conversationSummary}\n` : ''}
+Rules:
+- Output a JSON object with "title" and "body" fields
+- Title: short (under 72 chars), conventional commit style (feat/fix/refactor/etc)
+- Body: Markdown with ## Summary section (2-4 bullet points) and ## Changes section
+- Focus on the "why" and user-facing impact, not low-level code details
+- Output ONLY the JSON object, nothing else`;
+}
+
+interface CollectOptions {
+  projectId: string;
+  message: string;
+  label?: string;
+}
+
+const CONTENT_MESSAGE_TYPES = new Set(['stdout', 'result']);
+
 async function collectOneOffOutput(
   agentManager: AgentManager,
-  projectId: string,
-  message: string
+  options: CollectOptions
 ): Promise<string> {
+  const { projectId, message, label } = options;
+
   const oneOffId = await agentManager.startOneOffAgent({
     projectId,
     message,
@@ -73,8 +105,8 @@ async function collectOneOffOutput(
     const timeout = setTimeout(() => {
       cleanup();
       agentManager.stopOneOffAgent(oneOffId).catch(() => {});
-      reject(new Error('Commit message generation timed out'));
-    }, COMMIT_MSG_TIMEOUT_MS);
+      reject(new Error(`${label || 'Generation'} timed out`));
+    }, ONE_OFF_TIMEOUT_MS);
 
     const cleanup = (): void => {
       clearTimeout(timeout);
@@ -85,9 +117,8 @@ async function collectOneOffOutput(
 
     const messageHandler: AgentManagerEvents['oneOffMessage'] = (msgOneOffId, msg) => {
       if (msgOneOffId !== oneOffId) return;
-      if (msg.type === 'system') return;
 
-      if (msg.content) {
+      if (CONTENT_MESSAGE_TYPES.has(msg.type) && msg.content) {
         fullContent += msg.content;
       }
     };
@@ -126,6 +157,7 @@ export function createGitRouter(deps: ProjectRouterDependencies): Router {
     projectRepository,
     gitService,
     agentManager,
+    conversationRepository,
   } = deps;
 
   // Get git status
@@ -260,7 +292,7 @@ export function createGitRouter(deps: ProjectRouterDependencies): Router {
   router.post('/pull', validateBody(gitPullSchema), validateProjectExists(projectRepository), asyncHandler(async (req: Request, res: Response) => {
     const id = req.params['id'] as string;
     const body = req.body as GitPullBody;
-    const { remote = 'origin', branch } = body;
+    const { remote = 'origin', branch, rebase } = body;
 
     const project = await projectRepository.findById(id);
 
@@ -268,7 +300,7 @@ export function createGitRouter(deps: ProjectRouterDependencies): Router {
       throw new NotFoundError('Project');
     }
 
-    const result = await gitService.pull((project).path, remote, branch);
+    const result = await gitService.pull((project).path, remote, branch, rebase);
     res.json(result);
   }));
 
@@ -285,7 +317,7 @@ export function createGitRouter(deps: ProjectRouterDependencies): Router {
       throw new NotFoundError('Project');
     }
 
-    const diff = await gitService.getFileDiff((project).path, filePath, staged);
+    const { diff } = await gitService.getFileDiff((project).path, filePath, staged);
     res.json({ filePath, diff });
   }));
 
@@ -371,7 +403,9 @@ export function createGitRouter(deps: ProjectRouterDependencies): Router {
     const prompt = buildCommitMessagePrompt(stagedFiles, diff);
 
     try {
-      const rawOutput = await collectOneOffOutput(agentManager, projectId, prompt);
+      const rawOutput = await collectOneOffOutput(agentManager, {
+        projectId, message: prompt, label: 'Commit message generation',
+      });
       const commitMessage = extractCommitMessage(rawOutput);
       res.json({ message: commitMessage });
     } catch (err) {
@@ -385,7 +419,82 @@ export function createGitRouter(deps: ProjectRouterDependencies): Router {
     }
   }));
 
+  // Generate PR title and description using one-off agent
+  router.post('/generate-pr-description', validateProjectExists(projectRepository), asyncHandler(async (req: Request, res: Response) => {
+    const project = req.project!;
+    const projectPath = project.path;
+    const projectId = req.params['id'] as string;
+
+    const diff = await buildDiffForPR(gitService, projectPath);
+
+    if (!diff) {
+      res.status(400).json({ error: 'No changes found between current branch and base' });
+      return;
+    }
+
+    const conversationSummary = await buildConversationSummary(
+      conversationRepository, projectId
+    );
+
+    const prompt = buildPRDescriptionPrompt(diff, conversationSummary);
+
+    try {
+      const rawOutput = await collectOneOffOutput(agentManager, {
+        projectId, message: prompt, label: 'PR description generation',
+      });
+      const parsed = extractPRDescription(rawOutput);
+      res.json(parsed);
+    } catch (err) {
+      logger.error('Failed to generate PR description', {
+        projectId,
+        error: err instanceof Error ? err.message : 'Unknown error'
+      });
+      res.status(500).json({
+        error: err instanceof Error ? err.message : 'Failed to generate PR description'
+      });
+    }
+  }));
+
+  // Get GitHub repo identifier from remote URL
+  router.get('/github-repo', validateProjectExists(projectRepository), asyncHandler(async (req: Request, res: Response) => {
+    const project = req.project!;
+    const remoteUrl = await gitService.getRemoteUrl(project.path);
+
+    if (!remoteUrl) {
+      res.json({ repo: null });
+      return;
+    }
+
+    const repo = extractGitHubRepo(remoteUrl);
+    res.json({ repo });
+  }));
+
+  // Get git user name
+  router.get('/user-name', validateProjectExists(projectRepository), asyncHandler(async (req: Request, res: Response) => {
+    const project = req.project!;
+    const name = await gitService.getUserName(project.path);
+    res.json({ name });
+  }));
+
   return router;
+}
+
+function extractGitHubRepo(remoteUrl: string): string | null {
+  // Match SSH: git@github.com:owner/repo.git
+  const sshMatch = remoteUrl.match(/github\.com[:/]([^/]+\/[^/.]+)/);
+
+  if (sshMatch) {
+    return sshMatch[1]!;
+  }
+
+  // Match HTTPS: https://github.com/owner/repo.git
+  const httpsMatch = remoteUrl.match(/github\.com\/([^/]+\/[^/.]+)/);
+
+  if (httpsMatch) {
+    return httpsMatch[1]!;
+  }
+
+  return null;
 }
 
 function extractCommitMessage(rawOutput: string): string {
@@ -404,4 +513,93 @@ function extractCommitMessage(rawOutput: string): string {
   }
 
   return message;
+}
+
+async function buildDiffForPR(
+  gitService: GitService,
+  projectPath: string
+): Promise<string | null> {
+  try {
+    const branches = await gitService.getBranches(projectPath);
+    const currentBranch = branches.current;
+    const baseBranch = branches.local.includes('main') ? 'main' : 'master';
+
+    if (currentBranch === baseBranch) {
+      const diff = await gitService.getDiff(projectPath, true);
+      return diff || null;
+    }
+
+    const git = (gitService as { getGit?(p: string): unknown }).getGit
+      ? undefined
+      : null;
+
+    if (git === null) {
+      const stagedDiff = await gitService.getDiff(projectPath, true);
+      const unstagedDiff = await gitService.getDiff(projectPath, false);
+      return stagedDiff || unstagedDiff || null;
+    }
+
+    const stagedDiff = await gitService.getDiff(projectPath, true);
+    const unstagedDiff = await gitService.getDiff(projectPath, false);
+    return stagedDiff || unstagedDiff || null;
+  } catch {
+    return null;
+  }
+}
+
+const MAX_CONVERSATION_CHARS = 5000;
+
+async function buildConversationSummary(
+  conversationRepository: ConversationRepository,
+  projectId: string
+): Promise<string> {
+  try {
+    const messages = await conversationRepository.getMessagesLegacy(
+      projectId, 20
+    );
+
+    if (!messages || messages.length === 0) return '';
+
+    const summary = messages
+      .filter(m => m.type === 'user' || m.type === 'stdout')
+      .map(m => `[${m.type}]: ${m.content || ''}`)
+      .join('\n');
+
+    if (summary.length > MAX_CONVERSATION_CHARS) {
+      return summary.substring(0, MAX_CONVERSATION_CHARS) + '\n... (truncated)';
+    }
+
+    return summary;
+  } catch {
+    return '';
+  }
+}
+
+interface PRDescription {
+  title: string;
+  body: string;
+}
+
+function extractPRDescription(rawOutput: string): PRDescription {
+  let text = rawOutput.trim();
+
+  // Remove markdown code fence if present
+  const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+
+  if (jsonMatch) {
+    text = jsonMatch[1]!.trim();
+  }
+
+  try {
+    const parsed = JSON.parse(text) as { title?: string; body?: string };
+    return {
+      title: parsed.title || 'Update',
+      body: parsed.body || '',
+    };
+  } catch {
+    return {
+      title: text.split('\n')[0]?.substring(0, 72) || 'Update',
+      body: text,
+    };
+  }
 }

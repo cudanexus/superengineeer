@@ -479,13 +479,5 @@ describe('TaskDisplayModule', () => {
       expect(mockBtn.on).toHaveBeenCalledWith('click', expect.any(Function));
     });
 
-    it('should register optimizations button handler', () => {
-      const mockBtn = global.$();
-
-      TaskDisplayModule.setupHandlers();
-
-      expect(global.$).toHaveBeenCalledWith('#btn-optimizations');
-      expect(mockBtn.on).toHaveBeenCalledWith('click', expect.any(Function));
-    });
   });
 });

@@ -17,6 +17,8 @@ import {
 } from '../services';
 import { createGitService } from '../services/git-service';
 import { createShellService, ShellService } from '../services/shell-service';
+import { createGitHubCLIService, GitHubCLIService } from '../services/github-cli-service';
+import { createIntegrationsRouter } from './integrations';
 import { DefaultAgentManager, AgentManager } from '../agents';
 import { DefaultRalphLoopService } from '../services/ralph-loop/ralph-loop-service';
 import { RalphLoopService } from '../services/ralph-loop/types';
@@ -38,6 +40,7 @@ let sharedProjectRepository: FileProjectRepository | null = null;
 let sharedWebSocketServer: ProjectWebSocketServer | null = null;
 let sharedProjectDiscoveryService: ProjectDiscoveryService | null = null;
 let sharedOptimizationService: ClaudeOptimizationService | null = null;
+let sharedGitHubCLIService: GitHubCLIService | null = null;
 
 export interface ApiRouterDependencies {
   agentManager?: AgentManager;
@@ -204,6 +207,21 @@ export function createApiRouter(deps: ApiRouterDependencies = {}): Router {
     },
   }));
 
+  // Integrations
+  const githubCLIService = getOrCreateGitHubCLIService();
+  router.use('/integrations', createIntegrationsRouter({
+    githubCLIService,
+    projectService,
+    projectRepository,
+    broadcast: (message) => {
+      const ws = getWebSocketServer();
+
+      if (ws) {
+        ws.broadcast(message);
+      }
+    },
+  }));
+
   // Git service
   const gitService = createGitService();
 
@@ -338,6 +356,18 @@ function getOrCreateProjectDiscoveryService(projectRepository: FileProjectReposi
 
 export function getProjectDiscoveryService(): ProjectDiscoveryService | null {
   return sharedProjectDiscoveryService;
+}
+
+function getOrCreateGitHubCLIService(): GitHubCLIService {
+  if (!sharedGitHubCLIService) {
+    sharedGitHubCLIService = createGitHubCLIService();
+  }
+
+  return sharedGitHubCLIService;
+}
+
+export function getGitHubCLIService(): GitHubCLIService | null {
+  return sharedGitHubCLIService;
 }
 
 function getOrCreateOptimizationService(

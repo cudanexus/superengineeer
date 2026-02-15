@@ -1,6 +1,6 @@
 /**
  * Modals Module
- * Handles Claude files modal, context usage modal, and optimizations modal
+ * Handles Claude files modal and optimizations modal
  */
 (function(root, factory) {
   if (typeof module === 'object' && module.exports) {
@@ -40,119 +40,6 @@
     marked = deps.marked;
     hljs = deps.hljs;
     findProjectById = deps.findProjectById;
-  }
-
-  // ===== Context Usage Modal =====
-
-  function openContextUsageModal() {
-    var $content = $('#context-usage-content');
-    $content.html('<div class="text-gray-500 text-center py-4">Loading...</div>');
-    openModal('modal-context-usage');
-
-    if (!state.selectedProjectId) {
-      $content.html(renderNoProjectMessage());
-      return;
-    }
-
-    api.getContextUsage(state.selectedProjectId)
-      .done(function(data) {
-        $content.html(renderContextUsage(data.contextUsage));
-      })
-      .fail(function() {
-        $content.html(renderContextUsageError());
-      });
-  }
-
-  function renderNoProjectMessage() {
-    return '<div class="text-center py-4">' +
-      '<svg class="w-8 h-8 mx-auto mb-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
-        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>' +
-      '</svg>' +
-      '<p class="text-gray-500 text-sm">No project selected</p>' +
-    '</div>';
-  }
-
-  function renderContextUsageError() {
-    return '<div class="text-center py-4">' +
-      '<svg class="w-8 h-8 mx-auto mb-2 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
-        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>' +
-      '</svg>' +
-      '<p class="text-red-400 text-sm">Failed to load context usage</p>' +
-    '</div>';
-  }
-
-  function renderContextUsage(usage) {
-    if (!usage) {
-      return '<div class="text-center py-4">' +
-        '<svg class="w-8 h-8 mx-auto mb-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
-          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>' +
-        '</svg>' +
-        '<p class="text-gray-500 text-sm">No context usage data available</p>' +
-        '<p class="text-gray-600 text-xs mt-1">Start an agent to see context usage</p>' +
-      '</div>';
-    }
-
-    var percentColor = getPercentColor(usage.percentUsed);
-    var percentBarWidth = Math.min(usage.percentUsed, 100);
-    var formatNumber = Formatters.formatNumberCompact;
-
-    return '<div class="space-y-4">' +
-      // Progress bar
-      '<div class="space-y-2">' +
-        '<div class="flex justify-between text-sm">' +
-          '<span class="text-gray-400">Context Window</span>' +
-          '<span class="' + percentColor + ' font-medium">' + usage.percentUsed + '%</span>' +
-        '</div>' +
-        '<div class="w-full bg-gray-700 rounded-full h-3">' +
-          '<div class="' + getPercentBarColor(usage.percentUsed) + ' h-3 rounded-full transition-all duration-300" style="width: ' + percentBarWidth + '%"></div>' +
-        '</div>' +
-        '<div class="flex justify-between text-xs text-gray-500">' +
-          '<span>' + formatNumber(usage.totalTokens) + ' tokens used</span>' +
-          '<span>' + formatNumber(usage.maxContextTokens) + ' max</span>' +
-        '</div>' +
-      '</div>' +
-
-      // Token breakdown
-      '<div class="border-t border-gray-700 pt-4">' +
-        '<h4 class="text-sm font-medium text-gray-300 mb-3">Token Breakdown</h4>' +
-        '<div class="grid grid-cols-2 gap-3">' +
-          renderTokenStat('Input', usage.inputTokens, 'text-blue-400') +
-          renderTokenStat('Output', usage.outputTokens, 'text-green-400') +
-          renderTokenStat('Cache Created', usage.cacheCreationInputTokens, 'text-yellow-400') +
-          renderTokenStat('Cache Read', usage.cacheReadInputTokens, 'text-purple-400') +
-        '</div>' +
-      '</div>' +
-
-      // Total
-      '<div class="border-t border-gray-700 pt-4">' +
-        '<div class="flex justify-between items-center">' +
-          '<span class="text-gray-400">Total Tokens</span>' +
-          '<span class="text-lg font-semibold text-white">' + formatNumber(usage.totalTokens) + '</span>' +
-        '</div>' +
-      '</div>' +
-    '</div>';
-  }
-
-  function renderTokenStat(label, value, colorClass) {
-    var formatNumber = Formatters.formatNumberCompact;
-    return '<div class="bg-gray-700/50 rounded-lg p-3">' +
-      '<div class="text-xs text-gray-500 mb-1">' + label + '</div>' +
-      '<div class="' + colorClass + ' font-medium">' + formatNumber(value) + '</div>' +
-    '</div>';
-  }
-
-  function getPercentColor(percent) {
-    if (percent < 50) return 'text-green-400';
-    if (percent < 75) return 'text-yellow-400';
-    if (percent < 90) return 'text-orange-400';
-    return 'text-red-400';
-  }
-
-  function getPercentBarColor(percent) {
-    if (percent < 50) return 'bg-green-500';
-    if (percent < 75) return 'bg-yellow-500';
-    if (percent < 90) return 'bg-orange-500';
-    return 'bg-red-500';
   }
 
   // ===== Claude Files Modal =====
@@ -456,7 +343,6 @@
 
   return {
     init: init,
-    openContextUsageModal: openContextUsageModal,
     openClaudeFilesModal: openClaudeFilesModal,
     selectClaudeFile: selectClaudeFile,
     saveClaudeFile: saveClaudeFile,

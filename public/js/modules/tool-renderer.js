@@ -610,6 +610,14 @@
       html += '</div>'; // question container
     });
 
+    // Submit button (hidden until all questions answered)
+    html += '<div class="mt-3 flex justify-end">' +
+      '<button type="button" class="ask-user-submit hidden bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors" ' +
+        'data-tool-id="' + escapeHtml(toolId) + '">' +
+        'Submit Answers' +
+      '</button>' +
+    '</div>';
+
     html += '</div>'; // message container
 
     // Trigger UI blocking after rendering

@@ -20,7 +20,6 @@
   var truncateString = null;
   var formatConversationDate = null;
   var formatDuration = null;
-  var formatTokenCount = null;
   var renderConversation = null;
   var setPromptBlockingState = null;
   var SearchModule = null;
@@ -34,7 +33,6 @@
     truncateString = deps.truncateString;
     formatConversationDate = deps.formatConversationDate;
     formatDuration = deps.formatDuration;
-    formatTokenCount = deps.formatTokenCount;
     renderConversation = deps.renderConversation;
     setPromptBlockingState = deps.setPromptBlockingState;
     SearchModule = deps.SearchModule;
@@ -188,13 +186,6 @@
     // Tool calls
     if (stats.toolCallCount > 0) {
       parts.push('<span title="Tool calls">' + stats.toolCallCount + ' tools</span>');
-    }
-
-    // Total tokens from metadata
-    if (metadata && metadata.contextUsage && metadata.contextUsage.totalTokens > 0) {
-      var tokens = metadata.contextUsage.totalTokens;
-      var formatted = formatTokenCount(tokens);
-      parts.push('<span title="Total tokens used">' + formatted + ' tokens</span>');
     }
 
     $stats.html(parts.join('<span class="text-gray-600 mx-1">|</span>'));

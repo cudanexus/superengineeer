@@ -138,7 +138,12 @@
    * });
    */
   ApiClient.addProject = function(data) {
-    return $.post(baseUrl + '/api/projects', data);
+    return $.ajax({
+      url: baseUrl + '/api/projects',
+      method: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify(data),
+    });
   };
 
   /**
@@ -361,20 +366,6 @@
    */
   ApiClient.getLoopStatus = function(id) {
     return $.get(baseUrl + '/api/projects/' + id + '/agent/loop');
-  };
-
-  /**
-   * Get Claude context usage for the current session
-   * @function getContextUsage
-   * @memberof module:ApiClient
-   * @param {string} id - Project UUID
-   * @returns {Promise<Claudito.API.ContextUsage>} Token usage and limits
-   * @example
-   * const usage = await ApiClient.getContextUsage(projectId);
-   * console.log(`Using ${usage.percentage}% of context window`);
-   */
-  ApiClient.getContextUsage = function(id) {
-    return $.get(baseUrl + '/api/projects/' + id + '/agent/context');
   };
 
   /**
@@ -1053,6 +1044,15 @@
   };
 
   /**
+   * Get git user name from git config
+   * @param {string} projectId - Project UUID
+   * @returns {Promise<{name: string|null}>}
+   */
+  ApiClient.getGitUserName = function(projectId) {
+    return $.get(baseUrl + '/api/projects/' + projectId + '/git/user-name');
+  };
+
+  /**
    * Get Git diff for staged or unstaged changes
    * @function getGitDiff
    * @memberof module:ApiClient
@@ -1268,12 +1268,12 @@
    * @example
    * await ApiClient.gitPull(projectId, 'origin', 'main');
    */
-  ApiClient.gitPull = function(projectId, remote, branch) {
+  ApiClient.gitPull = function(projectId, remote, branch, rebase) {
     return $.ajax({
       url: baseUrl + '/api/projects/' + projectId + '/git/pull',
       method: 'POST',
       contentType: 'application/json',
-      data: JSON.stringify({ remote: remote, branch: branch })
+      data: JSON.stringify({ remote: remote, branch: branch, rebase: rebase })
     });
   };
 
@@ -1715,6 +1715,131 @@
   ApiClient.logout = function() {
     return $.post(baseUrl + '/api/auth/logout').done(function() {
       window.location.href = '/login';
+    });
+  };
+
+  // =========================================================================
+  // GitHub Integration
+  // =========================================================================
+
+  ApiClient.getGitHubStatus = function() {
+    return $.get(baseUrl + '/api/integrations/github/status');
+  };
+
+  ApiClient.getGitHubRepos = function(params) {
+    return $.get(baseUrl + '/api/integrations/github/repos', params);
+  };
+
+  ApiClient.searchGitHubRepos = function(params) {
+    return $.get(baseUrl + '/api/integrations/github/repos/search', params);
+  };
+
+  ApiClient.cloneGitHubRepo = function(data) {
+    return $.ajax({
+      url: baseUrl + '/api/integrations/github/clone',
+      method: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify(data),
+    });
+  };
+
+  // =========================================================================
+  // GitHub Issues
+  // =========================================================================
+
+  ApiClient.getGitHubIssues = function(params) {
+    return $.get(baseUrl + '/api/integrations/github/issues', params);
+  };
+
+  ApiClient.getGitHubIssueDetail = function(issueNumber, repo) {
+    return $.get(baseUrl + '/api/integrations/github/issues/' + issueNumber, { repo: repo });
+  };
+
+  ApiClient.closeGitHubIssue = function(issueNumber, repo) {
+    return $.ajax({
+      url: baseUrl + '/api/integrations/github/issues/' + issueNumber + '/close?repo=' + encodeURIComponent(repo),
+      method: 'POST',
+    });
+  };
+
+  ApiClient.commentOnGitHubIssue = function(issueNumber, repo, body) {
+    return $.ajax({
+      url: baseUrl + '/api/integrations/github/issues/' + issueNumber + '/comment?repo=' + encodeURIComponent(repo),
+      method: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify({ body: body }),
+    });
+  };
+
+  ApiClient.getGitHubRepoId = function(projectId) {
+    return $.get(baseUrl + '/api/projects/' + projectId + '/git/github-repo');
+  };
+
+  // =========================================================================
+  // GitHub Pull Requests
+  // =========================================================================
+
+  ApiClient.createGitHubPR = function(data) {
+    return $.ajax({
+      url: baseUrl + '/api/integrations/github/pr',
+      method: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify(data),
+    });
+  };
+
+  ApiClient.getGitHubPulls = function(params) {
+    return $.get(baseUrl + '/api/integrations/github/pulls', params);
+  };
+
+  ApiClient.getGitHubPRDetail = function(prNumber, repo) {
+    return $.get(baseUrl + '/api/integrations/github/pulls/' + prNumber, {
+      repo: repo,
+    });
+  };
+
+  ApiClient.commentOnGitHubPR = function(prNumber, repo, body) {
+    return $.ajax({
+      url: baseUrl + '/api/integrations/github/pulls/' + prNumber + '/comment?repo=' + encodeURIComponent(repo),
+      method: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify({ body: body }),
+    });
+  };
+
+  ApiClient.mergeGitHubPR = function(prNumber, repo, options) {
+    var opts = options || {};
+
+    return $.ajax({
+      url: baseUrl + '/api/integrations/github/pulls/' + prNumber + '/merge?repo=' + encodeURIComponent(repo),
+      method: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify({
+        method: opts.method || 'merge',
+        isDraft: opts.isDraft || false,
+      }),
+    });
+  };
+
+  ApiClient.generatePRDescription = function(projectId) {
+    return $.ajax({
+      url: baseUrl + '/api/projects/' + projectId + '/git/generate-pr-description',
+      method: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify({}),
+    });
+  };
+
+  // =========================================================================
+  // Roadmap Task Addition
+  // =========================================================================
+
+  ApiClient.addRoadmapTask = function(projectId, data) {
+    return $.ajax({
+      url: baseUrl + '/api/projects/' + projectId + '/roadmap/task',
+      method: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify(data),
     });
   };
 

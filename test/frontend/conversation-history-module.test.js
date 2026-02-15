@@ -13,7 +13,6 @@ describe('ConversationHistoryModule', () => {
   let mockTruncateString;
   let mockFormatConversationDate;
   let mockFormatDuration;
-  let mockFormatTokenCount;
   let mockRenderConversation;
   let mockSetPromptBlockingState;
   let mockSearchModule;
@@ -77,7 +76,6 @@ describe('ConversationHistoryModule', () => {
     mockTruncateString = jest.fn((str, len) => str.substring(0, len));
     mockFormatConversationDate = jest.fn((date) => '2024-01-15');
     mockFormatDuration = jest.fn((ms) => '5m');
-    mockFormatTokenCount = jest.fn((count) => '1.5k');
     mockRenderConversation = jest.fn();
     mockSetPromptBlockingState = jest.fn();
     mockSearchModule = {
@@ -99,7 +97,6 @@ describe('ConversationHistoryModule', () => {
       truncateString: mockTruncateString,
       formatConversationDate: mockFormatConversationDate,
       formatDuration: mockFormatDuration,
-      formatTokenCount: mockFormatTokenCount,
       renderConversation: mockRenderConversation,
       setPromptBlockingState: mockSetPromptBlockingState,
       SearchModule: mockSearchModule
@@ -453,23 +450,6 @@ describe('ConversationHistoryModule', () => {
       );
     });
 
-    it('should show token count when available', () => {
-      mockState.currentConversationStats = {
-        messageCount: 5,
-        toolCallCount: 0,
-        durationMs: 0
-      };
-      mockState.currentConversationMetadata = {
-        contextUsage: {
-          totalTokens: 1500
-        }
-      };
-      const mockStats = global.$();
-
-      ConversationHistoryModule.updateStats();
-
-      expect(mockFormatTokenCount).toHaveBeenCalledWith(1500);
-    });
   });
 
   describe('setupHandlers', () => {

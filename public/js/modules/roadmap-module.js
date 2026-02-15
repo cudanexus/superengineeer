@@ -19,6 +19,11 @@
   var findProjectById = null;
   var doSendMessage = null;
   var startInteractiveAgentWithMessage = null;
+  var api = null;
+  var updateProjectStatusById = null;
+  var startAgentStatusPolling = null;
+  var appendMessage = null;
+  var PermissionModeModule = null;
 
   function init(deps) {
     state = deps.state;
@@ -28,6 +33,11 @@
     findProjectById = deps.findProjectById;
     doSendMessage = deps.doSendMessage;
     startInteractiveAgentWithMessage = deps.startInteractiveAgentWithMessage;
+    api = deps.api;
+    updateProjectStatusById = deps.updateProjectStatusById;
+    startAgentStatusPolling = deps.startAgentStatusPolling;
+    appendMessage = deps.appendMessage;
+    PermissionModeModule = deps.PermissionModeModule;
   }
 
   function renderRoadmap(data) {
@@ -57,6 +67,14 @@
     '</div>';
   }
 
+  function isPhaseFullyComplete(phase) {
+    if (!phase.milestones || phase.milestones.length === 0) return false;
+
+    return phase.milestones.every(function(m) {
+      return m.totalCount > 0 && m.completedCount === m.totalCount;
+    });
+  }
+
   function renderPhases(phases, currentPhase, currentMilestone) {
     var html = '';
 
@@ -64,9 +82,18 @@
       var isCurrent = phase.id === currentPhase;
       var phaseClass = isCurrent ? 'border-blue-500' : 'border-gray-700';
 
+      var isPhaseComplete = isPhaseFullyComplete(phase);
+      var phaseDisabled = isPhaseComplete ? 'disabled title="All tasks completed"' : '';
+
       html += '<div class="mb-3 border-l-2 ' + phaseClass + ' pl-3">' +
         '<div class="flex items-center justify-between group mb-2">' +
-          '<span class="text-sm font-medium text-gray-200">' + escapeHtml(phase.title) + '</span>' +
+          '<div class="flex items-center gap-2">' +
+            '<input type="checkbox" class="roadmap-select-phase w-3.5 h-3.5 accent-purple-500 cursor-pointer" ' +
+              'data-phase-id="' + escapeHtml(phase.id) + '" ' +
+              'data-phase-title="' + escapeHtml(phase.title) + '" ' +
+              phaseDisabled + ' />' +
+            '<span class="text-sm font-medium text-gray-200">' + escapeHtml(phase.title) + '</span>' +
+          '</div>' +
           '<button class="btn-delete-phase opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 p-0.5 transition-opacity" ' +
             'data-phase-id="' + escapeHtml(phase.id) + '" ' +
             'data-phase-title="' + escapeHtml(phase.title) + '" ' +
@@ -105,8 +132,7 @@
           'data-phase-id="' + escapeHtml(phaseId) + '" ' +
           'data-milestone-id="' + escapeHtml(milestone.id) + '" ' +
           'data-milestone-title="' + escapeHtml(milestone.title) + '" ' +
-          milestoneDisabled + ' ' +
-          'onclick="event.stopPropagation();" />' +
+          milestoneDisabled + ' />' +
         '<svg class="w-3 h-3 text-gray-400 transition-transform duration-200 milestone-chevron ' + chevronClass + '" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
           '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>' +
         '</svg>' +
@@ -189,31 +215,48 @@
   function getSelectedRoadmapItems() {
     var items = [];
 
-    // Collect selected milestones
-    $('.roadmap-select-milestone:checked').each(function() {
+    // Collect selected phases
+    $('.roadmap-select-phase:checked').each(function() {
       var $checkbox = $(this);
       items.push({
-        type: 'milestone',
+        type: 'phase',
         phaseId: $checkbox.data('phase-id'),
-        milestoneId: $checkbox.data('milestone-id'),
-        title: $checkbox.data('milestone-title')
+        title: $checkbox.data('phase-title')
       });
     });
 
-    // Collect selected tasks (only those not under a selected milestone)
+    var selectedPhaseIds = items.map(function(item) { return item.phaseId; });
+
+    // Collect selected milestones (skip if phase already selected)
+    $('.roadmap-select-milestone:checked').each(function() {
+      var $checkbox = $(this);
+      var phaseId = $checkbox.data('phase-id');
+
+      if (selectedPhaseIds.indexOf(phaseId) === -1) {
+        items.push({
+          type: 'milestone',
+          phaseId: phaseId,
+          milestoneId: $checkbox.data('milestone-id'),
+          title: $checkbox.data('milestone-title')
+        });
+      }
+    });
+
+    // Collect selected tasks (skip if phase or milestone already selected)
     var selectedMilestoneIds = items
       .filter(function(item) { return item.type === 'milestone'; })
       .map(function(item) { return item.milestoneId; });
 
     $('.roadmap-select-task:checked:not(:disabled)').each(function() {
       var $checkbox = $(this);
+      var phaseId = $checkbox.data('phase-id');
       var milestoneId = $checkbox.data('milestone-id');
 
-      // Skip if the milestone is already selected (to avoid duplicates)
-      if (selectedMilestoneIds.indexOf(milestoneId) === -1) {
+      if (selectedPhaseIds.indexOf(phaseId) === -1 &&
+          selectedMilestoneIds.indexOf(milestoneId) === -1) {
         items.push({
           type: 'task',
-          phaseId: $checkbox.data('phase-id'),
+          phaseId: phaseId,
           milestoneId: milestoneId,
           taskIndex: $checkbox.data('task-index'),
           title: $checkbox.data('task-title')
@@ -238,7 +281,7 @@
   }
 
   function clearRoadmapSelection() {
-    $('.roadmap-select-milestone, .roadmap-select-task').prop('checked', false);
+    $('.roadmap-select-phase, .roadmap-select-milestone, .roadmap-select-task').prop('checked', false);
     updateRoadmapSelectionUI();
   }
 
@@ -250,30 +293,95 @@
       return;
     }
 
-    // Generate prompt to convert selected items into tasks
     var prompt = generateConvertToTasksPrompt(items);
 
-    // Close the roadmap modal
     closeModal('modal-roadmap');
-
-    // Clear selection for next time
     clearRoadmapSelection();
 
-    // Start interactive agent if not running, or send message if running
     var project = findProjectById(state.selectedProjectId);
+    var isRunning = project && project.status === 'running';
 
-    if (project && project.status === 'running') {
-      doSendMessage(prompt);
-    } else {
+    if (!isRunning) {
+      ensureAcceptEditsMode();
       startInteractiveAgentWithMessage(prompt);
+      return;
     }
+
+    if (state.permissionMode === 'acceptEdits') {
+      doSendMessage(prompt);
+      return;
+    }
+
+    // Agent is running in plan mode — stop, switch, restart with prompt
+    restartWithAcceptEditsAndMessage(prompt);
+  }
+
+  function ensureAcceptEditsMode() {
+    if (state.permissionMode !== 'acceptEdits') {
+      state.permissionMode = 'acceptEdits';
+      state.pendingPermissionMode = null;
+
+      if (PermissionModeModule) {
+        PermissionModeModule.updateButtons();
+        PermissionModeModule.updatePendingIndicator();
+      }
+    }
+  }
+
+  function restartWithAcceptEditsAndMessage(prompt) {
+    var projectId = state.selectedProjectId;
+    var sessionId = state.currentSessionId;
+
+    if (!projectId) return;
+
+    PermissionModeModule.setSwitchingState(true);
+    showToast('Switching to Accept Edits mode...', 'info');
+
+    api.stopAgent(projectId)
+      .done(function() {
+        updateProjectStatusById(projectId, 'stopped');
+
+        setTimeout(function() {
+          ensureAcceptEditsMode();
+
+          api.startInteractiveAgent(projectId, prompt, [], sessionId, 'acceptEdits')
+            .done(function(response) {
+              state.currentAgentMode = 'interactive';
+              updateProjectStatusById(projectId, 'running');
+              startAgentStatusPolling(projectId);
+              PermissionModeModule.setSwitchingState(false);
+
+              if (response && response.sessionId) {
+                state.currentSessionId = response.sessionId;
+              }
+
+              appendMessage(projectId, {
+                type: 'system',
+                content: 'Agent restarted with Accept Edits mode for roadmap tasks',
+                timestamp: new Date().toISOString()
+              });
+            })
+            .fail(function(xhr) {
+              PermissionModeModule.setSwitchingState(false);
+              var msg = xhr.responseJSON ? xhr.responseJSON.error : 'Failed to restart agent';
+              showToast(msg, 'error');
+            });
+        }, 1000);
+      })
+      .fail(function(xhr) {
+        PermissionModeModule.setSwitchingState(false);
+        var msg = xhr.responseJSON ? xhr.responseJSON.error : 'Failed to stop agent';
+        showToast(msg, 'error');
+      });
   }
 
   function generateConvertToTasksPrompt(items) {
     var lines = ['Please convert the following roadmap items into actionable tasks for your todo list:\n'];
 
     items.forEach(function(item, index) {
-      if (item.type === 'milestone') {
+      if (item.type === 'phase') {
+        lines.push((index + 1) + '. **Phase**: ' + item.title);
+      } else if (item.type === 'milestone') {
         lines.push((index + 1) + '. **Milestone**: ' + item.title);
       } else {
         lines.push((index + 1) + '. **Task**: ' + item.title);
@@ -284,6 +392,7 @@
     lines.push('1. Break it down into specific, actionable sub-tasks if needed');
     lines.push('2. Add these to your todo list using the TodoWrite tool');
     lines.push('3. Start working on them in order');
+    lines.push('4. Once a task is completed, update the ROADMAP.md to mark it as done with [x]');
 
     return lines.join('\n');
   }
@@ -311,7 +420,26 @@
     });
 
     // Roadmap selection change - update UI
-    $(document).on('change', '.roadmap-select-milestone, .roadmap-select-task', function() {
+    $(document).on('change', '.roadmap-select-phase, .roadmap-select-milestone, .roadmap-select-task', function() {
+      updateRoadmapSelectionUI();
+    });
+
+    // Fallback: click handler catches cases where change event doesn't bubble
+    // (e.g. milestone checkboxes with onclick="event.stopPropagation()")
+    $(document).on('click', '.roadmap-select-phase, .roadmap-select-milestone, .roadmap-select-task', function() {
+      setTimeout(updateRoadmapSelectionUI, 0);
+    });
+
+    // Phase checkbox cascades to milestones and tasks
+    $(document).on('change', '.roadmap-select-phase', function() {
+      var isChecked = $(this).is(':checked');
+      var phaseId = $(this).data('phase-id');
+
+      $('.roadmap-select-milestone[data-phase-id="' + phaseId + '"]:not(:disabled)')
+        .prop('checked', isChecked);
+      $('.roadmap-select-task[data-phase-id="' + phaseId + '"]:not(:disabled)')
+        .prop('checked', isChecked);
+
       updateRoadmapSelectionUI();
     });
 
