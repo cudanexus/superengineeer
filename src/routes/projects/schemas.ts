@@ -4,7 +4,13 @@ import { z } from 'zod';
 export const createProjectSchema = z.object({
   name: z.string().min(1, 'Project name is required').max(255),
   path: z.string().min(1, 'Project path is required'),
-  createNew: z.boolean().optional(),
+  createNew: z.preprocess(
+    (val) => {
+      if (typeof val === 'string') return val === 'true';
+      return val;
+    },
+    z.boolean().optional(),
+  ),
 });
 
 export const updatePermissionsSchema = z.object({

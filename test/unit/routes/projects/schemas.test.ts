@@ -41,6 +41,34 @@ describe('Project Route Schemas', () => {
       const result = createProjectSchema.safeParse(valid);
       expect(result.success).toBe(true);
     });
+
+    it('should coerce string "false" to boolean false', () => {
+      const input = {
+        name: 'My Project',
+        path: '/home/user/projects/my-project',
+        createNew: 'false',
+      };
+
+      const result = createProjectSchema.safeParse(input);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.createNew).toBe(false);
+      }
+    });
+
+    it('should coerce string "true" to boolean true', () => {
+      const input = {
+        name: 'My Project',
+        path: '/home/user/projects/my-project',
+        createNew: 'true',
+      };
+
+      const result = createProjectSchema.safeParse(input);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.createNew).toBe(true);
+      }
+    });
   });
 
   describe('updatePermissionsSchema', () => {
