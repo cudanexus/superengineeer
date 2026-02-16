@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { SettingsRepository, ClaudePermissions, PromptTemplate, McpServerConfig } from '../repositories';
+import { DataWipeService } from '../services/data-wipe-service';
 import { asyncHandler, ValidationError } from '../utils';
 import { SUPPORTED_MODELS, MODEL_DISPLAY_NAMES } from '../config/models';
 
@@ -27,6 +28,7 @@ export interface SettingsChangeEvent {
 
 export interface SettingsRouterDependencies {
   settingsRepository: SettingsRepository;
+  dataWipeService: DataWipeService;
   onSettingsChange?: (event: SettingsChangeEvent) => void;
 }
 
@@ -66,7 +68,7 @@ function validateMcpServers(servers: McpServerConfig[]): void {
 
 export function createSettingsRouter(deps: SettingsRouterDependencies): Router {
   const router = Router();
-  const { settingsRepository, onSettingsChange } = deps;
+  const { settingsRepository, dataWipeService, onSettingsChange } = deps;
 
   router.get('/', asyncHandler(async (_req: Request, res: Response): Promise<void> => {
     const settings = await settingsRepository.get();
@@ -81,6 +83,12 @@ export function createSettingsRouter(deps: SettingsRouterDependencies): Router {
     }));
     res.json({ models });
   });
+
+  // POST /api/settings/wipe-all-data - Delete all Claudito data (factory reset)
+  router.post('/wipe-all-data', asyncHandler(async (_req: Request, res: Response): Promise<void> => {
+    const summary = await dataWipeService.wipeAll();
+    res.json(summary);
+  }));
 
   router.put('/', asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const body = req.body as UpdateSettingsBody;

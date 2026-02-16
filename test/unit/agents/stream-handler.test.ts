@@ -666,7 +666,8 @@ describe('StreamHandler', () => {
         text: 'Which file?',
       }));
 
-      expect(waitingStatuses).toHaveLength(1);
+      // waitingForInput is only emitted from AskUserQuestion tool and result handlers
+      expect(waitingStatuses).toHaveLength(0);
       const questionMsgs = messages.filter(m => m.type === 'question');
       expect(questionMsgs).toHaveLength(1);
     });
@@ -712,7 +713,8 @@ describe('StreamHandler', () => {
         user_input: { question: 'Pick one', allow_text: true },
       }));
 
-      expect(waitingStatuses).toHaveLength(1);
+      // waitingForInput is only emitted from AskUserQuestion tool and result handlers
+      expect(waitingStatuses).toHaveLength(0);
       const questionMsgs = messages.filter(m => m.type === 'question');
       expect(questionMsgs).toHaveLength(1);
     });
@@ -1032,7 +1034,7 @@ describe('StreamHandler', () => {
       expect(questionMessages).toHaveLength(0);
     });
 
-    it('should still emit waitingForInput even when question message is suppressed', () => {
+    it('should not emit extra waitingForInput from user_event when AskUserQuestion already emitted', () => {
       handler.processLine(JSON.stringify({
         type: 'assistant',
         message: {
@@ -1054,8 +1056,8 @@ describe('StreamHandler', () => {
         user_input: { question: 'Choose' },
       }));
 
-      // Still gets a waiting event even though question message is suppressed
-      expect(waitingStatuses).toHaveLength(2);
+      // No extra waiting event from user_event (only AskUserQuestion + result emit waiting)
+      expect(waitingStatuses).toHaveLength(1);
     });
 
     it('should deduplicate repeated user_event question emissions', () => {

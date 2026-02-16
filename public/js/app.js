@@ -1294,6 +1294,30 @@
       $('#settings-tab-' + tabName).removeClass('hidden');
     });
 
+    // Wipe All Data - open confirmation modal
+    $('#btn-wipe-all-data').on('click', function() {
+      $('#modal-confirm-wipe-all').removeClass('hidden');
+    });
+
+    // Wipe All Data - confirm
+    $('#btn-confirm-wipe-all').on('click', function() {
+      var $btn = $(this);
+      $btn.prop('disabled', true).text('Wiping...');
+
+      api.wipeAllData()
+        .done(function(result) {
+          closeAllModals();
+          showToast('All data wiped (' + result.projectsWiped + ' projects)', 'success');
+          loadProjects();
+        })
+        .fail(function(xhr) {
+          showErrorToast(xhr, 'Failed to wipe data');
+        })
+        .always(function() {
+          $btn.prop('disabled', false).text('Wipe All Data');
+        });
+    });
+
     // Ralph Loop Config tab switching
     $(document).on('click', '.ralph-config-tab', function() {
       var tabName = $(this).data('tab');

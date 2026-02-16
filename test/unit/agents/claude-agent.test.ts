@@ -782,7 +782,7 @@ describe('DefaultClaudeAgent', () => {
         );
       });
 
-      it('should handle assistant event that triggers waiting', () => {
+      it('should handle assistant event ask_question without emitting waitingForInput', () => {
         const waitingListener = jest.fn();
         agent.on('waitingForInput', waitingListener);
 
@@ -796,9 +796,8 @@ describe('DefaultClaudeAgent', () => {
         };
         mockProcess.stdout.emit('data', Buffer.from(JSON.stringify(event) + '\n'));
 
-        expect(waitingListener).toHaveBeenCalledWith(
-          expect.objectContaining({ isWaiting: true })
-        );
+        // waitingForInput is only emitted from AskUserQuestion tool and result handlers
+        expect(waitingListener).not.toHaveBeenCalled();
       });
 
       it('should handle system init event and capture session ID', () => {

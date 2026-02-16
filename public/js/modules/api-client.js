@@ -795,6 +795,16 @@
     return $.get(baseUrl + '/api/settings/models');
   };
 
+  /**
+   * Wipe all Claudito data (factory reset)
+   * @function wipeAllData
+   * @memberof module:ApiClient
+   * @returns {Promise<{projectsWiped: number, globalDataDeleted: boolean, mcpTempDeleted: boolean}>}
+   */
+  ApiClient.wipeAllData = function() {
+    return $.ajax({ url: baseUrl + '/api/settings/wipe-all-data', method: 'POST' });
+  };
+
   // ============================================================
   // Project Model
   // ============================================================

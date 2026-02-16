@@ -423,6 +423,16 @@ Configure MCP servers to extend Claude's capabilities. Access via Settings > MCP
 
 Toggle Chrome browser usage for Claude agents via the **Chrome** button in the conversation toolbar (next to MCP Servers). When enabled, passes `--chrome` to Claude CLI; when disabled, passes `--no-chrome`. The setting is saved globally and applies to all new agent sessions (interactive, one-off, and autonomous).
 
+### Danger Zone (Factory Reset)
+
+Access via Settings > Danger Zone. The "Wipe All Data" button permanently deletes:
+- All project registrations and per-project `.claudito/` directories
+- All conversation history
+- Global settings, PID tracking, and project index (`~/.claudito/`)
+- Temporary MCP config files (`{OS_TEMP}/claudito-mcp/`)
+
+Project source files are **never** deleted.
+
 ### Agent Prompt Template
 
 Customize how instructions are given to agents. Available variables:
@@ -577,6 +587,7 @@ GET    /api/auth/check                     # Check session validity
 GET    /api/settings              # Get settings
 PUT    /api/settings              # Update settings
 GET    /api/settings/models       # Get available Claude models
+POST   /api/settings/wipe-all-data # Wipe all Claudito data (factory reset)
 ```
 
 ### Claude Files

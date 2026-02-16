@@ -611,13 +611,6 @@ export class StreamHandler extends EventEmitter {
    * Handle ask_question assistant event.
    */
   private handleAskQuestionAssistantEvent(event: StreamEvent): void {
-    // Increment waiting version to trigger waiting status
-    this.waitingVersion++;
-    this.emit('waitingForInput', {
-      isWaiting: true,
-      version: this.waitingVersion,
-    });
-
     // Skip question message if AskUserQuestion tool already rendered the interactive UI
     if (this.hasEmittedAskUserQuestion) {
       return;
@@ -893,13 +886,6 @@ export class StreamHandler extends EventEmitter {
   }
 
   private emitQuestionMessage(input: Record<string, unknown>): void {
-    // Always emit waiting state (idempotent)
-    this.waitingVersion++;
-    this.emit('waitingForInput', {
-      isWaiting: true,
-      version: this.waitingVersion,
-    });
-
     // Skip if AskUserQuestion tool already rendered the interactive UI
     if (this.hasEmittedAskUserQuestion) {
       return;

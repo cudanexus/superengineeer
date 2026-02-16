@@ -14,6 +14,7 @@ import {
   ClaudeRoadmapGenerator,
   DefaultInstructionGenerator,
   ClaudeOptimizationService,
+  DefaultDataWipeService,
 } from '../services';
 import { createGitService } from '../services/git-service';
 import { createShellService, ShellService } from '../services/shell-service';
@@ -191,8 +192,14 @@ export function createApiRouter(deps: ApiRouterDependencies = {}): Router {
   router.use('/fs', createFilesystemRouter(filesystemService));
 
   // Settings routes
+  const dataWipeService = new DefaultDataWipeService({
+    projectRepository,
+    dataDirectory: dataDir,
+  });
+
   router.use('/settings', createSettingsRouter({
     settingsRepository,
+    dataWipeService,
     onSettingsChange: (event) => {
       if (event.maxConcurrentAgents !== undefined) {
         agentManager.setMaxConcurrentAgents(event.maxConcurrentAgents);

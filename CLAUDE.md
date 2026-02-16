@@ -46,14 +46,14 @@ conversations/
 
 - **Infrastructure**: `ConfigLoader`, `HttpServer`, `ProjectWebSocketServer`, `EventManager` (in-memory event bus), `Logger` (with circular buffer)
 - **Data**: `ProjectRepository` (status.json per project), `ConversationRepository` (per project/item), `SettingsRepository` (global settings + agentPromptTemplate)
-- **Services**: `ProjectService`, `FilesystemService`, `GitService` (simple-git), `GitHubCLIService` (gh CLI wrapper), `RoadmapParser`, `RoadmapGenerator`, `InstructionGenerator`, `ClaudeOptimizationService` (edits files directly via Edit tool)
+- **Services**: `ProjectService`, `FilesystemService`, `GitService` (simple-git), `GitHubCLIService` (gh CLI wrapper), `RoadmapParser`, `RoadmapGenerator`, `InstructionGenerator`, `ClaudeOptimizationService` (edits files directly via Edit tool), `DataWipeService` (factory reset — wipes all Claudito data)
 - **Agents**: `ClaudeAgent` (CLI process management), `AgentManager` (multi-agent lifecycle: interactive + one-off)
 
 ## API Endpoints
 
 All project routes prefixed with `/api/projects/:id`. Standard REST verbs (GET/POST/PUT/DELETE).
 
-**Global**: `GET /api/health`, `GET /api/agents/status`, `GET|PUT /api/settings`, `GET /api/settings/models`
+**Global**: `GET /api/health`, `GET /api/agents/status`, `GET|PUT /api/settings`, `GET /api/settings/models`, `POST /api/settings/wipe-all-data`
 
 **Integrations** (`/api/integrations`): `GET github/status`, `GET github/repos(?owner=&language=&limit=)`, `GET github/repos/search(?query=&language=&sort=&limit=)`, `POST github/clone` (body: repo, targetDir, branch?, projectName?), `GET github/issues(?repo=&state=&label=&assignee=&milestone=&limit=)`, `GET github/issues/:num(?repo=)`, `POST github/issues/:num/close(?repo=)`, `POST github/issues/:num/comment(?repo=)` (body: body), `POST github/pr` (body: repo, title, body, base?, draft?), `GET github/pulls(?repo=&state=&limit=)`, `GET github/pulls/:num(?repo=)`
 
@@ -127,7 +127,7 @@ Sessions use UUID v4 IDs: `--session-id {uuid}` (new) or `--resume {uuid}` (exis
 - **GitHub Import**: Browse/search repos via `gh` CLI, clone and register as project with progress streaming
 - **GitHub Issues**: Browse issues with state/label/assignee filters, view detail with comments, "Start Working" (generates agent prompt), "Add to Roadmap" (creates task in milestone), close issues, add comments
 - **GitHub PRs**: Create PRs with auto-generated title/description (from conversation + diff), list PRs, view PR detail with reviews/comments, "Fix PR Feedback" (generates agent prompt from review feedback)
-- **Other**: Conversation history (view/rename, configurable limit), debug modal, mobile-responsive layout
+- **Other**: Conversation history (view/rename, configurable limit), debug modal, mobile-responsive layout, Settings Danger Zone (wipe all data)
 
 ## Settings
 

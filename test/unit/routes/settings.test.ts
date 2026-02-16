@@ -3,6 +3,7 @@ import request from 'supertest';
 import express, { Express } from 'express';
 import { createSettingsRouter, SettingsChangeEvent } from '../../../src/routes/settings';
 import { SettingsRepository } from '../../../src/repositories';
+import { DataWipeService, WipeSummary } from '../../../src/services/data-wipe-service';
 import { createErrorHandler } from '../../../src/utils/errors';
 import {
   createMockSettingsRepository,
@@ -13,18 +14,31 @@ interface ErrorResponse {
   error: string;
 }
 
+function createMockDataWipeService(): jest.Mocked<DataWipeService> {
+  return {
+    wipeAll: jest.fn<Promise<WipeSummary>, []>().mockResolvedValue({
+      projectsWiped: 2,
+      globalDataDeleted: true,
+      mcpTempDeleted: true,
+    }),
+  };
+}
+
 describe('SettingsRouter', () => {
   let mockRepository: jest.Mocked<SettingsRepository>;
+  let mockDataWipeService: jest.Mocked<DataWipeService>;
   let app: Express;
   let onSettingsChange: jest.Mock<void, [SettingsChangeEvent]>;
 
   beforeEach(() => {
     mockRepository = createMockSettingsRepository();
+    mockDataWipeService = createMockDataWipeService();
     onSettingsChange = jest.fn<void, [SettingsChangeEvent]>();
     app = express();
     app.use(express.json());
     app.use('/settings', createSettingsRouter({
       settingsRepository: mockRepository,
+      dataWipeService: mockDataWipeService,
       onSettingsChange,
     }));
     // Add error handler to convert ValidationError to proper response
@@ -187,6 +201,7 @@ describe('SettingsRouter', () => {
       app.use(express.json());
       app.use('/settings', createSettingsRouter({
         settingsRepository: mockRepository,
+        dataWipeService: mockDataWipeService,
         onSettingsChange,
       }));
       app.use(createErrorHandler());
@@ -654,6 +669,28 @@ describe('SettingsRouter', () => {
         const body = response.body as ErrorResponse;
         expect(body.error).toContain('Invalid URL');
       });
+    });
+  });
+
+  describe('POST /settings/wipe-all-data', () => {
+    it('should call dataWipeService.wipeAll and return summary', async () => {
+      const response = await request(app).post('/settings/wipe-all-data');
+
+      expect(response.status).toBe(200);
+      expect(mockDataWipeService.wipeAll).toHaveBeenCalled();
+      expect(response.body).toEqual({
+        projectsWiped: 2,
+        globalDataDeleted: true,
+        mcpTempDeleted: true,
+      });
+    });
+
+    it('should return 500 when wipeAll fails', async () => {
+      mockDataWipeService.wipeAll.mockRejectedValue(new Error('Wipe failed'));
+
+      const response = await request(app).post('/settings/wipe-all-data');
+
+      expect(response.status).toBe(500);
     });
   });
 });
