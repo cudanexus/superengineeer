@@ -1721,12 +1721,14 @@
     'safe-dev': {
       allowRules: [
         'Read',
+        'Task',
         'Glob',
         'Grep',
         'Bash(npm run:*)',
         'Bash(npm test:*)',
         'Bash(npm install)',
         'Bash(node:*)',
+        'Bash(tsc:*)',
         'Bash(go run:*)',
         'Bash(go build:*)',
         'Bash(go test:*)',
@@ -1738,7 +1740,9 @@
         'Bash(git status)',
         'Bash(git diff:*)',
         'Bash(git log:*)',
-        'Bash(git branch:*)'
+        'Bash(git branch:*)',
+        'WebSearch',
+        'WebFetch'
       ],
       denyRules: [
         'Read(./.env)',
