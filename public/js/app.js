@@ -31,6 +31,8 @@
   var ResourceMonitor = window.ResourceMonitor;
   var WebSocketModule = window.WebSocketModule;
   var OneOffToolbarModule = window.OneOffToolbarModule;
+  var RunConfigsModule = window.RunConfigsModule;
+  var InventifyModule = window.InventifyModule;
 
   // Alias for backward compatibility within this file
   var api = ApiClient;
@@ -1625,6 +1627,7 @@
         $('#input-history-limit').val(settings.historyLimit || 25);
         $('#input-claude-md-max-size').val(settings.claudeMdMaxSizeKB || 50);
         $('#input-desktop-notifications').prop('checked', settings.enableDesktopNotifications || false);
+        $('#input-inventify-folder').val(settings.inventifyFolder || '');
         $('#input-ralph-loop-history-limit').val(settings.ralphLoop?.historyLimit || 5);
         updatePermissionFieldsState();
 
@@ -1817,6 +1820,7 @@
       historyLimit: historyLimit,
       claudeMdMaxSizeKB: claudeMdMaxSizeKB,
       enableDesktopNotifications: enableDesktopNotifications,
+      inventifyFolder: $('#input-inventify-folder').val() || '',
       ralphLoop: {
         historyLimit: ralphLoopHistoryLimit
       },
@@ -2706,17 +2710,27 @@
   function submitQuestionAnswers(toolId, $container) {
     var mqs = getMultiQuestionState();
     var totalQuestions = mqs.totalQuestions;
-    var parts = [];
+
+    // Build answers map: { "0": "selectedLabel", "1": "selectedLabel", ... }
+    var answers = {};
 
     for (var i = 0; i < totalQuestions; i++) {
       if (mqs.answers[i]) {
-        parts.push(totalQuestions > 1
-          ? 'Q' + (i + 1) + ': ' + mqs.answers[i]
-          : mqs.answers[i]);
+        answers[String(i)] = mqs.answers[i];
       }
     }
 
-    var response = parts.join(', ');
+    var summaryParts = [];
+
+    for (var j = 0; j < totalQuestions; j++) {
+      if (answers[String(j)]) {
+        summaryParts.push(totalQuestions > 1
+          ? 'Q' + (j + 1) + ': ' + answers[String(j)]
+          : answers[String(j)]);
+      }
+    }
+
+    var summary = summaryParts.join(', ');
 
     // Disable all buttons and submit after sending
     $container.find('.ask-user-option')
@@ -2724,9 +2738,16 @@
       .addClass('opacity-50 cursor-not-allowed');
     $container.find('.ask-user-submit').prop('disabled', true).addClass('opacity-50');
 
-    sendQuestionResponse(response);
+    // Send as tool_result via the answer endpoint
+    if (state.selectedProjectId) {
+      api.answerAgentQuestion(state.selectedProjectId, toolId, answers)
+        .fail(function(xhr) {
+          showErrorToast(xhr, 'Failed to send answer');
+        });
+    }
+
     clearBlockingAfterAnswer();
-    ToolRenderer.updateToolStatus(toolId, 'completed', 'User selected: ' + response);
+    ToolRenderer.updateToolStatus(toolId, 'completed', 'User selected: ' + summary);
 
     state.multiQuestionState = {
       activeToolId: null,
@@ -2963,6 +2984,13 @@
       } else if (state.justAnsweredQuestion) {
         // Clear the pending message if we just answered a question
         state.pendingMessageBeforeQuestion = null;
+      }
+
+      // Replay any deferred plan message now that blocking is cleared
+      if (state.deferredPlanMessage) {
+        var planMsg = state.deferredPlanMessage;
+        state.deferredPlanMessage = null;
+        appendMessage(state.selectedProjectId, planMsg);
       }
     }
   }
@@ -3417,6 +3445,11 @@
       if (typeof GitHubIssuesModule !== 'undefined') {
         GitHubIssuesModule.onProjectChanged(projectId);
       }
+
+      // Notify RunConfigsModule of project change
+      if (RunConfigsModule) {
+        RunConfigsModule.onProjectChanged();
+      }
     }
 
     state.selectedProjectId = projectId;
@@ -3444,7 +3477,6 @@
     loadAgentStatus(projectId);
     loadRalphLoopStatus(projectId);
     TaskDisplayModule.loadOptimizationsBadge(projectId);
-    checkShellEnabled(projectId);
     checkGitHubAvailable();
 
     // Restore saved tab preference and refresh tab content
@@ -5059,6 +5091,10 @@
         if (typeof OneOffTabsModule !== 'undefined') {
           OneOffTabsModule.updateStatus(message.projectId, message.data.oneOffId, message.data.status);
         }
+
+        if (InventifyModule) {
+          InventifyModule.handleOneOffStatus(message.data.oneOffId, message.data.status);
+        }
         break;
       case 'oneoff_waiting':
         if (typeof OneOffTabsModule !== 'undefined') {
@@ -5077,6 +5113,16 @@
             $progress.append('<div class="' + cls + '">' + escapeHtml(message.data.message) + '</div>');
             $progress.scrollTop($progress[0].scrollHeight);
           }
+        }
+        break;
+      case 'run_config_output':
+        if (RunConfigsModule) {
+          RunConfigsModule.handleOutput(message.data);
+        }
+        break;
+      case 'run_config_status':
+        if (RunConfigsModule) {
+          RunConfigsModule.handleStatusChange(message.data);
         }
         break;
     }
@@ -5422,7 +5468,7 @@
     $('#tab-content-' + tabName).removeClass('hidden');
 
     // Show/hide input area based on tab
-    if (tabName === 'project-files' || tabName === 'git' || tabName === 'shell' || tabName === 'ralph-loop') {
+    if (tabName === 'project-files' || tabName === 'git' || tabName === 'shell' || tabName === 'ralph-loop' || tabName === 'run-configs') {
       $('#interactive-input-area').addClass('hidden');
     } else {
       $('#interactive-input-area').removeClass('hidden');
@@ -5455,6 +5501,11 @@
       loadRalphLoopStatus(state.selectedProjectId);
     }
 
+    // If switching to run-configs tab, activate it
+    if (tabName === 'run-configs' && RunConfigsModule) {
+      RunConfigsModule.onTabActivated();
+    }
+
   }
 
   /**
@@ -5475,6 +5526,8 @@
       ShellModule.onTabActivated();
     } else if (state.activeTab === 'ralph-loop') {
       loadRalphLoopStatus(state.selectedProjectId);
+    } else if (state.activeTab === 'run-configs' && RunConfigsModule) {
+      RunConfigsModule.onTabActivated();
     }
   }
 
@@ -5499,6 +5552,10 @@
         return;
       }
       switchTab('shell');
+    });
+
+    $('#tab-run-configs').on('click', function() {
+      switchTab('run-configs');
     });
 
   }
@@ -5902,6 +5959,35 @@
       }
     });
 
+    if (RunConfigsModule) {
+      RunConfigsModule.init({
+        state: state,
+        api: api,
+        showToast: showToast,
+        showErrorToast: showErrorToast,
+        escapeHtml: escapeHtml
+      });
+    }
+
+    if (InventifyModule) {
+      InventifyModule.init({
+        api: api,
+        escapeHtml: escapeHtml,
+        state: state,
+        FolderBrowserModule: FolderBrowserModule,
+      });
+    }
+
+    // Inventify folder browse button in settings
+    $(document).on('click', '#btn-settings-inventify-browse', function() {
+      state.folderBrowserCallback = function(selectedPath) {
+        if (selectedPath) {
+          $('#input-inventify-folder').val(selectedPath);
+        }
+      };
+      FolderBrowserModule.open();
+    });
+
     ToolRenderer.init({
       escapeHtml: escapeHtml,
       truncateString: truncateString,
@@ -5934,6 +6020,10 @@
     TaskDisplayModule.setupHandlers();
     PermissionModeModule.setupHandlers();
     FolderBrowserModule.setupHandlers();
+
+    if (RunConfigsModule) {
+      RunConfigsModule.setupHandlers();
+    }
 
     // Check authentication status first
     checkAuthenticationOnLoad();
@@ -5990,6 +6080,10 @@
       .done(function(data) {
         if (data.version) {
           $('#app-version').text('v' + data.version);
+        }
+
+        if (data.shellEnabled !== undefined) {
+          state.shellEnabled = data.shellEnabled;
         }
       });
   }

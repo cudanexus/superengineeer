@@ -8,3 +8,6 @@ export * from './shell-service';
 export * from './claude-optimization-service';
 export * from './github-cli-service';
 export * from './data-wipe-service';
+export * from './run-config';
+export * from './inventify-types';
+export * from './inventify-service';

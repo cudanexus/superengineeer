@@ -10,6 +10,7 @@ import {
   ContextUsageData,
   ProjectPermissionOverrides,
   CreateProjectData,
+  RunConfiguration,
 } from '../../../src/repositories/project';
 import {
   ConversationRepository,
@@ -86,6 +87,7 @@ export const DEFAULT_TEST_SETTINGS: GlobalSettings = {
     servers: [],
   },
   chromeEnabled: false,
+  inventifyFolder: '',
 };
 
 export const DEFAULT_CLAUDE_PERMISSIONS: ClaudePermissions = {
@@ -349,6 +351,14 @@ export function createMockProjectRepository(
 
       if (!project) return Promise.resolve(null);
       project.mcpOverrides = overrides;
+      project.updatedAt = new Date().toISOString();
+      return Promise.resolve({ ...project });
+    }),
+    updateRunConfigurations: jest.fn().mockImplementation((id: string, configs: RunConfiguration[]) => {
+      const project = projects.get(id);
+
+      if (!project) return Promise.resolve(null);
+      project.runConfigurations = configs;
       project.updatedAt = new Date().toISOString();
       return Promise.resolve({ ...project });
     }),
@@ -624,6 +634,7 @@ export function createMockClaudeAgent(projectId = 'test-project'): jest.Mocked<C
         queuedMessages.push(input);
       }
     }),
+    sendToolResult: jest.fn(),
     removeQueuedMessage: jest.fn().mockImplementation((index: number) => {
       if (index < 0 || index >= queuedMessages.length) return false;
       queuedMessages.splice(index, 1);
@@ -899,6 +910,7 @@ export function createMockAgentManager(): jest.Mocked<AgentManager> {
       return Promise.resolve();
     }),
     sendInput: jest.fn(),
+    sendToolResult: jest.fn(),
     stopAgent: jest.fn().mockImplementation((projectId: string) => {
       runningAgents.delete(projectId);
       return Promise.resolve();
@@ -980,6 +992,7 @@ export function createMockAgentManager(): jest.Mocked<AgentManager> {
     getOneOffStatus: jest.fn().mockReturnValue(null),
     getOneOffContextUsage: jest.fn().mockReturnValue(null),
     isOneOffWaitingForInput: jest.fn().mockReturnValue(false),
+    getOneOffCollectedOutput: jest.fn().mockReturnValue(null),
     on: jest.fn().mockImplementation(<K extends keyof AgentManagerEvents>(
       event: K,
       listener: AgentManagerEvents[K]
@@ -1079,6 +1092,18 @@ export function createMockGitHubCLIService(): jest.Mocked<GitHubCLIService> {
     }),
     closeIssue: jest.fn().mockResolvedValue(undefined),
     commentOnIssue: jest.fn().mockResolvedValue(undefined),
+    createIssue: jest.fn().mockResolvedValue({ ...sampleGitHubIssue }),
+    listLabels: jest.fn().mockResolvedValue([
+      { name: 'bug', color: 'fc2929', description: 'Something is broken' },
+      { name: 'enhancement', color: '84b6eb', description: 'New feature' },
+    ]),
+    listMilestones: jest.fn().mockResolvedValue([
+      { title: 'v1.0', number: 1, state: 'open' },
+    ]),
+    listCollaborators: jest.fn().mockResolvedValue([
+      { login: 'testuser' },
+      { login: 'collaborator1' },
+    ]),
     commentOnPR: jest.fn().mockResolvedValue(undefined),
     markPRReady: jest.fn().mockResolvedValue(undefined),
     mergePR: jest.fn().mockResolvedValue(undefined),
@@ -1493,5 +1518,212 @@ export function createTestReviewerFeedback(overrides?: Partial<ReviewerFeedback>
   return {
     ...sampleReviewerFeedback,
     ...overrides,
+  };
+}
+
+// ============================================================================
+// Run Configuration Service Mock
+// ============================================================================
+
+import {
+  RunConfigurationService,
+  CreateRunConfigData,
+  UpdateRunConfigData,
+} from '../../../src/services/run-config/types';
+import { RunConfiguration as RunConfig } from '../../../src/repositories/project';
+
+export const sampleRunConfiguration: RunConfig = {
+  id: 'rc-uuid-1234',
+  name: 'Dev Server',
+  command: 'npm',
+  args: ['run', 'dev'],
+  cwd: '.',
+  env: {},
+  shell: null,
+  autoRestart: false,
+  autoRestartDelay: 1000,
+  autoRestartMaxRetries: 5,
+  preLaunchConfigId: null,
+  createdAt: '2024-01-01T00:00:00.000Z',
+  updatedAt: '2024-01-01T00:00:00.000Z',
+};
+
+export function createMockRunConfigurationService(): jest.Mocked<RunConfigurationService> {
+  const configs = new Map<string, RunConfig[]>();
+
+  return {
+    list: jest.fn().mockImplementation((projectId: string) => {
+      return Promise.resolve(configs.get(projectId) || []);
+    }),
+    getById: jest.fn().mockImplementation((projectId: string, configId: string) => {
+      const projectConfigs = configs.get(projectId) || [];
+      const config = projectConfigs.find((c) => c.id === configId);
+      return Promise.resolve(config || null);
+    }),
+    create: jest.fn().mockImplementation((projectId: string, data: CreateRunConfigData) => {
+      const now = new Date().toISOString();
+      const config: RunConfig = {
+        id: `rc-${Date.now()}`,
+        name: data.name,
+        command: data.command,
+        args: data.args || [],
+        cwd: data.cwd || '.',
+        env: data.env || {},
+        shell: data.shell ?? null,
+        autoRestart: data.autoRestart ?? false,
+        autoRestartDelay: data.autoRestartDelay ?? 1000,
+        autoRestartMaxRetries: data.autoRestartMaxRetries ?? 5,
+        preLaunchConfigId: data.preLaunchConfigId ?? null,
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      const existing = configs.get(projectId) || [];
+      configs.set(projectId, [...existing, config]);
+
+      return Promise.resolve({ ...config });
+    }),
+    update: jest.fn().mockImplementation((projectId: string, configId: string, data: UpdateRunConfigData) => {
+      const projectConfigs = configs.get(projectId) || [];
+      const index = projectConfigs.findIndex((c) => c.id === configId);
+
+      if (index === -1) return Promise.resolve(null);
+
+      const existing = projectConfigs[index]!;
+      const updated: RunConfig = {
+        ...existing,
+        ...data,
+        updatedAt: new Date().toISOString(),
+      };
+      projectConfigs[index] = updated;
+
+      return Promise.resolve({ ...updated });
+    }),
+    delete: jest.fn().mockImplementation((projectId: string, configId: string) => {
+      const projectConfigs = configs.get(projectId) || [];
+      const filtered = projectConfigs.filter((c) => c.id !== configId);
+
+      if (filtered.length === projectConfigs.length) return Promise.resolve(false);
+      configs.set(projectId, filtered);
+
+      return Promise.resolve(true);
+    }),
+  };
+}
+
+// ============================================================================
+// Run Config Import Service Mock
+// ============================================================================
+
+import { RunConfigImportService } from '../../../src/services/run-config/import-types';
+
+export function createMockRunConfigImportService(): jest.Mocked<RunConfigImportService> {
+  return {
+    scan: jest.fn().mockResolvedValue({ projectPath: '/test', importable: [] }),
+  };
+}
+
+// ============================================================================
+// Run Process Manager Mock
+// ============================================================================
+
+import {
+  RunProcessManager,
+  RunProcessStatus,
+} from '../../../src/services/run-config/run-process-types';
+
+export function createMockRunProcessManager(): jest.Mocked<RunProcessManager> {
+  const emitter = new EventEmitter();
+  const statuses = new Map<string, Map<string, RunProcessStatus>>();
+
+  return {
+    start: jest.fn().mockImplementation((projectId: string, _projectPath: string, configId: string) => {
+      const status: RunProcessStatus = {
+        configId,
+        state: 'running',
+        pid: Math.floor(Math.random() * 10000) + 1000,
+        startedAt: new Date().toISOString(),
+        uptimeMs: 0,
+        exitCode: null,
+        restartCount: 0,
+        error: null,
+      };
+
+      if (!statuses.has(projectId)) statuses.set(projectId, new Map());
+      statuses.get(projectId)!.set(configId, status);
+
+      return Promise.resolve(status);
+    }),
+    stop: jest.fn().mockImplementation((projectId: string, configId: string) => {
+      const projectStatuses = statuses.get(projectId);
+
+      if (projectStatuses) {
+        const status = projectStatuses.get(configId);
+
+        if (status) {
+          status.state = 'stopped';
+          status.pid = null;
+        }
+      }
+
+      return Promise.resolve();
+    }),
+    stopAll: jest.fn().mockResolvedValue(undefined),
+    getStatus: jest.fn().mockImplementation((projectId: string, configId: string) => {
+      const status = statuses.get(projectId)?.get(configId);
+
+      return status || {
+        configId,
+        state: 'stopped',
+        pid: null,
+        startedAt: null,
+        uptimeMs: null,
+        exitCode: null,
+        restartCount: 0,
+        error: null,
+      };
+    }),
+    getAllStatuses: jest.fn().mockImplementation((projectId: string) => {
+      const projectStatuses = statuses.get(projectId);
+
+      if (!projectStatuses) return [];
+      return Array.from(projectStatuses.values());
+    }),
+    shutdown: jest.fn().mockResolvedValue(undefined),
+    on: jest.fn().mockImplementation((event: string, listener: (...args: unknown[]) => void) => {
+      emitter.on(event, listener);
+    }),
+    off: jest.fn().mockImplementation((event: string, listener: (...args: unknown[]) => void) => {
+      emitter.off(event, listener);
+    }),
+  };
+}
+
+export function createTestRunConfiguration(overrides?: Partial<RunConfig>): RunConfig {
+  return {
+    ...sampleRunConfiguration,
+    ...overrides,
+    id: overrides?.id || `rc-${Date.now()}`,
+  };
+}
+
+// ============================================================================
+// Inventify Service Mock
+// ============================================================================
+
+import { InventifyService, InventifyResult } from '../../../src/services/inventify-types';
+
+export function createMockInventifyService(): jest.Mocked<InventifyService> {
+  return {
+    start: jest.fn().mockResolvedValue({
+      oneOffId: 'inventify-oneoff-id',
+      placeholderProjectId: 'inventify-project-id',
+    } as InventifyResult),
+    isRunning: jest.fn().mockReturnValue(false),
+    getIdeas: jest.fn().mockReturnValue(null),
+    selectIdea: jest.fn().mockResolvedValue({
+      oneOffId: 'inventify-build-oneoff-id',
+      placeholderProjectId: 'inventify-project-id',
+    } as InventifyResult),
   };
 }

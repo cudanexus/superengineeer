@@ -413,6 +413,170 @@ describe('DefaultGitHubCLIService', () => {
     });
   });
 
+  describe('createIssue', () => {
+    it('should create an issue and fetch details via issue view', async () => {
+      const { service, runner } = createService();
+      const issueData = {
+        number: 15,
+        title: 'Bug report',
+        body: 'Something broke',
+        state: 'OPEN',
+        url: 'https://github.com/owner/repo/issues/15',
+        author: { login: 'user' },
+        labels: [{ name: 'bug' }],
+        assignees: [{ login: 'dev1' }],
+        milestone: { title: 'v1.0' },
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-01-01T00:00:00Z',
+        comments: { totalCount: 0 },
+      };
+      runner.exec
+        .mockResolvedValueOnce({ stdout: 'https://github.com/owner/repo/issues/15\n', stderr: '' })
+        .mockResolvedValueOnce({ stdout: JSON.stringify(issueData), stderr: '' });
+
+      const result = await service.createIssue({
+        repo: 'owner/repo',
+        title: 'Bug report',
+        body: 'Something broke',
+        labels: ['bug'],
+        assignees: ['dev1'],
+        milestone: 'v1.0',
+      });
+
+      expect(result.number).toBe(15);
+      expect(result.title).toBe('Bug report');
+
+      const createArgs = runner.exec.mock.calls[0]![1] as string[];
+      expect(createArgs).toContain('issue');
+      expect(createArgs).toContain('create');
+      expect(createArgs).toContain('--label');
+      expect(createArgs).toContain('bug');
+      expect(createArgs).toContain('--assignee');
+      expect(createArgs).toContain('dev1');
+      expect(createArgs).toContain('--milestone');
+      expect(createArgs).toContain('v1.0');
+
+      const viewArgs = runner.exec.mock.calls[1]![1] as string[];
+      expect(viewArgs).toContain('issue');
+      expect(viewArgs).toContain('view');
+      expect(viewArgs).toContain('15');
+    });
+
+    it('should create an issue with only required fields', async () => {
+      const { service, runner } = createService();
+      const issueData = {
+        number: 16,
+        title: 'Simple issue',
+        body: '',
+        state: 'OPEN',
+        url: 'https://github.com/owner/repo/issues/16',
+        author: { login: 'user' },
+        labels: [],
+        assignees: [],
+        milestone: null,
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-01-01T00:00:00Z',
+        comments: { totalCount: 0 },
+      };
+      runner.exec
+        .mockResolvedValueOnce({ stdout: 'https://github.com/owner/repo/issues/16\n', stderr: '' })
+        .mockResolvedValueOnce({ stdout: JSON.stringify(issueData), stderr: '' });
+
+      await service.createIssue({ repo: 'owner/repo', title: 'Simple issue' });
+
+      const createArgs = runner.exec.mock.calls[0]![1] as string[];
+      expect(createArgs).not.toContain('--label');
+      expect(createArgs).not.toContain('--assignee');
+      expect(createArgs).not.toContain('--milestone');
+    });
+
+    it('should throw on failure', async () => {
+      const { service, runner } = createService();
+      runner.exec.mockRejectedValue(new Error('permission denied'));
+
+      await expect(service.createIssue({
+        repo: 'owner/repo', title: 'test',
+      })).rejects.toThrow('Failed to create issue');
+    });
+  });
+
+  describe('listLabels', () => {
+    it('should return labels for a repo', async () => {
+      const { service, runner } = createService();
+      const labels = [
+        { name: 'bug', color: 'fc2929', description: 'Something broken' },
+        { name: 'enhancement', color: '84b6eb', description: 'New feature' },
+      ];
+      runner.exec.mockResolvedValue({ stdout: JSON.stringify(labels), stderr: '' });
+
+      const result = await service.listLabels('owner/repo');
+
+      expect(result).toHaveLength(2);
+      expect(result[0]!.name).toBe('bug');
+
+      const args = runner.exec.mock.calls[0]![1] as string[];
+      expect(args).toContain('label');
+      expect(args).toContain('list');
+      expect(args).toContain('--repo');
+      expect(args).toContain('owner/repo');
+    });
+
+    it('should throw on failure', async () => {
+      const { service, runner } = createService();
+      runner.exec.mockRejectedValue(new Error('not found'));
+
+      await expect(service.listLabels('owner/repo')).rejects.toThrow('Failed to list labels');
+    });
+  });
+
+  describe('listMilestones', () => {
+    it('should return milestones for a repo', async () => {
+      const { service, runner } = createService();
+      const milestones = [{ title: 'v1.0', number: 1, state: 'open' }];
+      runner.exec.mockResolvedValue({ stdout: JSON.stringify(milestones), stderr: '' });
+
+      const result = await service.listMilestones('owner/repo');
+
+      expect(result).toHaveLength(1);
+      expect(result[0]!.title).toBe('v1.0');
+
+      const args = runner.exec.mock.calls[0]![1] as string[];
+      expect(args).toContain('api');
+      expect(args).toContain('repos/owner/repo/milestones');
+    });
+
+    it('should throw on failure', async () => {
+      const { service, runner } = createService();
+      runner.exec.mockRejectedValue(new Error('forbidden'));
+
+      await expect(service.listMilestones('owner/repo')).rejects.toThrow('Failed to list milestones');
+    });
+  });
+
+  describe('listCollaborators', () => {
+    it('should return collaborators for a repo', async () => {
+      const { service, runner } = createService();
+      const collaborators = [{ login: 'user1' }, { login: 'user2' }];
+      runner.exec.mockResolvedValue({ stdout: JSON.stringify(collaborators), stderr: '' });
+
+      const result = await service.listCollaborators('owner/repo');
+
+      expect(result).toHaveLength(2);
+      expect(result[0]!.login).toBe('user1');
+
+      const args = runner.exec.mock.calls[0]![1] as string[];
+      expect(args).toContain('api');
+      expect(args).toContain('repos/owner/repo/collaborators');
+    });
+
+    it('should throw on failure', async () => {
+      const { service, runner } = createService();
+      runner.exec.mockRejectedValue(new Error('not found'));
+
+      await expect(service.listCollaborators('owner/repo')).rejects.toThrow('Failed to list collaborators');
+    });
+  });
+
   describe('commentOnPR', () => {
     it('should call gh pr comment with correct args', async () => {
       const { service, runner } = createService();

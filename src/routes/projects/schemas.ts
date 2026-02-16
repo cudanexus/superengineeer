@@ -159,6 +159,48 @@ export const gitPushTagSchema = z.object({
   remote: z.string().default('origin'),
 });
 
+// Inventify schemas
+export const inventifyStartSchema = z.object({
+  projectTypes: z.array(z.string()).min(1, 'At least one project type is required'),
+  themes: z.array(z.string()).min(1, 'At least one theme is required'),
+});
+
+export const inventifySelectSchema = z.object({
+  selectedIndex: z.number().int().min(0).max(4),
+});
+
+// Run Configuration schemas
+export const createRunConfigSchema = z.object({
+  name: z.string().min(1, 'Name is required').max(255),
+  command: z.string().min(1, 'Command is required'),
+  args: z.array(z.string()).optional(),
+  cwd: z.string().optional(),
+  env: z.record(z.string(), z.string()).optional(),
+  shell: z.string().nullable().optional(),
+  autoRestart: z.boolean().optional(),
+  autoRestartDelay: z.number().int().min(100).max(60000).optional(),
+  autoRestartMaxRetries: z.number().int().min(0).max(100).optional(),
+  preLaunchConfigId: z.string().nullable().optional(),
+});
+
+export const updateRunConfigSchema = z.object({
+  name: z.string().min(1).max(255).optional(),
+  command: z.string().min(1).optional(),
+  args: z.array(z.string()).optional(),
+  cwd: z.string().optional(),
+  env: z.record(z.string(), z.string()).optional(),
+  shell: z.string().nullable().optional(),
+  autoRestart: z.boolean().optional(),
+  autoRestartDelay: z.number().int().min(100).max(60000).optional(),
+  autoRestartMaxRetries: z.number().int().min(0).max(100).optional(),
+  preLaunchConfigId: z.string().nullable().optional(),
+});
+
+export const projectAndConfigIdSchema = z.object({
+  id: z.string().min(1, 'Project ID is required'),
+  configId: z.string().min(1, 'Config ID is required'),
+});
+
 // Query parameter schemas
 export const listConversationsQuerySchema = z.object({
   limit: z.string().regex(/^\d+$/).transform(Number).optional(),

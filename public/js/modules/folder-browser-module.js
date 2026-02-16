@@ -84,10 +84,12 @@
         '<span class="text-gray-300">Current folder:</span> ' +
         '<span class="text-purple-400">' + escapeHtml(currentPath) + '</span>'
       );
+      $('#btn-new-folder').prop('disabled', false);
     } else {
       $('#selected-path').html(
         '<span class="text-gray-500">Navigate to a folder to select it</span>'
       );
+      $('#btn-new-folder').prop('disabled', true);
     }
   }
 
@@ -237,6 +239,38 @@
   }
 
   /**
+   * Create a new folder inside the current path
+   */
+  function createNewFolder() {
+    var currentPath = state.folderBrowser.currentPath;
+
+    if (!currentPath) {
+      return;
+    }
+
+    var folderName = prompt('Enter folder name:');
+
+    if (!folderName || !folderName.trim()) {
+      return;
+    }
+
+    folderName = folderName.trim();
+    var newPath = currentPath + '\\' + folderName;
+
+    api.createFolder(newPath)
+      .done(function() {
+        showToast('Folder created: ' + folderName, 'success');
+        loadFolder(currentPath);
+      })
+      .fail(function(xhr) {
+        var msg = xhr.responseJSON && xhr.responseJSON.error
+          ? xhr.responseJSON.error
+          : 'Failed to create folder';
+        showToast(msg, 'error');
+      });
+  }
+
+  /**
    * Setup event handlers for folder browser
    */
   function setupHandlers() {
@@ -261,6 +295,10 @@
 
     $('#btn-select-folder').on('click', function() {
       confirmSelection();
+    });
+
+    $('#btn-new-folder').on('click', function() {
+      createNewFolder();
     });
   }
 

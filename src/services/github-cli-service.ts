@@ -92,6 +92,31 @@ export interface IssueViewOptions {
   issueNumber: number;
 }
 
+export interface IssueCreateOptions {
+  repo: string;
+  title: string;
+  body?: string;
+  labels?: string[];
+  assignees?: string[];
+  milestone?: string;
+}
+
+export interface GitHubLabel {
+  name: string;
+  color: string;
+  description: string;
+}
+
+export interface GitHubMilestone {
+  title: string;
+  number: number;
+  state: string;
+}
+
+export interface GitHubCollaborator {
+  login: string;
+}
+
 // Pull Request types
 
 export interface GitHubPullRequest {
@@ -193,6 +218,10 @@ export interface GitHubCLIService {
   viewIssue(options: IssueViewOptions): Promise<GitHubIssueDetail>;
   closeIssue(repo: string, issueNumber: number): Promise<void>;
   commentOnIssue(repo: string, issueNumber: number, body: string): Promise<void>;
+  createIssue(options: IssueCreateOptions): Promise<GitHubIssue>;
+  listLabels(repo: string): Promise<GitHubLabel[]>;
+  listMilestones(repo: string): Promise<GitHubMilestone[]>;
+  listCollaborators(repo: string): Promise<GitHubCollaborator[]>;
   createPR(options: PRCreateOptions): Promise<GitHubPullRequest>;
   listPRs(options: PRListOptions): Promise<GitHubPullRequest[]>;
   viewPR(options: PRViewOptions): Promise<GitHubPRDetail>;
@@ -345,6 +374,55 @@ export class DefaultGitHubCLIService implements GitHubCLIService {
       ]);
     } catch (err) {
       throw new GitHubCLIError(`Failed to comment on issue: ${extractErrorMessage(err)}`);
+    }
+  }
+
+  async createIssue(options: IssueCreateOptions): Promise<GitHubIssue> {
+    const args = buildIssueCreateArgs(options);
+
+    try {
+      const { stdout } = await this.commandRunner.exec('gh', args);
+      const issueNumber = extractIssueNumberFromUrl(stdout.trim());
+      const viewArgs = buildIssueViewArgs({ repo: options.repo, issueNumber });
+      const viewResult = await this.commandRunner.exec('gh', viewArgs);
+      return parseIssueViewOutput(viewResult.stdout);
+    } catch (err) {
+      throw new GitHubCLIError(`Failed to create issue: ${extractErrorMessage(err)}`);
+    }
+  }
+
+  async listLabels(repo: string): Promise<GitHubLabel[]> {
+    try {
+      const { stdout } = await this.commandRunner.exec('gh', [
+        'label', 'list', '--repo', repo, '--json', 'name,color,description',
+      ]);
+      return JSON.parse(stdout || '[]') as GitHubLabel[];
+    } catch (err) {
+      throw new GitHubCLIError(`Failed to list labels: ${extractErrorMessage(err)}`);
+    }
+  }
+
+  async listMilestones(repo: string): Promise<GitHubMilestone[]> {
+    try {
+      const { stdout } = await this.commandRunner.exec('gh', [
+        'api', `repos/${repo}/milestones`,
+        '--jq', '[.[] | {title: .title, number: .number, state: .state}]',
+      ]);
+      return JSON.parse(stdout || '[]') as GitHubMilestone[];
+    } catch (err) {
+      throw new GitHubCLIError(`Failed to list milestones: ${extractErrorMessage(err)}`);
+    }
+  }
+
+  async listCollaborators(repo: string): Promise<GitHubCollaborator[]> {
+    try {
+      const { stdout } = await this.commandRunner.exec('gh', [
+        'api', `repos/${repo}/collaborators`,
+        '--jq', '[.[] | {login: .login}]',
+      ]);
+      return JSON.parse(stdout || '[]') as GitHubCollaborator[];
+    } catch (err) {
+      throw new GitHubCLIError(`Failed to list collaborators: ${extractErrorMessage(err)}`);
     }
   }
 
@@ -566,6 +644,32 @@ function buildIssueViewArgs(options: IssueViewOptions): string[] {
   ];
 }
 
+function buildIssueCreateArgs(options: IssueCreateOptions): string[] {
+  const args = [
+    'issue', 'create',
+    '--repo', options.repo,
+    '--title', options.title,
+  ];
+
+  if (options.body) {
+    args.push('--body', options.body);
+  }
+
+  for (const label of options.labels || []) {
+    args.push('--label', label);
+  }
+
+  for (const assignee of options.assignees || []) {
+    args.push('--assignee', assignee);
+  }
+
+  if (options.milestone) {
+    args.push('--milestone', options.milestone);
+  }
+
+  return args;
+}
+
 function buildPRCreateArgs(options: PRCreateOptions): string[] {
   const args = [
     'pr', 'create',
@@ -615,6 +719,16 @@ function extractPRNumberFromUrl(url: string): number {
 
   if (!match) {
     throw new GitHubCLIError(`Could not extract PR number from: ${url}`);
+  }
+
+  return parseInt(match[1]!, 10);
+}
+
+function extractIssueNumberFromUrl(url: string): number {
+  const match = url.match(/\/issues\/(\d+)/);
+
+  if (!match) {
+    throw new GitHubCLIError(`Could not extract issue number from: ${url}`);
   }
 
   return parseInt(match[1]!, 10);

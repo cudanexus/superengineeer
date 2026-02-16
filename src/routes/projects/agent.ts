@@ -193,6 +193,29 @@ export function createAgentRouter(deps: ProjectRouterDependencies): Router {
     res.json({ contextUsage });
   }));
 
+  // Answer an AskUserQuestion from the agent
+  router.post('/answer', validateProjectExists(projectRepository), moderateRateLimit, asyncHandler((req: Request, res: Response) => {
+    const id = req.params['id'] as string;
+    const { toolUseId, answers } = req.body as { toolUseId?: string; answers?: Record<string, string | string[]> };
+
+    if (!toolUseId) {
+      throw new ValidationError('toolUseId is required');
+    }
+
+    if (!answers || typeof answers !== 'object') {
+      throw new ValidationError('answers is required');
+    }
+
+    if (!agentManager.isRunning(id)) {
+      throw new ValidationError('Agent is not running');
+    }
+
+    const content = JSON.stringify({ answers });
+    agentManager.sendToolResult(id, toolUseId, content);
+
+    res.json({ success: true });
+  }));
+
   // Send input to running interactive agent
   router.post('/send', validateBody(agentSendMessageSchema), validateProjectExists(projectRepository), moderateRateLimit, asyncHandler((req: Request, res: Response) => {
     const logger = getLogger('agent-send');

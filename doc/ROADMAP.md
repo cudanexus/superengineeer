@@ -2,8 +2,8 @@
 
 ## Progress Summary
 
-- **Phase 1: GitHub Integration** ✅ Complete
-- **Phase 2: GitLab & Jira Integration** 🔄 Not Started
+- **Phase 1: GitHub Integration** 🔄 In Progress (1.5 remaining)
+- **Phase 2: Run Configurations** 🔄 Not Started
 - **Phase 3: Docker Sandboxed Execution** 🔄 Not Started
 - **Phase 4: Advanced Agent Orchestration** 🔄 Not Started
 - **Phase 5: Collaboration & Sharing** 🔄 Not Started
@@ -46,39 +46,52 @@ Integrate with GitHub using the `gh` CLI tool to browse repositories, clone proj
 - [x] Fetch PR review comments via `gh pr view --json reviews,comments` and show in agent output tab
 - [x] Add "Fix PR Feedback" action: parse review comments from `gh pr diff` and feed as agent prompt
 
-## Phase 2: GitLab & Jira Integration
+### Milestone 1.5: GitHub Issue Creation
 
-Extend the integration framework to support GitLab and Jira, enabling multi-platform issue tracking and project management.
+- [ ] Define `IssueCreateOptions` interface with fields: `repo`, `title`, `body`, `labels` (string array), `assignees` (string array), `milestone` (string)
+- [ ] Add `createIssue(options: IssueCreateOptions)` method to `GitHubCLIService` interface and implement it using `gh issue create --repo --title --body [--label --assignee --milestone]`
+- [ ] Add `POST /api/integrations/github/issues` endpoint that validates required fields (`title`, `body`) and calls `createIssue`, returning the created issue URL and number
+- [ ] Create "New Issue" button in the GitHub Issues panel that opens a creation modal with title input, body textarea (markdown), label multi-select, assignee multi-select, and milestone dropdown
+- [ ] Populate label, assignee, and milestone dropdowns by fetching available options via `gh label list`, `gh api repos/:owner/:repo/collaborators`, and `gh api repos/:owner/:repo/milestones`
+- [ ] Add unit tests for the `createIssue` service method, the POST route handler, and arg-building logic
 
-### Milestone 2.1: Integration Provider Framework
+## Phase 2: Run Configurations
 
-- [ ] Create `IntegrationProvider` interface (authenticate, listRepos, listIssues, createPR)
-- [ ] Refactor GitHub service to implement `IntegrationProvider`
-- [ ] Build provider registry with per-project provider selection
-- [ ] Create shared integration settings UI (add/remove/configure providers)
+Allow users to define, manage, and execute named run configurations per project — similar to JetBrains IDE run/debug configurations. Each configuration defines a shell command (with optional arguments, environment variables, and working directory) that can be launched, stopped, and monitored from the UI.
 
-### Milestone 2.2: GitLab Integration
+### Milestone 2.1: Run Configuration Data Model & Persistence
 
-- [ ] Implement `GitLabService` with personal access token and OAuth authentication
-- [ ] Add GitLab repository browser with group/subgroup navigation
-- [ ] Implement GitLab issue listing with label and milestone filters
-- [ ] Add merge request creation with auto-generated description
-- [ ] Support GitLab CI pipeline status display in project view
+- [ ] Define `RunConfiguration` interface with fields: `id`, `name`, `command`, `args`, `cwd` (relative to project root), `env` (key-value pairs), `shell` (optional override), `autoRestart` (boolean), `preLaunchConfigId` (optional, references another config to run first)
+- [ ] Add `runConfigurations` array to the project `status.json` schema with CRUD operations in `ProjectRepository`
+- [ ] Create `RunConfigurationService` interface with methods: `create`, `update`, `delete`, `getAll`, `getById`
+- [ ] Implement `DefaultRunConfigurationService` with validation (unique names, command required, valid cwd path)
+- [ ] Add unit tests for the service covering CRUD, validation errors, and pre-launch dependency cycles
 
-### Milestone 2.3: Jira Integration
+### Milestone 2.2: Run Configuration API Endpoints
 
-- [ ] Implement `JiraService` with API token authentication (Cloud and Server)
-- [ ] Add Jira board/backlog browser with project and sprint filters
-- [ ] Implement "Start Working" action from Jira ticket (summary, description, acceptance criteria)
-- [ ] Add "Add to Roadmap" action: import Jira ticket as roadmap task with bidirectional link
-- [ ] Update Jira ticket status and add work log comments on task completion
+- [ ] Add `GET /api/projects/:id/run-configs` returning all configurations for a project
+- [ ] Add `POST /api/projects/:id/run-configs` to create a new configuration (validate required fields)
+- [ ] Add `PUT /api/projects/:id/run-configs/:configId` to update an existing configuration
+- [ ] Add `DELETE /api/projects/:id/run-configs/:configId` to remove a configuration (prevent deletion if referenced as pre-launch by another config)
+- [ ] Add unit tests for all route handlers with mocked service layer
 
-### Milestone 2.4: Unified Issue Dashboard
+### Milestone 2.3: Process Execution & Lifecycle
 
-- [ ] Create cross-provider issue dashboard aggregating GitHub, GitLab, and Jira
-- [ ] Add priority-based sorting and custom saved filters
-- [ ] Implement bulk "Add to Roadmap" for multiple selected issues
-- [ ] Show linked integration source (icon + link) on roadmap tasks
+- [ ] Create `RunProcessManager` interface for spawning and tracking running processes per project
+- [ ] Implement process spawning via `child_process.spawn` with configured `command`, `args`, `cwd`, `env`, and `shell` options
+- [ ] Handle pre-launch chains: before starting a config, start its `preLaunchConfigId` config first and wait for it to be running
+- [ ] Add `POST /api/projects/:id/run-configs/:configId/start` and `POST .../stop` endpoints
+- [ ] Add `GET /api/projects/:id/run-configs/:configId/status` returning process state (`stopped`, `starting`, `running`, `errored`), PID, uptime, and exit code
+- [ ] Implement graceful stop (SIGTERM, then SIGKILL after timeout) and auto-restart on crash when `autoRestart` is enabled
+
+### Milestone 2.4: Real-Time Output Streaming & UI
+
+- [ ] Stream process stdout/stderr to the frontend via WebSocket events (`run_config_output`, `run_config_status`)
+- [ ] Create a "Run Configurations" panel in the project view with a list of all configs showing name, status badge, and start/stop buttons
+- [ ] Add a run configuration editor modal with form fields for name, command, args, cwd, env variables (dynamic key-value rows), shell, auto-restart toggle, and pre-launch config dropdown
+- [ ] Implement a terminal-style output viewer per running config (scrollable, ANSI color support, clear button)
+- [ ] Add a toolbar quick-launch dropdown listing all configs for the current project with one-click start
+- [ ] Support running multiple configs simultaneously with independent output streams and status tracking
 
 ## Phase 3: Docker Sandboxed Execution
 
@@ -140,61 +153,3 @@ Enhance agent capabilities with multi-agent collaboration, scheduled execution, 
 - [ ] Add automatic conversation summarization when context approaches limit
 - [ ] Create context budget allocation across concurrent agents
 - [ ] Show real-time context budget visualization per agent in UI
-
-## Phase 5: Collaboration & Sharing
-
-Enable team workflows with shared projects, session sharing, and export/import capabilities.
-
-### Milestone 5.1: Session Export & Import
-
-- [ ] Create `ExportService` for serializing conversations to portable JSON/Markdown
-- [ ] Implement conversation export with tool call results and file diffs included
-- [ ] Add import functionality to resume exported sessions in new environments
-- [ ] Support selective export (date range, specific conversations)
-
-### Milestone 5.2: Project Templates
-
-- [ ] Create template system for bootstrapping new projects with pre-configured settings
-- [ ] Add built-in templates (Node.js API, React app, Python CLI, Rust library)
-- [ ] Implement custom template creation from existing project configuration
-- [ ] Add template browser UI with preview and one-click project creation
-
-### Milestone 5.3: Notification System
-
-- [ ] Create `NotificationService` interface with pluggable providers
-- [ ] Implement desktop notifications for agent completion and errors
-- [ ] Add optional Slack/Discord webhook notifications for long-running tasks
-- [ ] Create notification preferences UI (per-event granularity)
-
-### Milestone 5.4: Multi-User Support
-
-- [ ] Implement JWT-based authentication with user accounts
-- [ ] Add role-based access control (admin, developer, viewer)
-- [ ] Create project sharing with per-user permission levels
-- [ ] Add audit log for tracking user actions across shared projects
-
-## Phase 6: Observability & Analytics
-
-Provide deep insights into agent performance, cost tracking, and system health.
-
-### Milestone 6.1: Cost & Token Analytics
-
-- [ ] Create `AnalyticsService` for aggregating token usage across agents and projects
-- [ ] Implement per-project and per-conversation cost estimation (model-aware pricing)
-- [ ] Add analytics dashboard with charts (daily usage, cost trends, model breakdown)
-- [ ] Create budget alerts with configurable thresholds and notifications
-
-### Milestone 6.2: Agent Performance Metrics
-
-- [ ] Track task completion rates, average duration, and iteration counts
-- [ ] Measure tool call success/failure rates per agent session
-- [ ] Create performance comparison view across models (speed, quality, cost)
-- [ ] Add Ralph Loop efficiency metrics (iterations to approval, rejection reasons)
-
-### Milestone 6.3: System Health Monitoring
-
-- [ ] Implement structured health checks for all services (Docker, Git, filesystem)
-- [ ] Add process memory and CPU tracking with historical graphs
-- [ ] Create system status dashboard with dependency health indicators
-- [ ] Implement log aggregation with searchable log viewer and level filtering
-- [ ] Add alerting for resource exhaustion (disk space, memory, container limits)

@@ -2,6 +2,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { Server, IncomingMessage } from 'http';
 import { AgentManager, AgentMessage, QueuedProject, AgentResourceStatus, ContextUsage, WaitingStatus, FullAgentStatus } from '../agents';
 import { RoadmapGenerator, RoadmapMessage, AuthService, ShellService } from '../services';
+import { RunProcessManager, RunProcessStatus } from '../services/run-config/run-process-types';
 import { RalphLoopService, RalphLoopStatus, IterationSummary, ReviewerFeedback, RalphLoopFinalStatus } from '../services/ralph-loop/types';
 import { ConversationRepository, ProjectRepository } from '../repositories';
 import { getLogger, Logger, getLogStore, LogEntry } from '../utils/logger';
@@ -119,6 +120,16 @@ export interface GitHubCloneProgressData {
   message: string;
 }
 
+export interface RunConfigOutputData {
+  configId: string;
+  data: string;
+}
+
+export interface RunConfigStatusData {
+  configId: string;
+  status: RunProcessStatus;
+}
+
 export interface AgentMessageWithContext extends AgentMessage {
   contextUsage?: ContextUsage;
 }
@@ -149,6 +160,8 @@ export type WebSocketMessageData =
   | OneOffStatusData
   | OneOffWaitingData
   | GitHubCloneProgressData
+  | RunConfigOutputData
+  | RunConfigStatusData
   | string; // Covers 'connected' messages and simple loop events
 
 export interface SessionRecoveryData {
@@ -183,6 +196,8 @@ export interface WebSocketMessage {
     | 'oneoff_status'
     | 'oneoff_waiting'
     | 'github_clone_progress'
+    | 'run_config_output'
+    | 'run_config_status'
 ;
   projectId?: string;
   data?: WebSocketMessageData | SessionRecoveryData;
@@ -203,6 +218,7 @@ export interface WebSocketServerDependencies {
   authService?: AuthService;
   shellService?: ShellService;
   ralphLoopService?: RalphLoopService;
+  runProcessManager?: RunProcessManager;
   conversationRepository?: ConversationRepository;
   projectRepository?: ProjectRepository;
 }
@@ -215,6 +231,7 @@ export class DefaultWebSocketServer implements ProjectWebSocketServer {
   private readonly authService?: AuthService;
   private readonly shellService?: ShellService;
   private readonly ralphLoopService?: RalphLoopService;
+  private readonly runProcessManager?: RunProcessManager;
   private readonly conversationRepository?: ConversationRepository;
   private readonly projectRepository?: ProjectRepository;
   private readonly projectSubscriptions: Map<string, Set<WebSocket>> = new Map();
@@ -229,6 +246,7 @@ export class DefaultWebSocketServer implements ProjectWebSocketServer {
     this.authService = deps.authService;
     this.shellService = deps.shellService;
     this.ralphLoopService = deps.ralphLoopService;
+    this.runProcessManager = deps.runProcessManager;
     this.conversationRepository = deps.conversationRepository;
     this.projectRepository = deps.projectRepository;
     this.logger = getLogger('websocket');
@@ -237,6 +255,7 @@ export class DefaultWebSocketServer implements ProjectWebSocketServer {
     this.setupShellListeners();
     this.setupRalphLoopListeners();
     this.setupOneOffListeners();
+    this.setupRunConfigListeners();
     this.setupLoggerListeners();
   }
 
@@ -513,11 +532,11 @@ export class DefaultWebSocketServer implements ProjectWebSocketServer {
       });
     });
 
-    this.agentManager.on('waitingForInput', (projectId, isWaiting, version) => {
+    this.agentManager.on('waitingForInput', (projectId, waitingStatus) => {
       this.broadcast({
         type: 'agent_waiting',
         projectId,
-        data: { isWaiting, version },
+        data: waitingStatus,
       });
     });
 
@@ -774,6 +793,31 @@ export class DefaultWebSocketServer implements ProjectWebSocketServer {
         type: 'oneoff_waiting',
         projectId: meta.projectId,
         data: { oneOffId, isWaiting, version },
+      });
+    });
+  }
+
+  private setupRunConfigListeners(): void {
+    if (!this.runProcessManager) {
+      this.logger.debug('No run process manager provided, skipping listener setup');
+      return;
+    }
+
+    this.logger.info('Setting up run config process listeners');
+
+    this.runProcessManager.on('output', (projectId, configId, data) => {
+      this.broadcastToProject(projectId, {
+        type: 'run_config_output',
+        projectId,
+        data: { configId, data },
+      });
+    });
+
+    this.runProcessManager.on('status', (projectId, configId, status) => {
+      this.broadcastToProject(projectId, {
+        type: 'run_config_status',
+        projectId,
+        data: { configId, status },
       });
     });
   }

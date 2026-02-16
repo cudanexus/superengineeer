@@ -19,7 +19,8 @@ describe('FolderBrowserModule', () => {
       append: jest.fn().mockReturnThis(),
       val: jest.fn().mockReturnThis(),
       on: jest.fn().mockReturnThis(),
-      data: jest.fn()
+      data: jest.fn(),
+      prop: jest.fn().mockReturnThis(),
     };
 
     return jest.fn().mockReturnValue(mockElement);
@@ -144,6 +145,16 @@ describe('FolderBrowserModule', () => {
       expect(mockEscapeHtml).toHaveBeenCalledWith('C:\\test\\folder');
     });
 
+    it('should enable new folder button when path set', () => {
+      mockState.folderBrowser.currentPath = 'C:\\test\\folder';
+      const mockEl = global.$();
+
+      FolderBrowserModule.updateSelectedPathDisplay();
+
+      expect(global.$).toHaveBeenCalledWith('#btn-new-folder');
+      expect(mockEl.prop).toHaveBeenCalledWith('disabled', false);
+    });
+
     it('should show placeholder when no path', () => {
       mockState.folderBrowser.currentPath = null;
       const mockEl = global.$();
@@ -153,6 +164,16 @@ describe('FolderBrowserModule', () => {
       expect(mockEl.html).toHaveBeenCalledWith(
         expect.stringContaining('Navigate to a folder')
       );
+    });
+
+    it('should disable new folder button when no path', () => {
+      mockState.folderBrowser.currentPath = null;
+      const mockEl = global.$();
+
+      FolderBrowserModule.updateSelectedPathDisplay();
+
+      expect(global.$).toHaveBeenCalledWith('#btn-new-folder');
+      expect(mockEl.prop).toHaveBeenCalledWith('disabled', true);
     });
   });
 
@@ -212,7 +233,7 @@ describe('FolderBrowserModule', () => {
     it('should render entries when provided', () => {
       const mockBrowser = {
         empty: jest.fn().mockReturnThis(),
-        append: jest.fn().mockReturnThis()
+        append: jest.fn().mockReturnThis(),
       };
 
       global.$ = jest.fn((selector) => {
@@ -238,7 +259,7 @@ describe('FolderBrowserModule', () => {
     it('should render drive list', () => {
       const mockBrowser = {
         empty: jest.fn().mockReturnThis(),
-        append: jest.fn().mockReturnThis()
+        append: jest.fn().mockReturnThis(),
       };
 
       global.$ = jest.fn((selector) => {
@@ -334,10 +355,10 @@ describe('FolderBrowserModule', () => {
 
       // Mock val() to return empty string when called without args
       const mockNameInput = {
-        val: jest.fn().mockReturnValueOnce('')
+        val: jest.fn().mockReturnValueOnce(''),
       };
       const mockPathInput = {
-        val: jest.fn().mockReturnThis()
+        val: jest.fn().mockReturnThis(),
       };
 
       global.$ = jest.fn((selector) => {
@@ -392,6 +413,15 @@ describe('FolderBrowserModule', () => {
       FolderBrowserModule.setupHandlers();
 
       expect(global.$).toHaveBeenCalledWith('#btn-select-folder');
+      expect(mockBtn.on).toHaveBeenCalledWith('click', expect.any(Function));
+    });
+
+    it('should register new folder button handler', () => {
+      const mockBtn = global.$();
+
+      FolderBrowserModule.setupHandlers();
+
+      expect(global.$).toHaveBeenCalledWith('#btn-new-folder');
       expect(mockBtn.on).toHaveBeenCalledWith('click', expect.any(Function));
     });
   });

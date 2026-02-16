@@ -120,6 +120,14 @@
     $('#btn-finish-issue-toolbar').on('click', function() {
       finishIssueWork($(this));
     });
+
+    $('#btn-new-issue').on('click', function() {
+      openCreateIssueModal();
+    });
+
+    $('#btn-create-issue-submit').on('click', function() {
+      submitNewIssue();
+    });
   }
 
   function getRepoId(callback) {
@@ -255,10 +263,7 @@
       });
   }
 
-  function renderIssueDetail(detail) {
-    var issue = detail.issue;
-    var comments = detail.comments;
-
+  function renderIssueDetailButtons(issue) {
     $('#issue-detail-title').text('#' + issue.number + ' ' + issue.title);
     $('#btn-issue-detail-start').data('issue-number', issue.number);
     $('#btn-issue-detail-roadmap').data('issue-number', issue.number);
@@ -279,6 +284,28 @@
       $('#btn-issue-detail-finish').addClass('hidden');
       $('#btn-issue-detail-start').removeClass('hidden');
     }
+  }
+
+  function renderIssueComments(comments) {
+    if (!comments || comments.length === 0) return '';
+
+    var html = '<div class="mt-4 border-t border-gray-700 pt-3">' +
+      '<div class="text-xs font-medium text-gray-400 mb-2">Comments (' + comments.length + ')</div>';
+
+    comments.forEach(function(comment) {
+      html += '<div class="mb-3 pl-3 border-l-2 border-gray-700">' +
+        '<div class="text-xs text-gray-500">' + escapeHtml(comment.author) +
+          ' &middot; ' + new Date(comment.createdAt).toLocaleDateString() + '</div>' +
+        '<div class="text-sm text-gray-300 mt-1 whitespace-pre-wrap break-words">' + escapeHtml(comment.body) + '</div>' +
+      '</div>';
+    });
+
+    return html + '</div>';
+  }
+
+  function renderIssueDetail(detail) {
+    var issue = detail.issue;
+    renderIssueDetailButtons(issue);
 
     var bodyHtml = issue.body
       ? '<div class="text-sm text-gray-300 whitespace-pre-wrap break-words">' + escapeHtml(issue.body) + '</div>'
@@ -301,24 +328,7 @@
       (issue.milestone ? ' &middot; Milestone: ' + escapeHtml(issue.milestone) : '') +
     '</div>';
 
-    var commentsHtml = '';
-
-    if (comments && comments.length > 0) {
-      commentsHtml = '<div class="mt-4 border-t border-gray-700 pt-3">' +
-        '<div class="text-xs font-medium text-gray-400 mb-2">Comments (' + comments.length + ')</div>';
-
-      comments.forEach(function(comment) {
-        commentsHtml += '<div class="mb-3 pl-3 border-l-2 border-gray-700">' +
-          '<div class="text-xs text-gray-500">' + escapeHtml(comment.author) +
-            ' &middot; ' + new Date(comment.createdAt).toLocaleDateString() + '</div>' +
-          '<div class="text-sm text-gray-300 mt-1 whitespace-pre-wrap break-words">' + escapeHtml(comment.body) + '</div>' +
-        '</div>';
-      });
-
-      commentsHtml += '</div>';
-    }
-
-    $('#issue-detail-body').html(labelsHtml + metaHtml + bodyHtml + commentsHtml);
+    $('#issue-detail-body').html(labelsHtml + metaHtml + bodyHtml + renderIssueComments(detail.comments));
   }
 
   function detectBranchType(labels) {
@@ -840,6 +850,116 @@
       })
       .fail(function() {
         showToast('Failed to close issue', 'error');
+      });
+  }
+
+  function openCreateIssueModal() {
+    // Reset form
+    $('#create-issue-title').val('');
+    $('#create-issue-body').val('');
+    $('#create-issue-labels').html('<span class="text-gray-500">Loading...</span>');
+    $('#create-issue-assignees').html('<span class="text-gray-500">Loading...</span>');
+    $('#create-issue-milestone').html('<option value="">None</option>');
+
+    openModal('modal-create-issue');
+
+    // Load metadata in parallel
+    var projectId = state.currentProject ? state.currentProject.id : null;
+
+    if (!projectId || !cachedRepoId[projectId]) return;
+
+    var repo = cachedRepoId[projectId];
+    loadCheckboxMetadata(api.getGitHubLabels(repo), '#create-issue-labels', 'name', 'name');
+    loadCheckboxMetadata(api.getGitHubCollaborators(repo), '#create-issue-assignees', 'login', 'login');
+    loadMilestoneOptions(repo);
+  }
+
+  function loadCheckboxMetadata(promise, selector, valueKey, displayKey) {
+    promise
+      .done(function(items) { renderCheckboxList(selector, items, valueKey, displayKey); })
+      .fail(function() { $(selector).html('<span class="text-red-400">Failed to load</span>'); });
+  }
+
+  function loadMilestoneOptions(repo) {
+    api.getGitHubMilestones(repo)
+      .done(function(milestones) {
+        var html = '<option value="">None</option>';
+
+        for (var i = 0; i < milestones.length; i++) {
+          var m = milestones[i];
+          html += '<option value="' + escapeHtml(m.title) + '">' + escapeHtml(m.title) + '</option>';
+        }
+
+        $('#create-issue-milestone').html(html);
+      });
+  }
+
+  function renderCheckboxList(selector, items, valueKey, displayKey) {
+    if (!items || items.length === 0) {
+      $(selector).html('<span class="text-gray-500 italic">None available</span>');
+      return;
+    }
+
+    var html = '';
+
+    for (var i = 0; i < items.length; i++) {
+      var item = items[i];
+      var val = item[valueKey] || '';
+      var label = item[displayKey] || val;
+      html += '<label class="flex items-center gap-1.5 py-0.5 cursor-pointer hover:text-gray-200">' +
+        '<input type="checkbox" value="' + escapeHtml(val) + '" class="rounded border-gray-500">' +
+        '<span>' + escapeHtml(label) + '</span>' +
+        '</label>';
+    }
+
+    $(selector).html(html);
+  }
+
+  function getCheckedValues(containerSelector) {
+    var values = [];
+    $(containerSelector).find('input[type="checkbox"]:checked').each(function() {
+      values.push($(this).val());
+    });
+    return values;
+  }
+
+  function submitNewIssue() {
+    var title = $('#create-issue-title').val().trim();
+
+    if (!title) {
+      showToast('Title is required', 'error');
+      $('#create-issue-title').focus();
+      return;
+    }
+
+    var projectId = state.currentProject ? state.currentProject.id : null;
+
+    if (!projectId || !cachedRepoId[projectId]) return;
+
+    var repo = cachedRepoId[projectId];
+    var data = {
+      repo: repo,
+      title: title,
+      body: $('#create-issue-body').val().trim(),
+      labels: getCheckedValues('#create-issue-labels'),
+      assignees: getCheckedValues('#create-issue-assignees'),
+      milestone: $('#create-issue-milestone').val() || undefined,
+    };
+
+    var $btn = $('#btn-create-issue-submit');
+    $btn.prop('disabled', true).text('Creating...');
+
+    api.createGitHubIssue(data)
+      .done(function(issue) {
+        showToast('Issue #' + issue.number + ' created', 'success');
+        closeModal('modal-create-issue');
+        loadIssues();
+      })
+      .fail(function() {
+        showToast('Failed to create issue', 'error');
+      })
+      .always(function() {
+        $btn.prop('disabled', false).text('Create Issue');
       });
   }
 

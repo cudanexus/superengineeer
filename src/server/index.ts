@@ -3,7 +3,7 @@ import { Server, createServer } from 'http';
 import fs from 'fs';
 import path from 'path';
 import { AppConfig } from '../config';
-import { createApiRouter, getAgentManager, getRoadmapGenerator, getShellService, getRalphLoopService, getConversationRepository, getProjectRepository, setWebSocketServer } from '../routes';
+import { createApiRouter, getAgentManager, getRoadmapGenerator, getShellService, getRalphLoopService, getConversationRepository, getProjectRepository, setWebSocketServer, getRunProcessManager } from '../routes';
 import { createAuthRouter } from '../routes/auth';
 import { DefaultWebSocketServer, ProjectWebSocketServer } from '../websocket';
 import { createErrorHandler, formatAccessibleUrls } from '../utils';
@@ -220,7 +220,14 @@ export class ExpressHttpServer implements HttpServer {
   }
 
   async stop(): Promise<void> {
-    // Stop all agents first
+    // Shutdown run config processes
+    const runProcessManager = getRunProcessManager();
+
+    if (runProcessManager) {
+      await runProcessManager.shutdown();
+    }
+
+    // Stop all agents
     const agentManager = getAgentManager();
 
     if (agentManager) {
@@ -260,12 +267,15 @@ export class ExpressHttpServer implements HttpServer {
       return;
     }
 
+    const runProcessManager = getRunProcessManager();
+
     this.wsServer = new DefaultWebSocketServer({
       agentManager,
       roadmapGenerator: roadmapGenerator || undefined,
       authService: this.authService,
       shellService: shellService || undefined,
       ralphLoopService: ralphLoopService || undefined,
+      runProcessManager: runProcessManager || undefined,
       conversationRepository: getConversationRepository() || undefined,
       projectRepository: getProjectRepository() || undefined,
     });

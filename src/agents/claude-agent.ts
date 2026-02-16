@@ -54,6 +54,7 @@ export interface ClaudeAgent {
   start(instructions: string): void;
   stop(): Promise<void>;
   sendInput(input: string): void;
+  sendToolResult(toolUseId: string, content: string): void;
   removeQueuedMessage(index: number): boolean;
   on<K extends keyof ClaudeAgentEvents>(event: K, listener: ClaudeAgentEvents[K]): void;
   off<K extends keyof ClaudeAgentEvents>(event: K, listener: ClaudeAgentEvents[K]): void;
@@ -66,6 +67,7 @@ export interface ClaudeAgentEvents {
   waitingForInput: (status: WaitingStatus) => void;
   sessionNotFound: (sessionId: string) => void;
   exitPlanMode: (planContent: string) => void;
+  enterPlanMode: () => void;
 }
 
 // Export alias for backward compatibility
@@ -392,6 +394,36 @@ export class DefaultClaudeAgent implements ClaudeAgent {
     this.processNextQueuedInput();
   }
 
+  sendToolResult(toolUseId: string, content: string): void {
+    if (!this.processManager.isRunning()) {
+      throw new Error('Agent is not running');
+    }
+
+    const jsonMessage = JSON.stringify({
+      type: 'user',
+      message: {
+        role: 'user',
+        content: [{ type: 'tool_result', tool_use_id: toolUseId, content }],
+      },
+    });
+    const messageToSend = jsonMessage + '\n';
+
+    this.logger.info('STDIN >>> Sending tool result', {
+      toolUseId,
+      contentLength: content.length,
+    });
+
+    const success = this.processManager.sendInput(messageToSend);
+
+    if (success) {
+      this._waitingVersion++;
+      this.emitter.emit('waitingForInput', {
+        isWaiting: false,
+        version: this._waitingVersion,
+      });
+    }
+  }
+
   removeQueuedMessage(index: number): boolean {
     if (index < 0 || index >= this.inputQueue.length) {
       return false;
@@ -474,6 +506,11 @@ export class DefaultClaudeAgent implements ClaudeAgent {
     this.streamHandler.on('exitPlanMode', (planContent: string) => {
       this.logger.info('ExitPlanMode received', { planContentLength: planContent.length });
       this.emitter.emit('exitPlanMode', planContent);
+    });
+
+    this.streamHandler.on('enterPlanMode', () => {
+      this.logger.info('EnterPlanMode received');
+      this.emitter.emit('enterPlanMode');
     });
 
     // Forward process manager events

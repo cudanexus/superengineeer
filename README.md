@@ -185,6 +185,7 @@ Chat with Claude in real-time. The agent auto-starts when you send your first me
 - Send follow-up messages naturally
 - Toggle permission mode (Plan/Accept Edits) at runtime
 - Plan mode with approve/reject/request changes options
+- **Plan Mode Auto-Continue**: When Claude calls `EnterPlanMode`, the agent automatically restarts in plan mode and sends "Continue" so work proceeds without manual intervention
 - Per-project model selection (Claude Sonnet 4/Opus 4/Opus 4.5/Haiku)
 
 #### Ralph Loop Mode (Advanced)
@@ -205,7 +206,7 @@ Access via the Ralph Loop tab when an agent is running.
 
 - **Add Projects**: Point to any directory with a codebase
 - **Import from GitHub**: Browse and search your GitHub repos, clone directly into Claudito as a project
-- **GitHub Issues**: Browse project issues with filters, "Start Working" sends issue as agent prompt, "Add to Roadmap" creates a task, close issues and add comments
+- **GitHub Issues**: Browse project issues with filters, create new issues (with labels, assignees, milestones), "Start Working" sends issue as agent prompt, "Add to Roadmap" creates a task, close issues and add comments
 - **GitHub PRs**: Create PRs with auto-generated title/description from conversation history and diff, browse PRs with state filters, view PR detail with reviews and comments, "Fix PR Feedback" sends review feedback as agent prompt
 - **Multi-Project Support**: Manage multiple projects simultaneously
 - **Concurrent Execution**: Run multiple agents at once (configurable limit)
@@ -225,9 +226,9 @@ Claudito includes built-in authentication to protect your agent manager:
 
 | Feature | Description |
 |---------|-------------|
-| **Tabbed Interface** | Switch between Agent Output, Project Files, Shell, Git, and Ralph Loop |
+| **Tabbed Interface** | Switch between Agent Output, Project Files, Shell, Git, Ralph Loop, and Run Configs |
 | **Shell Terminal** | Full PTY terminal with directory restriction to project folder |
-| **File Browser** | Browse, view, edit, create, delete files and folders |
+| **File Browser** | Browse, view, edit, create, delete files and folders. Folder browser includes a "New Folder" button for creating directories inline while browsing |
 | **Syntax Highlighting** | 30+ languages supported via highlight.js |
 | **Tool Visualization** | See Claude's tool usage with icons and arguments |
 | **Code Diffs** | Side-by-side diff view with word-level inline change highlighting |
@@ -289,11 +290,43 @@ A full PTY-based terminal integrated into the UI:
 
 > **Security Note**: The shell terminal is **automatically disabled** when the server is bound to all interfaces (`0.0.0.0`). This prevents remote shell access. To enable shell on all interfaces, set `CLAUDITO_FORCE_SHELL_ENABLED=1` (not recommended).
 
+### Run Configurations
+
+Per-project named shell commands (similar to JetBrains IDE run configurations) with live output streaming:
+
+| Feature | Description |
+|---------|-------------|
+| **Named Commands** | Define reusable shell commands per project (e.g. dev server, test watcher) |
+| **Import from Project** | Scan package.json, Cargo.toml, go.mod, Makefile, pyproject.toml and import configs |
+| **Live Output** | xterm.js terminal per configuration with full color and ANSI support |
+| **Start/Stop** | One-click start and stop with real-time status badges |
+| **Auto-Restart** | Automatically restart on failure with configurable delay and max retries |
+| **Pre-Launch Chains** | Run dependent configurations before starting (with cycle detection) |
+| **Environment Variables** | Custom env vars per configuration |
+| **Working Directory** | Relative to project root, validated to prevent path traversal |
+| **Shell Override** | Use a specific shell (defaults to cmd.exe on Windows, $SHELL on Unix) |
+
+Access via the **Run** tab in the main UI.
+
+### Inventify - Project Idea Generator
+
+Generate new project ideas and have them automatically built:
+
+1. Click the lightbulb icon in the sidebar
+2. Select project types (Web App, API, CLI, Desktop, Mobile, Library, Extension)
+3. Select themes (Games, Enterprise, Dev Tools, Education, Social, Finance, Health, Creative, Data, IoT)
+4. Click "Generate!" -- a one-off agent brainstorms **5 unique project ideas**, each with a name, tagline, and description
+5. Browse the 5 idea cards and click one to select it
+6. On selection: creates the project directory, writes `doc/plan.md` with a detailed plan, registers in Claudito, and starts a Ralph Loop to build it
+
+Configure the output folder in Settings > General > Inventify Folder.
+
 ### Additional Features
 
 - **CLAUDE.md Editor**: Edit global and project-specific CLAUDE.md files with preview and AI-powered optimization
 - **One-Off Agent Sub-Tabs**: Background agent tasks appear as interactive sub-tabs in Agent Output with full tool rendering, per-tab toolbar (Tasks with badge, Search with highlighting, Permission Mode, Model selector, Font Size controls), per-tab input matching main tab (rows=3, cancel+send buttons, hint text), and agent lifecycle management. Shared controls (Permission Mode, Model, Font Size) sync across all tabs. Optimization uses direct file editing via Claude's Edit tool
 - **Conversation History**: Browse, restore, and rename previous conversations
+- **AskUserQuestion Support**: Interactive UI for Claude's AskUserQuestion tool — renders questions with clickable options, "Other" for custom text, multi-question support, answers sent as tool_result
 - **Session Resumption**: Resume Claude sessions across restarts
 - **Debug Panel**: View logs, Claude I/O, process info, and troubleshoot issues
 - **Optimizations Check**: Detect missing or oversized CLAUDE.md files
@@ -319,6 +352,7 @@ Access settings via the gear icon in the UI sidebar.
 | `agentPromptTemplate` | Template for agent instructions | (see below) |
 | `defaultModel` | Default Claude model for agents | `claude-opus-4-6` |
 | `appendSystemPrompt` | Custom text appended to Claude's system prompt | `""` |
+| `inventifyFolder` | Parent directory where Inventify creates new projects | `""` |
 
 ### Permission Configuration
 
@@ -476,8 +510,12 @@ GET  /api/integrations/github/repos/search        # Search repos (?query=&langua
 POST /api/integrations/github/clone               # Clone repo and register as project
 GET  /api/integrations/github/issues              # List issues (?repo=&state=&label=&assignee=&milestone=&limit=)
 GET  /api/integrations/github/issues/:num         # Issue detail with comments (?repo=)
+POST /api/integrations/github/issues              # Create issue (body: {repo, title, body?, labels?, assignees?, milestone?})
 POST /api/integrations/github/issues/:num/close   # Close issue (?repo=)
 POST /api/integrations/github/issues/:num/comment # Add comment (?repo=, body: {body})
+GET  /api/integrations/github/labels              # List repo labels (?repo=)
+GET  /api/integrations/github/milestones          # List repo milestones (?repo=)
+GET  /api/integrations/github/collaborators       # List repo collaborators (?repo=)
 POST /api/integrations/github/pr                  # Create PR (body: repo, title, body, base?, draft?)
 GET  /api/integrations/github/pulls               # List PRs (?repo=&state=&limit=)
 GET  /api/integrations/github/pulls/:num          # PR detail with reviews & comments (?repo=)
@@ -502,6 +540,7 @@ POST   /api/projects/:id/agent/oneoff/:oneOffId/send  # Send message to one-off 
 GET    /api/projects/:id/agent/oneoff/:oneOffId/status # Get one-off agent status
 GET    /api/projects/:id/agent/oneoff/:oneOffId/context # Get one-off agent context
 POST   /api/projects/:id/agent/send        # Send message
+POST   /api/projects/:id/agent/answer     # Answer AskUserQuestion (tool_result)
 GET    /api/projects/:id/agent/status      # Get status
 GET    /api/projects/:id/agent/context     # Get context usage
 ```
@@ -573,6 +612,27 @@ POST   /api/projects/:id/shell/resize      # Resize terminal
 POST   /api/projects/:id/shell/stop        # Stop shell session
 ```
 
+### Run Configurations
+
+```
+GET    /api/projects/:id/run-configs                  # List all configs
+GET    /api/projects/:id/run-configs/importable       # Scan project files for importable configs
+POST   /api/projects/:id/run-configs                  # Create config
+PUT    /api/projects/:id/run-configs/:configId        # Update config
+DELETE /api/projects/:id/run-configs/:configId        # Delete config
+POST   /api/projects/:id/run-configs/:configId/start  # Start process
+POST   /api/projects/:id/run-configs/:configId/stop   # Stop process
+GET    /api/projects/:id/run-configs/:configId/status  # Get process status
+```
+
+### Inventify
+
+```
+POST   /api/projects/inventify/start       # Start brainstorming (body: projectTypes[], themes[])
+GET    /api/projects/inventify/ideas       # Get generated idea cards (5 ideas)
+POST   /api/projects/inventify/select      # Select an idea to build (body: ideaIndex or idea object)
+```
+
 ### Authentication
 
 ```
@@ -640,6 +700,8 @@ ws.send(JSON.stringify({ type: 'subscribe', projectId: 'your-project-id' }));
 // - oneoff_message: One-off agent output (routed to sub-tabs)
 // - oneoff_status: One-off agent status changes
 // - oneoff_waiting: One-off agent waiting for input
+// - run_config_output: Run config process output (configId, data)
+// - run_config_status: Run config process status change (configId, status)
 ```
 
 ## Development

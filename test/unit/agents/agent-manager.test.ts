@@ -399,7 +399,7 @@ describe('DefaultAgentManager', () => {
         { isWaiting: true, version: 1 }
       );
 
-      expect(listener).toHaveBeenCalledWith('test-project', true, 1);
+      expect(listener).toHaveBeenCalledWith('test-project', { isWaiting: true, version: 1 });
     });
   });
 
@@ -1314,6 +1314,130 @@ describe('DefaultAgentManager', () => {
           mcpServers: [],
         })
       );
+    });
+  });
+
+  describe('dangerouslySkipPermissions', () => {
+    it('should pass skipPermissions when settings defaultMode is plan but runtime mode is acceptEdits', async () => {
+      // Simulate: settings has defaultMode='plan' + dangerouslySkipPermissions=true
+      // UI starts agent with permissionMode='acceptEdits'
+      mockSettingsRepo.get.mockResolvedValue({
+        ...mockSettingsRepo.get.mock.results[0]?.value || await mockSettingsRepo.get(),
+        claudePermissions: {
+          dangerouslySkipPermissions: true,
+          allowedTools: [],
+          defaultMode: 'plan',
+          allowRules: ['Read', 'Write'],
+          denyRules: [],
+          askRules: [],
+        },
+      });
+
+      // Permission generator returns what it would for defaultMode='plan' + skip=true:
+      // skipPermissions=false because the generator checks defaultMode, not runtime mode
+      mockPermissionGenerator.generateArgs.mockReturnValue({
+        allowedTools: ['Read', 'Write'],
+        disallowedTools: [],
+        permissionMode: 'plan',
+        skipPermissions: false,
+      });
+
+      await agentManager.startInteractiveAgent('test-project', {
+        permissionMode: 'acceptEdits',
+      });
+
+      expect(mockAgentFactory.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          permissions: expect.objectContaining({
+            skipPermissions: true,
+            allowedTools: [],
+            disallowedTools: [],
+          }),
+        })
+      );
+    });
+
+    it('should NOT pass skipPermissions when effective mode is plan', async () => {
+      mockSettingsRepo.get.mockResolvedValue({
+        ...mockSettingsRepo.get.mock.results[0]?.value || await mockSettingsRepo.get(),
+        claudePermissions: {
+          dangerouslySkipPermissions: true,
+          allowedTools: [],
+          defaultMode: 'plan',
+          allowRules: ['Read'],
+          denyRules: [],
+          askRules: [],
+        },
+      });
+
+      mockPermissionGenerator.generateArgs.mockReturnValue({
+        allowedTools: ['Read'],
+        disallowedTools: [],
+        permissionMode: 'plan',
+        skipPermissions: false,
+      });
+
+      // No runtime override — effective mode stays 'plan'
+      await agentManager.startInteractiveAgent('test-project');
+
+      expect(mockAgentFactory.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          permissions: expect.objectContaining({
+            skipPermissions: false,
+            permissionMode: 'plan',
+          }),
+        })
+      );
+    });
+
+    it('should pass skipPermissions when permissionGenerator already returns it', async () => {
+      // Standard case: defaultMode=acceptEdits + skip=true, generator returns skipPermissions=true
+      mockPermissionGenerator.generateArgs.mockReturnValue({
+        allowedTools: [],
+        disallowedTools: [],
+        skipPermissions: true,
+      });
+
+      await agentManager.startInteractiveAgent('test-project');
+
+      expect(mockAgentFactory.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          permissions: expect.objectContaining({
+            skipPermissions: true,
+            allowedTools: [],
+            disallowedTools: [],
+          }),
+        })
+      );
+    });
+  });
+
+  describe('handleEnterPlanMode', () => {
+    it('should stop and restart agent with plan mode when enterPlanMode fires', async () => {
+      await agentManager.startInteractiveAgent('test-project');
+
+      // Trigger enterPlanMode event on the mock agent
+      const agent = mockAgent as unknown as { _emit: (event: string, ...args: unknown[]) => void };
+      agent._emit('enterPlanMode');
+
+      // Wait for async handling
+      await new Promise(resolve => setTimeout(resolve, 600));
+
+      // Agent should have been stopped (stop called from agent exit + stopAgent)
+      expect(mockAgent.stop).toHaveBeenCalled();
+
+      // Should have restarted with plan mode - factory.create called again
+      expect(mockAgentFactory.create).toHaveBeenCalledTimes(2);
+      expect(mockAgentFactory.create).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          permissions: expect.objectContaining({
+            permissionMode: 'plan',
+          }),
+        })
+      );
+
+      // Should have sent 'Continue' as initial message
+      expect(mockAgent.start).toHaveBeenLastCalledWith('Continue');
     });
   });
 });

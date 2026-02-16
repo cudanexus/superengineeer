@@ -17,7 +17,8 @@ import { AgentManager } from '../../agents';
 import { RalphLoopService } from '../../services/ralph-loop/types';
 import { ConnectedClient } from '../../websocket/websocket-server';
 import { ProjectDiscoveryService } from '../../services/project-discovery';
-import { ClaudeOptimizationService } from '../../services';
+import { ClaudeOptimizationService, RunConfigurationService, RunConfigImportService, InventifyService } from '../../services';
+import { RunProcessManager } from '../../services/run-config/run-process-types';
 
 // Router dependencies interface
 export interface ProjectRouterDependencies {
@@ -36,6 +37,10 @@ export interface ProjectRouterDependencies {
   ralphLoopService?: RalphLoopService | null;
   projectDiscoveryService?: ProjectDiscoveryService | null;
   optimizationService?: ClaudeOptimizationService;
+  runConfigurationService?: RunConfigurationService;
+  runProcessManager?: RunProcessManager;
+  runConfigImportService?: RunConfigImportService;
+  inventifyService?: InventifyService;
 }
 
 // Request body interfaces
@@ -169,6 +174,11 @@ export interface RalphLoopStartBody {
 
 export interface ModelOverrideBody {
   model?: string | null;
+}
+
+export interface InventifyStartBody {
+  projectTypes?: string[];
+  themes?: string[];
 }
 
 // Response/shared types

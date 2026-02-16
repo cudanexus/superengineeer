@@ -51,9 +51,20 @@ export interface ContextUsage {
   percentUsed: number;
 }
 
+export interface AskUserQuestionData {
+  toolId: string;
+  questions: Array<{
+    question: string;
+    header?: string;
+    options: Array<{ label: string; description?: string }>;
+    multiSelect?: boolean;
+  }>;
+}
+
 export interface WaitingStatus {
   isWaiting: boolean;
   version: number;
+  askUserQuestion?: AskUserQuestionData;
 }
 
 export interface AgentMessage {

@@ -155,6 +155,12 @@ describe('AgentManager Lifecycle Tests', () => {
       }
     }
 
+    sendToolResult(_toolUseId: string, _content: string): void {
+      if (this.mode !== 'interactive') {
+        throw new Error('Agent is not in interactive mode');
+      }
+    }
+
     removeQueuedMessage(index: number): boolean {
       if (index >= 0 && index < this.queuedMessages.length) {
         this.queuedMessages.splice(index, 1);
@@ -876,7 +882,7 @@ describe('AgentManager Lifecycle Tests', () => {
 
       mockAgent.simulateWaiting(true, 1);
 
-      expect(waitingListener).toHaveBeenCalledWith(projectId, true, 1);
+      expect(waitingListener).toHaveBeenCalledWith(projectId, { isWaiting: true, version: 1 });
       expect(agentManager.isWaitingForInput(projectId)).toBe(true);
       expect(agentManager.getWaitingVersion(projectId)).toBe(1);
     });

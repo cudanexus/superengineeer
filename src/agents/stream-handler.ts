@@ -379,6 +379,7 @@ export class StreamHandler extends EventEmitter {
     }
 
     this.hasEmittedEnterPlanMode = true;
+    this.emit('enterPlanMode');
     this.emitPlanModeMessage('enter');
   }
 
@@ -417,11 +418,30 @@ export class StreamHandler extends EventEmitter {
     // Emit as a tool_use message so the frontend can render it properly
     this.emitToolMessage('AskUserQuestion', input, toolId);
 
-    // Also emit the waiting for input state
+    // Build question data from tool input
+    const questions = Array.isArray(input.questions)
+      ? (input.questions as Array<{
+          question?: string;
+          header?: string;
+          options?: Array<{ label?: string; description?: string }>;
+          multiSelect?: boolean;
+        }>).map(q => ({
+          question: q.question || '',
+          header: q.header,
+          options: Array.isArray(q.options) ? q.options.map(o => ({
+            label: o.label || '',
+            description: o.description,
+          })) : [],
+          multiSelect: q.multiSelect,
+        }))
+      : [];
+
+    // Also emit the waiting for input state with question data
     this.waitingVersion++;
     this.emit('waitingForInput', {
       isWaiting: true,
       version: this.waitingVersion,
+      askUserQuestion: { toolId, questions },
     });
   }
 

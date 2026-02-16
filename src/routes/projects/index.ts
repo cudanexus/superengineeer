@@ -7,6 +7,8 @@ import { createShellRouter } from './shell';
 import { createRalphLoopRouter } from './ralph-loop';
 import { createGitRouter } from './git';
 import { createOptimizationRouter } from './optimization';
+import { createRunConfigsRouter } from './run-configs';
+import { createInventifyRouter } from './inventify';
 
 // Re-export types for backward compatibility
 export * from './types';
@@ -16,6 +18,9 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
   const router = Router();
 
   // Mount sub-routers
+  // Inventify must be before /:id routes to avoid 'inventify' being treated as project ID
+  router.use('/inventify', createInventifyRouter(deps));
+
   // Core routes are mounted at root level
   router.use('/', createCoreRouter(deps));
 
@@ -27,6 +32,7 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
   router.use('/:id/shell', createShellRouter(deps));
   router.use('/:id/ralph-loop', createRalphLoopRouter(deps));
   router.use('/:id/git', createGitRouter(deps));
+  router.use('/:id/run-configs', createRunConfigsRouter(deps));
   router.use('/:id', createOptimizationRouter(deps));
 
   return router;

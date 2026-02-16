@@ -15,7 +15,14 @@ import {
   DefaultInstructionGenerator,
   ClaudeOptimizationService,
   DefaultDataWipeService,
+  DefaultRunConfigurationService,
+  RunConfigurationService,
+  DefaultRunProcessManager,
+  DefaultRunConfigImportService,
+  InventifyService,
+  DefaultInventifyService,
 } from '../services';
+import { RunProcessManager } from '../services/run-config/run-process-types';
 import { createGitService } from '../services/git-service';
 import { createShellService, ShellService } from '../services/shell-service';
 import { createGitHubCLIService, GitHubCLIService } from '../services/github-cli-service';
@@ -42,6 +49,9 @@ let sharedWebSocketServer: ProjectWebSocketServer | null = null;
 let sharedProjectDiscoveryService: ProjectDiscoveryService | null = null;
 let sharedOptimizationService: ClaudeOptimizationService | null = null;
 let sharedGitHubCLIService: GitHubCLIService | null = null;
+let sharedRunConfigurationService: RunConfigurationService | null = null;
+let sharedRunProcessManager: RunProcessManager | null = null;
+let sharedInventifyService: InventifyService | null = null;
 
 export interface ApiRouterDependencies {
   agentManager?: AgentManager;
@@ -92,6 +102,7 @@ export function createApiRouter(deps: ApiRouterDependencies = {}): Router {
       status: 'ok',
       version: packageJson.version,
       timestamp: new Date().toISOString(),
+      shellEnabled: deps.shellEnabled !== false,
     });
   });
 
@@ -239,6 +250,20 @@ export function createApiRouter(deps: ApiRouterDependencies = {}): Router {
   // Optimization service
   const optimizationService = getOrCreateOptimizationService(agentManager);
 
+  // Run configuration service, process manager & import service
+  const runConfigurationService = getOrCreateRunConfigurationService(projectRepository);
+  const runProcessManager = getOrCreateRunProcessManager(runConfigurationService);
+  const runConfigImportService = new DefaultRunConfigImportService();
+
+  // Inventify service
+  const ralphLoopService = getOrCreateRalphLoopService(projectRepository, settingsRepository);
+  const inventifyService = getOrCreateInventifyService(
+    agentManager,
+    projectService,
+    ralphLoopService,
+    settingsRepository,
+  );
+
   // Project routes
   router.use('/projects', createProjectsRouter({
     projectRepository,
@@ -253,9 +278,13 @@ export function createApiRouter(deps: ApiRouterDependencies = {}): Router {
     gitService,
     shellService,
     shellEnabled,
-    ralphLoopService: getOrCreateRalphLoopService(projectRepository, settingsRepository),
+    ralphLoopService,
     projectDiscoveryService: getOrCreateProjectDiscoveryService(projectRepository),
     optimizationService,
+    runConfigurationService,
+    runProcessManager,
+    runConfigImportService,
+    inventifyService,
   }));
 
   return router;
@@ -392,4 +421,57 @@ function getOrCreateOptimizationService(
 
 export function getOptimizationService(): ClaudeOptimizationService | null {
   return sharedOptimizationService;
+}
+
+function getOrCreateRunConfigurationService(
+  projectRepository: FileProjectRepository,
+): RunConfigurationService {
+  if (!sharedRunConfigurationService) {
+    sharedRunConfigurationService = new DefaultRunConfigurationService({
+      projectRepository,
+    });
+  }
+  return sharedRunConfigurationService;
+}
+
+export function getRunConfigurationService(): RunConfigurationService | null {
+  return sharedRunConfigurationService;
+}
+
+function getOrCreateRunProcessManager(
+  runConfigurationService: RunConfigurationService,
+): RunProcessManager {
+  if (!sharedRunProcessManager) {
+    sharedRunProcessManager = new DefaultRunProcessManager({
+      runConfigurationService,
+    });
+  }
+  return sharedRunProcessManager;
+}
+
+export function getRunProcessManager(): RunProcessManager | null {
+  return sharedRunProcessManager;
+}
+
+function getOrCreateInventifyService(
+  agentManager: AgentManager,
+  projectService: DefaultProjectService,
+  ralphLoopService: RalphLoopService,
+  settingsRepository: FileSettingsRepository,
+): InventifyService {
+  if (!sharedInventifyService) {
+    const logger = getLogger('inventify');
+    sharedInventifyService = new DefaultInventifyService({
+      logger,
+      agentManager,
+      projectService,
+      ralphLoopService,
+      settingsRepository,
+    });
+  }
+  return sharedInventifyService;
+}
+
+export function getInventifyService(): InventifyService | null {
+  return sharedInventifyService;
 }

@@ -225,6 +225,11 @@
             <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
           </svg>
         </button>
+        <button id="btn-inventify" title="Inventify - Generate project idea" class="bg-yellow-600 hover:bg-yellow-500 text-white py-1.5 px-2 rounded flex items-center justify-center text-sm transition-colors">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.674M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+          </svg>
+        </button>
       </div>
 
       <!-- Project Search -->
@@ -341,6 +346,13 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
               </svg>
               <span class="text-xs md:text-sm">Shell</span>
+            </button>
+            <button id="tab-run-configs" class="tab-button py-2 px-4 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 flex flex-col items-center md:flex-row md:justify-start">
+              <svg class="w-4 h-4 mb-1 md:mb-0 md:inline-block md:mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+              <span class="text-xs md:text-sm">Run</span>
             </button>
           </div>
 
@@ -829,6 +841,52 @@
             <div id="shell-terminal" class="flex-1 p-2 bg-gray-900"></div>
           </div>
 
+          <!-- Run Configs Tab Content -->
+          <div id="tab-content-run-configs" class="tab-content flex-1 overflow-hidden hidden flex flex-col">
+            <!-- Toolbar -->
+            <div class="flex items-center justify-between gap-2 p-2 border-b border-gray-700">
+              <div class="flex items-center gap-2">
+                <button id="btn-add-run-config" class="bg-purple-600 hover:bg-purple-700 text-white py-1 px-3 rounded flex items-center gap-1 text-xs transition-colors">
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                  </svg>
+                  Add
+                </button>
+                <button id="btn-import-run-config" class="bg-gray-600 hover:bg-gray-500 text-white py-1 px-3 rounded flex items-center gap-1 text-xs transition-colors">
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                  </svg>
+                  Import
+                </button>
+                <button id="btn-clear-rc-output" class="bg-gray-600 hover:bg-gray-700 text-white py-1 px-3 rounded flex items-center gap-1 text-xs transition-colors">
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                  </svg>
+                  Clear
+                </button>
+              </div>
+              <span class="text-xs text-gray-500">Run Configurations</span>
+            </div>
+            <!-- Split Layout -->
+            <div class="flex flex-1 overflow-hidden">
+              <!-- Config List (left) -->
+              <div class="w-64 flex-shrink-0 border-r border-gray-700 overflow-y-auto p-2 space-y-2">
+                <div id="rc-config-list" class="space-y-2">
+                  <div class="text-gray-500 text-sm text-center py-8">No run configurations yet. Click "Add" to create one.</div>
+                </div>
+              </div>
+              <!-- Output Area (right) -->
+              <div class="flex-1 flex flex-col overflow-hidden">
+                <!-- Output Tabs Bar -->
+                <div id="rc-output-tabs" class="flex gap-1 px-2 pt-1 bg-gray-800 border-b border-gray-700 overflow-x-auto flex-shrink-0"></div>
+                <!-- Terminal Container -->
+                <div id="rc-terminal-container" class="flex-1 bg-gray-900 overflow-hidden relative">
+                  <div class="text-gray-500 text-sm text-center py-8">Select a configuration to view its output.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
         </div>
 
         <!-- Input Area for Interactive Mode -->
@@ -951,6 +1009,7 @@
           <div class="flex items-center justify-between gap-3">
             <div id="selected-path" class="text-xs truncate flex-1"></div>
             <div class="flex gap-2 flex-shrink-0">
+              <button type="button" id="btn-new-folder" class="px-3 py-1.5 text-sm text-gray-300 hover:text-white border border-gray-600 hover:border-gray-500 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed" disabled>New Folder</button>
               <button type="button" class="modal-close px-3 py-1.5 text-sm text-gray-300 hover:text-white transition-colors">Cancel</button>
               <button type="button" id="btn-select-folder" class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded text-sm transition-colors">Select This Folder</button>
             </div>
@@ -1264,6 +1323,14 @@
                 </label>
                 <p class="text-xs text-gray-500 ml-6">Get notified when an agent is waiting for your input</p>
               </div>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-300 mb-1">Inventify Folder</label>
+              <div class="flex items-center gap-2">
+                <input type="text" name="inventifyFolder" id="input-inventify-folder" class="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-purple-500" placeholder="e.g. C:\Projects\inventify">
+                <button type="button" id="btn-settings-inventify-browse" class="bg-gray-600 hover:bg-gray-500 text-white px-2 py-1.5 rounded text-xs transition-colors">Browse</button>
+              </div>
+              <p class="text-xs text-gray-500 mt-1">Parent folder where Inventify creates new project directories</p>
             </div>
             <div class="border-t border-gray-700 pt-4 mt-4">
               <label class="block text-xs font-medium text-gray-300 mb-2">GitHub Integration</label>
@@ -2343,6 +2410,112 @@
     </div>
   </div>
 
+  <!-- Run Config Editor Modal -->
+  <div id="modal-run-config-editor" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-lg max-h-[80vh] flex flex-col">
+        <div class="p-3 border-b border-gray-700 flex items-center justify-between flex-shrink-0">
+          <h3 id="rc-editor-title" class="font-semibold text-white">New Run Configuration</h3>
+          <button class="modal-close text-gray-400 hover:text-white">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        <div class="p-3 overflow-y-auto flex-1 space-y-3">
+          <input type="hidden" id="rc-editor-config-id">
+          <!-- Name -->
+          <div>
+            <label class="block text-xs font-medium text-gray-400 mb-1">Name</label>
+            <input type="text" id="input-rc-name" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm text-gray-100 focus:outline-none focus:border-purple-500" placeholder="e.g. Dev Server">
+          </div>
+          <!-- Command -->
+          <div>
+            <label class="block text-xs font-medium text-gray-400 mb-1">Command</label>
+            <input type="text" id="input-rc-command" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm text-gray-100 focus:outline-none focus:border-purple-500" placeholder="e.g. npm run dev">
+          </div>
+          <!-- Args -->
+          <div>
+            <label class="block text-xs font-medium text-gray-400 mb-1">Arguments <span class="text-gray-500">(space-separated)</span></label>
+            <input type="text" id="input-rc-args" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm text-gray-100 focus:outline-none focus:border-purple-500" placeholder="e.g. --port 3001">
+          </div>
+          <!-- CWD -->
+          <div>
+            <label class="block text-xs font-medium text-gray-400 mb-1">Working Directory <span class="text-gray-500">(relative to project)</span></label>
+            <input type="text" id="input-rc-cwd" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm text-gray-100 focus:outline-none focus:border-purple-500" placeholder="." value=".">
+          </div>
+          <!-- Shell -->
+          <div>
+            <label class="block text-xs font-medium text-gray-400 mb-1">Shell <span class="text-gray-500">(blank = default)</span></label>
+            <input type="text" id="input-rc-shell" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm text-gray-100 focus:outline-none focus:border-purple-500" placeholder="e.g. /bin/bash or cmd.exe">
+          </div>
+          <!-- Environment Variables -->
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <label class="block text-xs font-medium text-gray-400">Environment Variables</label>
+              <button id="btn-add-env-var" class="text-purple-400 hover:text-purple-300 text-xs">+ Add</button>
+            </div>
+            <div id="rc-env-vars" class="space-y-1"></div>
+          </div>
+          <!-- Auto-Restart -->
+          <div class="flex items-center gap-3">
+            <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+              <input type="checkbox" id="input-rc-auto-restart" class="rounded bg-gray-700 border-gray-600 text-purple-500 focus:ring-purple-500">
+              Auto-restart on failure
+            </label>
+          </div>
+          <!-- Restart settings (inline) -->
+          <div class="flex gap-3">
+            <div class="flex-1">
+              <label class="block text-xs font-medium text-gray-400 mb-1">Restart Delay (ms)</label>
+              <input type="number" id="input-rc-restart-delay" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm text-gray-100 focus:outline-none focus:border-purple-500" value="1000" min="100" max="60000">
+            </div>
+            <div class="flex-1">
+              <label class="block text-xs font-medium text-gray-400 mb-1">Max Retries <span class="text-gray-500">(0=∞)</span></label>
+              <input type="number" id="input-rc-restart-max" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm text-gray-100 focus:outline-none focus:border-purple-500" value="5" min="0" max="100">
+            </div>
+          </div>
+          <!-- Pre-Launch Config -->
+          <div>
+            <label class="block text-xs font-medium text-gray-400 mb-1">Pre-Launch Configuration</label>
+            <select id="input-rc-prelaunch" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm text-gray-100 focus:outline-none focus:border-purple-500">
+              <option value="">None</option>
+            </select>
+          </div>
+        </div>
+        <div class="p-3 border-t border-gray-700 flex justify-end gap-2 flex-shrink-0">
+          <button id="btn-cancel-run-config" class="px-3 py-1.5 text-sm text-gray-300 hover:text-white transition-colors">Cancel</button>
+          <button id="btn-save-run-config" class="px-3 py-1.5 text-sm bg-purple-600 hover:bg-purple-700 text-white rounded transition-colors">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Run Config Import Modal -->
+  <div id="modal-run-config-import" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-lg max-h-[80vh] flex flex-col">
+        <div class="p-3 border-b border-gray-700 flex items-center justify-between flex-shrink-0">
+          <h3 class="font-semibold text-white">Import Run Configurations</h3>
+          <button class="modal-close text-gray-400 hover:text-white">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        <div id="rc-import-body" class="p-3 overflow-y-auto flex-1">
+          <div class="text-gray-500 text-sm text-center py-4">Scanning project files...</div>
+        </div>
+        <div class="p-3 border-t border-gray-700 flex justify-end gap-2 flex-shrink-0">
+          <button id="btn-cancel-import-rc" class="px-3 py-1.5 text-sm text-gray-300 hover:text-white transition-colors">Cancel</button>
+          <button id="btn-confirm-import-rc" class="px-3 py-1.5 text-sm bg-purple-600 hover:bg-purple-700 text-white rounded transition-colors hidden">Import Selected</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Search Options Modal -->
   <div id="modal-search" class="modal hidden">
     <div class="modal-backdrop"></div>
@@ -2827,6 +3000,7 @@
             <input type="text" id="issues-filter-label" class="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs flex-1" placeholder="Filter by label...">
             <input type="text" id="issues-filter-assignee" class="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs flex-1" placeholder="Assignee...">
             <button id="btn-issues-refresh" class="bg-gray-600 hover:bg-gray-500 text-white px-2 py-1 rounded text-xs transition-colors">Refresh</button>
+            <button id="btn-new-issue" class="bg-green-600 hover:bg-green-500 text-white px-2 py-1 rounded text-xs transition-colors">+ New Issue</button>
           </div>
         </div>
         <div id="issues-list" class="p-2 overflow-y-auto flex-1">
@@ -2851,6 +3025,47 @@
           <button id="btn-issue-detail-finish" class="bg-green-600 hover:bg-green-500 text-white px-3 py-1.5 rounded text-xs transition-colors hidden">Finish Work</button>
           <button id="btn-issue-detail-roadmap" class="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1.5 rounded text-xs transition-colors">Add to Roadmap</button>
           <button id="btn-issue-detail-start" class="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded text-xs transition-colors">Start Working</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create Issue Modal -->
+  <div id="modal-create-issue" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-lg max-h-[80vh] flex flex-col">
+        <div class="flex items-center justify-between p-3 border-b border-gray-700">
+          <h3 class="text-sm font-semibold">New Issue</h3>
+          <button class="modal-close text-gray-400 hover:text-white">&times;</button>
+        </div>
+        <div class="p-3 overflow-y-auto flex-1 space-y-3">
+          <div>
+            <label class="text-xs text-gray-400 block mb-1">Title <span class="text-red-400">*</span></label>
+            <input type="text" id="create-issue-title" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm" placeholder="Issue title...">
+          </div>
+          <div>
+            <label class="text-xs text-gray-400 block mb-1">Description</label>
+            <textarea id="create-issue-body" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm h-24 resize-y" placeholder="Describe the issue..."></textarea>
+          </div>
+          <div>
+            <label class="text-xs text-gray-400 block mb-1">Labels</label>
+            <div id="create-issue-labels" class="bg-gray-700/50 border border-gray-600 rounded p-2 max-h-28 overflow-y-auto text-xs text-gray-400">Loading...</div>
+          </div>
+          <div>
+            <label class="text-xs text-gray-400 block mb-1">Assignees</label>
+            <div id="create-issue-assignees" class="bg-gray-700/50 border border-gray-600 rounded p-2 max-h-28 overflow-y-auto text-xs text-gray-400">Loading...</div>
+          </div>
+          <div>
+            <label class="text-xs text-gray-400 block mb-1">Milestone</label>
+            <select id="create-issue-milestone" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm">
+              <option value="">None</option>
+            </select>
+          </div>
+        </div>
+        <div class="p-3 border-t border-gray-700 flex justify-end gap-2">
+          <button class="modal-close bg-gray-600 hover:bg-gray-500 text-white px-3 py-1.5 rounded text-xs transition-colors">Cancel</button>
+          <button id="btn-create-issue-submit" class="bg-green-600 hover:bg-green-500 text-white px-3 py-1.5 rounded text-xs transition-colors">Create Issue</button>
         </div>
       </div>
     </div>
@@ -3005,6 +3220,79 @@
     </div>
   </div>
 
+  <!-- Inventify Modal -->
+  <div id="modal-inventify" class="fixed inset-0 z-50 hidden">
+    <div class="modal-backdrop absolute inset-0 bg-black/60"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+      <div class="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-lg flex flex-col max-h-[80vh]">
+        <div class="flex items-center justify-between p-3 border-b border-gray-700">
+          <h3 class="text-sm font-semibold text-yellow-400 flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.674M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+            </svg>
+            Inventify - Project Idea Generator
+          </h3>
+          <button class="modal-close text-gray-400 hover:text-white" onclick="$('#modal-inventify').addClass('hidden')">&times;</button>
+        </div>
+        <div class="p-3 overflow-y-auto flex-1 space-y-4">
+          <div id="inventify-form-sections">
+            <!-- Folder Path -->
+            <div class="mb-4">
+              <label class="block text-xs font-medium text-gray-300 mb-1">Output Folder</label>
+              <div class="flex items-center gap-2">
+                <span id="inventify-folder-path" class="text-sm text-gray-400 truncate flex-1">Not set</span>
+                <button id="btn-inventify-folder-browse" class="bg-gray-700 hover:bg-gray-600 text-white px-2 py-1 rounded text-xs transition-colors">Browse</button>
+              </div>
+              <p id="inventify-folder-warning" class="text-xs text-yellow-400 mt-1 hidden">Set a folder in Settings &gt; General to use Inventify.</p>
+            </div>
+            <!-- Project Types -->
+            <div class="mb-4">
+              <label class="block text-xs font-medium text-gray-300 mb-2">Project Types</label>
+              <div id="inventify-types" class="grid grid-cols-2 gap-1.5">
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="web" class="rounded bg-gray-700 border-gray-600 text-purple-500 focus:ring-purple-500"><span class="text-sm text-gray-300">Web App</span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="api" class="rounded bg-gray-700 border-gray-600 text-purple-500 focus:ring-purple-500"><span class="text-sm text-gray-300">API / Backend</span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="cli" class="rounded bg-gray-700 border-gray-600 text-purple-500 focus:ring-purple-500"><span class="text-sm text-gray-300">CLI Tool</span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="desktop" class="rounded bg-gray-700 border-gray-600 text-purple-500 focus:ring-purple-500"><span class="text-sm text-gray-300">Desktop App</span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="mobile" class="rounded bg-gray-700 border-gray-600 text-purple-500 focus:ring-purple-500"><span class="text-sm text-gray-300">Mobile App</span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="library" class="rounded bg-gray-700 border-gray-600 text-purple-500 focus:ring-purple-500"><span class="text-sm text-gray-300">Library / Package</span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="extension" class="rounded bg-gray-700 border-gray-600 text-purple-500 focus:ring-purple-500"><span class="text-sm text-gray-300">Browser Extension</span></label>
+              </div>
+              <input id="inventify-custom-types" type="text" placeholder="Custom types (comma-separated)" class="mt-2 w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-purple-500">
+            </div>
+            <!-- Themes -->
+            <div>
+              <label class="block text-xs font-medium text-gray-300 mb-2">Themes</label>
+              <div id="inventify-themes" class="grid grid-cols-2 gap-1.5">
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="games" class="rounded bg-gray-700 border-gray-600 text-yellow-500 focus:ring-yellow-500"><span class="text-sm text-gray-300">Games</span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="enterprise" class="rounded bg-gray-700 border-gray-600 text-yellow-500 focus:ring-yellow-500"><span class="text-sm text-gray-300">Enterprise</span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="dev-tools" class="rounded bg-gray-700 border-gray-600 text-yellow-500 focus:ring-yellow-500"><span class="text-sm text-gray-300">Dev Tools</span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="education" class="rounded bg-gray-700 border-gray-600 text-yellow-500 focus:ring-yellow-500"><span class="text-sm text-gray-300">Education</span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="social" class="rounded bg-gray-700 border-gray-600 text-yellow-500 focus:ring-yellow-500"><span class="text-sm text-gray-300">Social</span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="finance" class="rounded bg-gray-700 border-gray-600 text-yellow-500 focus:ring-yellow-500"><span class="text-sm text-gray-300">Finance</span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="health" class="rounded bg-gray-700 border-gray-600 text-yellow-500 focus:ring-yellow-500"><span class="text-sm text-gray-300">Health</span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="creative" class="rounded bg-gray-700 border-gray-600 text-yellow-500 focus:ring-yellow-500"><span class="text-sm text-gray-300">Creative / Art</span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="data" class="rounded bg-gray-700 border-gray-600 text-yellow-500 focus:ring-yellow-500"><span class="text-sm text-gray-300">Data / Analytics</span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="iot" class="rounded bg-gray-700 border-gray-600 text-yellow-500 focus:ring-yellow-500"><span class="text-sm text-gray-300">IoT / Hardware</span></label>
+              </div>
+              <input id="inventify-custom-themes" type="text" placeholder="Custom themes (comma-separated)" class="mt-2 w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-yellow-500">
+            </div>
+          </div>
+          <!-- Ideas cards -->
+          <div id="inventify-ideas" class="hidden space-y-2"></div>
+          <!-- Status -->
+          <div id="inventify-status" class="text-sm hidden"></div>
+        </div>
+        <div class="p-3 border-t border-gray-700 flex justify-between">
+          <button id="btn-inventify-back" class="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1.5 rounded text-xs transition-colors hidden">Back</button>
+          <div class="flex gap-2 ml-auto">
+            <button id="btn-inventify-cancel" class="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1.5 rounded text-xs transition-colors">Cancel</button>
+            <button id="btn-inventify-generate" class="bg-yellow-600 hover:bg-yellow-500 text-white px-3 py-1.5 rounded text-xs transition-colors font-medium">Generate!</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Container -->
   <div id="toast-container" class="fixed bottom-4 right-4 space-y-2 z-50"></div>
 
@@ -3046,6 +3334,8 @@
   <script src="/js/modules/mcp-settings-module.js"></script>
   <script src="/js/modules/mcp-project-module.js"></script>
   <script src="/js/modules/claude-commands-module.js"></script>
+  <script src="/js/modules/run-configs-module.js"></script>
+  <script src="/js/modules/inventify-module.js"></script>
   <!-- Main application -->
   <script src="/js/app.js"></script>
 </body>

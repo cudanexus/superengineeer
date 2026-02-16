@@ -46,16 +46,16 @@ conversations/
 
 - **Infrastructure**: `ConfigLoader`, `HttpServer`, `ProjectWebSocketServer`, `EventManager` (in-memory event bus), `Logger` (with circular buffer)
 - **Data**: `ProjectRepository` (status.json per project), `ConversationRepository` (per project/item), `SettingsRepository` (global settings + agentPromptTemplate)
-- **Services**: `ProjectService`, `FilesystemService`, `GitService` (simple-git), `GitHubCLIService` (gh CLI wrapper), `RoadmapParser`, `RoadmapGenerator`, `InstructionGenerator`, `ClaudeOptimizationService` (edits files directly via Edit tool), `DataWipeService` (factory reset — wipes all Claudito data)
+- **Services**: `ProjectService`, `FilesystemService`, `GitService` (simple-git), `GitHubCLIService` (gh CLI wrapper), `RoadmapParser`, `RoadmapGenerator`, `InstructionGenerator`, `ClaudeOptimizationService` (edits files directly via Edit tool), `DataWipeService` (factory reset — wipes all Claudito data), `RunConfigurationService` (CRUD for run configs), `RunConfigImportService` (detects project files and suggests configs), `RunProcessManager` (node-pty process lifecycle with auto-restart), `InventifyService` (project idea generator using one-off agent + Ralph Loop)
 - **Agents**: `ClaudeAgent` (CLI process management), `AgentManager` (multi-agent lifecycle: interactive + one-off)
 
 ## API Endpoints
 
 All project routes prefixed with `/api/projects/:id`. Standard REST verbs (GET/POST/PUT/DELETE).
 
-**Global**: `GET /api/health`, `GET /api/agents/status`, `GET|PUT /api/settings`, `GET /api/settings/models`, `POST /api/settings/wipe-all-data`
+**Global**: `GET /api/health` (includes `shellEnabled`), `GET /api/agents/status`, `GET|PUT /api/settings`, `GET /api/settings/models`, `POST /api/settings/wipe-all-data`
 
-**Integrations** (`/api/integrations`): `GET github/status`, `GET github/repos(?owner=&language=&limit=)`, `GET github/repos/search(?query=&language=&sort=&limit=)`, `POST github/clone` (body: repo, targetDir, branch?, projectName?), `GET github/issues(?repo=&state=&label=&assignee=&milestone=&limit=)`, `GET github/issues/:num(?repo=)`, `POST github/issues/:num/close(?repo=)`, `POST github/issues/:num/comment(?repo=)` (body: body), `POST github/pr` (body: repo, title, body, base?, draft?), `GET github/pulls(?repo=&state=&limit=)`, `GET github/pulls/:num(?repo=)`
+**Integrations** (`/api/integrations`): `GET github/status`, `GET github/repos(?owner=&language=&limit=)`, `GET github/repos/search(?query=&language=&sort=&limit=)`, `POST github/clone` (body: repo, targetDir, branch?, projectName?), `GET github/issues(?repo=&state=&label=&assignee=&milestone=&limit=)`, `GET github/issues/:num(?repo=)`, `POST github/issues` (body: repo, title, body?, labels?, assignees?, milestone?), `POST github/issues/:num/close(?repo=)`, `POST github/issues/:num/comment(?repo=)` (body: body), `GET github/labels(?repo=)`, `GET github/milestones(?repo=)`, `GET github/collaborators(?repo=)`, `POST github/pr` (body: repo, title, body, base?, draft?), `GET github/pulls(?repo=&state=&limit=)`, `GET github/pulls/:num(?repo=)`
 
 **Filesystem** (`/api/fs`): `drives`, `browse?path=`, `browse-with-files?path=`, `read?path=`, `PUT write`, `DELETE delete`
 
@@ -63,7 +63,7 @@ All project routes prefixed with `/api/projects/:id`. Standard REST verbs (GET/P
 
 **Roadmap** (`/:id/roadmap`): GET (content+parsed), `POST generate`, PUT (modify), `POST respond`, `PUT next-item`, `POST task` (add task), DELETE `task|milestone|phase`
 
-**Agent** (`/:id/agent`): `POST interactive` (start session), `POST send`, `POST stop`, GET `status|context|loop|queue`, DELETE `queue(/:index)`
+**Agent** (`/:id/agent`): `POST interactive` (start session), `POST send`, `POST answer` (AskUserQuestion tool_result), `POST stop`, GET `status|context|loop|queue`, DELETE `queue(/:index)`
 
 **One-Off Agents** (`/:id/agent/oneoff/:oneOffId`): `POST send|stop`, GET `status|context`
 
@@ -75,13 +75,19 @@ All project routes prefixed with `/api/projects/:id`. Standard REST verbs (GET/P
 
 **Ralph Loop** (`/:id/ralph-loop`): GET (list), `POST start`, `/:taskId` GET|DELETE, `/:taskId/stop|pause|resume`
 
+**Run Configurations** (`/:id/run-configs`): GET / (list), GET `/importable` (scan project files), POST / (create), PUT `/:configId` (update), DELETE `/:configId`, POST `/:configId/start`, POST `/:configId/stop`, GET `/:configId/status`
+
+**Inventify** (`/api/projects/inventify`): `POST /start` (body: projectTypes[], themes[]) — brainstorms 5 project ideas, `GET /ideas` — returns pending ideas, `POST /select` (body: selectedIndex) — picks an idea and builds it (creates directory + plan, registers project, starts Ralph Loop)
+
 ## WebSocket Messages
 
-**Core**: `subscribe`/`unsubscribe`, `agent_message`, `agent_status`, `agent_waiting` (includes version), `queue_change`, `roadmap_message`, `session_recovery`, `github_clone_progress`
+**Core**: `subscribe`/`unsubscribe`, `agent_message`, `agent_status`, `agent_waiting` (includes version + optional askUserQuestion data), `queue_change`, `roadmap_message`, `session_recovery`, `github_clone_progress`
 
 **Ralph Loop**: `ralph_loop_status` (idle/worker_running/reviewer_running/completed/failed/paused), `ralph_loop_iteration`, `ralph_loop_output`, `ralph_loop_complete`, `ralph_loop_worker_complete`, `ralph_loop_reviewer_complete`, `ralph_loop_error`
 
 **One-Off Agents**: `oneoff_message`, `oneoff_status`, `oneoff_waiting` (includes oneOffId, isWaiting, version)
+
+**Run Configurations**: `run_config_output` (configId, data), `run_config_status` (configId, status)
 
 ## Ralph Loop
 
@@ -113,7 +119,7 @@ Implements Geoffrey Huntley's "Ralph Wiggum technique" - an iterative worker/rev
 
 ## Session Management
 
-Sessions use UUID v4 IDs: `--session-id {uuid}` (new) or `--resume {uuid}` (existing). Permission mode changes queue until idle, then restart with 1s delay. Unrecognized sessions auto-create fresh conversation with new UUID.
+Sessions use UUID v4 IDs: `--session-id {uuid}` (new) or `--resume {uuid}` (existing). Permission mode changes queue until idle, then restart with 1s delay. Unrecognized sessions auto-create fresh conversation with new UUID. When Claude calls `EnterPlanMode`, agent auto-restarts in plan mode and sends "Continue" so work proceeds without manual intervention.
 
 ## Features
 
@@ -124,14 +130,17 @@ Sessions use UUID v4 IDs: `--session-id {uuid}` (new) or `--resume {uuid}` (exis
 - **Claude Files Modal**: Edit CLAUDE.md files (global/project), markdown preview, optimize via one-off agent
 - **Roadmap Management**: Checkbox selection, "Run Selected" auto-generates prompts, delete tasks/milestones/phases
 - **Ralph Loop Tab**: Start/Pause/Resume/Stop controls, live output streaming, history view
+- **Run Configs Tab**: Per-project named shell commands with xterm.js output, auto-restart, pre-launch chains, environment variables, import from project files (package.json, Cargo.toml, go.mod, Makefile, pyproject.toml)
 - **GitHub Import**: Browse/search repos via `gh` CLI, clone and register as project with progress streaming
-- **GitHub Issues**: Browse issues with state/label/assignee filters, view detail with comments, "Start Working" (generates agent prompt), "Add to Roadmap" (creates task in milestone), close issues, add comments
+- **GitHub Issues**: Browse issues with state/label/assignee filters, view detail with comments, create new issues (with labels, assignees, milestones), "Start Working" (generates agent prompt), "Add to Roadmap" (creates task in milestone), close issues, add comments
 - **GitHub PRs**: Create PRs with auto-generated title/description (from conversation + diff), list PRs, view PR detail with reviews/comments, "Fix PR Feedback" (generates agent prompt from review feedback)
+- **Inventify**: Project idea generator — select project types + themes, agent brainstorms 5 ideas, user picks one, then agent creates detailed plan + directory with `doc/plan.md`, registers as Claudito project, auto-starts Ralph Loop to build it
+- **Folder Browser**: "New Folder" button to create directories inline while browsing
 - **Other**: Conversation history (view/rename, configurable limit), debug modal, mobile-responsive layout, Settings Danger Zone (wipe all data)
 
 ## Settings
 
-`maxConcurrentAgents` (1-10), `agentPromptTemplate`, `appendSystemPrompt` (restarts all agents on change), `sendWithCtrlEnter`, `historyLimit` (5-100, default: 25), `promptTemplates`, `defaultModel` (default: claude-opus-4-6), `chromeEnabled` (toggle in toolbar, passes `--chrome`/`--no-chrome` to agents)
+`maxConcurrentAgents` (1-10), `agentPromptTemplate`, `appendSystemPrompt` (restarts all agents on change), `sendWithCtrlEnter`, `historyLimit` (5-100, default: 25), `promptTemplates`, `defaultModel` (default: claude-opus-4-6), `chromeEnabled` (toggle in toolbar, passes `--chrome`/`--no-chrome` to agents), `inventifyFolder` (parent directory for generated projects)
 
 **Prompt Templates**: Reusable prompts (Settings > Templates). Syntax: `${type:name}` or `${type:name:options}`. Types: `text`, `textarea`, `select:opt1,opt2`, `checkbox`
 

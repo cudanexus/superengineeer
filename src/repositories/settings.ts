@@ -268,6 +268,8 @@ export interface GlobalSettings {
   mcp: McpSettings;
   /** Enable Chrome browser usage in Claude agents */
   chromeEnabled: boolean;
+  /** Base directory for Inventify-generated projects */
+  inventifyFolder: string;
 }
 
 const DEFAULT_SETTINGS: GlobalSettings = {
@@ -368,6 +370,7 @@ Your goal is to ensure high-quality deliverables. Be thorough but fair in your a
     servers: [],
   },
   chromeEnabled: false,
+  inventifyFolder: '',
 };
 
 // Update type that allows partial nested objects for incremental updates
@@ -386,6 +389,7 @@ export interface SettingsUpdate {
   ralphLoop?: Partial<RalphLoopSettings>;
   mcp?: Partial<McpSettings>;
   chromeEnabled?: boolean;
+  inventifyFolder?: string;
 }
 
 export interface SettingsRepository {
@@ -511,6 +515,7 @@ export class FileSettingsRepository implements SettingsRepository {
         servers: parsedMcp?.servers ?? DEFAULT_SETTINGS.mcp.servers,
       },
       chromeEnabled: parsed.chromeEnabled ?? DEFAULT_SETTINGS.chromeEnabled,
+      inventifyFolder: parsed.inventifyFolder ?? DEFAULT_SETTINGS.inventifyFolder,
     };
   }
 
@@ -610,6 +615,10 @@ export class FileSettingsRepository implements SettingsRepository {
 
     if (updates.chromeEnabled !== undefined) {
       this.settings.chromeEnabled = updates.chromeEnabled;
+    }
+
+    if (updates.inventifyFolder !== undefined) {
+      this.settings.inventifyFolder = updates.inventifyFolder;
     }
 
     this.saveToFile();

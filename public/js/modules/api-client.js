@@ -518,6 +518,22 @@
     return $.get(baseUrl + '/api/projects/' + projectId + '/agent/oneoff/' + encodeURIComponent(oneOffId) + '/context');
   };
 
+  /**
+   * Answer an AskUserQuestion from the agent
+   * @param {string} projectId - Project UUID
+   * @param {string} toolUseId - The tool_use_id for the AskUserQuestion
+   * @param {Object} answers - Map of question index to selected answer(s)
+   * @returns {Promise<Object>}
+   */
+  ApiClient.answerAgentQuestion = function(projectId, toolUseId, answers) {
+    return $.ajax({
+      url: baseUrl + '/api/projects/' + projectId + '/agent/answer',
+      method: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify({ toolUseId: toolUseId, answers: answers })
+    });
+  };
+
   // ============================================================
   // Queue
   // ============================================================
@@ -1781,6 +1797,27 @@
     });
   };
 
+  ApiClient.createGitHubIssue = function(data) {
+    return $.ajax({
+      url: baseUrl + '/api/integrations/github/issues',
+      method: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify(data),
+    });
+  };
+
+  ApiClient.getGitHubLabels = function(repo) {
+    return $.get(baseUrl + '/api/integrations/github/labels', { repo: repo });
+  };
+
+  ApiClient.getGitHubMilestones = function(repo) {
+    return $.get(baseUrl + '/api/integrations/github/milestones', { repo: repo });
+  };
+
+  ApiClient.getGitHubCollaborators = function(repo) {
+    return $.get(baseUrl + '/api/integrations/github/collaborators', { repo: repo });
+  };
+
   ApiClient.getGitHubRepoId = function(projectId) {
     return $.get(baseUrl + '/api/projects/' + projectId + '/git/github-repo');
   };
@@ -1850,6 +1887,99 @@
       method: 'POST',
       contentType: 'application/json',
       data: JSON.stringify(data),
+    });
+  };
+
+  // =========================================================================
+  // Run Configurations
+  // =========================================================================
+
+  ApiClient.getRunConfigs = function(projectId) {
+    return $.get(baseUrl + '/api/projects/' + projectId + '/run-configs');
+  };
+
+  /**
+   * Scan for importable run configurations from project files
+   * @param {string} projectId - Project UUID
+   * @returns {Promise<Object>} Scan result with importable configs
+   */
+  ApiClient.getImportableRunConfigs = function(projectId) {
+    return $.get(baseUrl + '/api/projects/' + projectId + '/run-configs/importable');
+  };
+
+  ApiClient.createRunConfig = function(projectId, data) {
+    return $.ajax({
+      url: baseUrl + '/api/projects/' + projectId + '/run-configs',
+      method: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify(data),
+    });
+  };
+
+  ApiClient.updateRunConfig = function(projectId, configId, data) {
+    return $.ajax({
+      url: baseUrl + '/api/projects/' + projectId + '/run-configs/' + configId,
+      method: 'PUT',
+      contentType: 'application/json',
+      data: JSON.stringify(data),
+    });
+  };
+
+  ApiClient.deleteRunConfig = function(projectId, configId) {
+    return $.ajax({
+      url: baseUrl + '/api/projects/' + projectId + '/run-configs/' + configId,
+      method: 'DELETE',
+    });
+  };
+
+  ApiClient.startRunConfig = function(projectId, configId) {
+    return $.ajax({
+      url: baseUrl + '/api/projects/' + projectId + '/run-configs/' + configId + '/start',
+      method: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify({}),
+    });
+  };
+
+  ApiClient.stopRunConfig = function(projectId, configId) {
+    return $.ajax({
+      url: baseUrl + '/api/projects/' + projectId + '/run-configs/' + configId + '/stop',
+      method: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify({}),
+    });
+  };
+
+  ApiClient.getRunConfigStatus = function(projectId, configId) {
+    return $.get(baseUrl + '/api/projects/' + projectId + '/run-configs/' + configId + '/status');
+  };
+
+  // =========================================================================
+  // Inventify
+  // =========================================================================
+
+  ApiClient.startInventify = function(data) {
+    return $.ajax({
+      url: baseUrl + '/api/projects/inventify/start',
+      method: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify(data),
+    });
+  };
+
+  ApiClient.getInventifyIdeas = function() {
+    return $.ajax({
+      url: baseUrl + '/api/projects/inventify/ideas',
+      method: 'GET',
+    });
+  };
+
+  ApiClient.selectInventifyIdea = function(selectedIndex) {
+    return $.ajax({
+      url: baseUrl + '/api/projects/inventify/select',
+      method: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify({ selectedIndex: selectedIndex }),
     });
   };
 

@@ -248,7 +248,7 @@ body {
 }
 
 #modal-folder-browser {
-  z-index: 45;
+  z-index: 60;
 }
 
 /* Status badges */

@@ -335,6 +335,25 @@ describe('StreamHandler', () => {
       expect(planModeMessages[0]!.planModeInfo?.action).toBe('enter');
     });
 
+    it('should emit enterPlanMode event for EnterPlanMode tool', () => {
+      let enterPlanModeCount = 0;
+      handler.on('enterPlanMode', () => { enterPlanModeCount++; });
+
+      handler.processLine(JSON.stringify({
+        type: 'assistant',
+        message: {
+          content: [{
+            type: 'tool_use',
+            id: 'tool-enter-evt-1',
+            name: 'EnterPlanMode',
+            input: {},
+          }],
+        },
+      }));
+
+      expect(enterPlanModeCount).toBe(1);
+    });
+
     it('should prevent duplicate EnterPlanMode in same turn', () => {
       handler.processLine(JSON.stringify({
         type: 'assistant',

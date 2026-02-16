@@ -58,7 +58,7 @@ export interface OneOffMeta {
 export interface AgentManagerEvents {
   message: (projectId: string, message: AgentMessage) => void;
   status: (projectId: string, status: AgentStatus) => void;
-  waitingForInput: (projectId: string, isWaiting: boolean, version: number) => void;
+  waitingForInput: (projectId: string, waitingStatus: WaitingStatus) => void;
   queueChange: (queue: QueuedProject[]) => void;
   milestoneStarted: (projectId: string, milestone: MilestoneRef) => void;
   milestoneCompleted: (projectId: string, milestone: MilestoneRef, reason: string) => void;
@@ -106,6 +106,7 @@ export interface AgentManager {
   startAgent(projectId: string, instructions: string): Promise<void>;
   startInteractiveAgent(projectId: string, options?: StartInteractiveAgentOptions): Promise<void>;
   sendInput(projectId: string, input: string, images?: ImageData[]): void;
+  sendToolResult(projectId: string, toolUseId: string, content: string): void;
   stopAgent(projectId: string): Promise<void>;
   stopAllAgents(): Promise<void>;
   getAgentStatus(projectId: string): AgentStatus;
@@ -140,6 +141,7 @@ export interface AgentManager {
   getOneOffStatus(oneOffId: string): FullAgentStatus | null;
   getOneOffContextUsage(oneOffId: string): ContextUsage | null;
   isOneOffWaitingForInput(oneOffId: string): boolean;
+  getOneOffCollectedOutput(oneOffId: string): string | null;
   on<K extends keyof AgentManagerEvents>(event: K, listener: AgentManagerEvents[K]): void;
   off<K extends keyof AgentManagerEvents>(event: K, listener: AgentManagerEvents[K]): void;
 }
@@ -357,11 +359,13 @@ export class DefaultAgentManager implements AgentManager {
     const permArgs = this.permissionGenerator.generateArgs(settings.claudePermissions, projectOverrides, mcpServers);
 
     const effectiveMode = options?.permissionMode || permArgs.permissionMode;
+    const shouldSkip = effectiveMode !== 'plan' &&
+      (permArgs.skipPermissions || settings.claudePermissions.dangerouslySkipPermissions);
 
     const permissionConfig: PermissionConfig = {
-      skipPermissions: effectiveMode === 'plan' ? false : permArgs.skipPermissions,
-      allowedTools: permArgs.allowedTools,
-      disallowedTools: permArgs.disallowedTools,
+      skipPermissions: shouldSkip,
+      allowedTools: shouldSkip ? [] : permArgs.allowedTools,
+      disallowedTools: shouldSkip ? [] : permArgs.disallowedTools,
       permissionMode: effectiveMode,
     };
 
@@ -472,6 +476,20 @@ export class DefaultAgentManager implements AgentManager {
     }
 
     agent.sendInput(contentToSend);
+  }
+
+  sendToolResult(projectId: string, toolUseId: string, content: string): void {
+    const agent = this.agents.get(projectId);
+
+    if (!agent) {
+      throw new Error('No agent running for this project');
+    }
+
+    if (agent.mode !== 'interactive') {
+      throw new Error('Agent is not in interactive mode');
+    }
+
+    agent.sendToolResult(toolUseId, content);
   }
 
   async stopAgent(projectId: string): Promise<void> {
@@ -803,11 +821,13 @@ export class DefaultAgentManager implements AgentManager {
     const permArgs = this.permissionGenerator.generateArgs(settings.claudePermissions, projectOverrides);
 
     const effectiveOneOffMode = options.permissionMode || permArgs.permissionMode;
+    const shouldSkipOneOff = effectiveOneOffMode !== 'plan' &&
+      (permArgs.skipPermissions || settings.claudePermissions.dangerouslySkipPermissions);
 
     const permissionConfig: PermissionConfig = {
-      skipPermissions: effectiveOneOffMode === 'plan' ? false : permArgs.skipPermissions,
-      allowedTools: permArgs.allowedTools,
-      disallowedTools: permArgs.disallowedTools,
+      skipPermissions: shouldSkipOneOff,
+      allowedTools: shouldSkipOneOff ? [] : permArgs.allowedTools,
+      disallowedTools: shouldSkipOneOff ? [] : permArgs.disallowedTools,
       permissionMode: effectiveOneOffMode,
     };
 
@@ -888,6 +908,11 @@ export class DefaultAgentManager implements AgentManager {
   isOneOffWaitingForInput(oneOffId: string): boolean {
     const agent = this.oneOffAgents.get(oneOffId);
     return agent ? agent.isWaitingForInput : false;
+  }
+
+  getOneOffCollectedOutput(oneOffId: string): string | null {
+    const agent = this.oneOffAgents.get(oneOffId);
+    return agent ? agent.collectedOutput : null;
   }
 
   private setupOneOffAgentListeners(oneOffId: string, agent: ClaudeAgent): void {
@@ -994,10 +1019,13 @@ export class DefaultAgentManager implements AgentManager {
     const projectOverrides = project.permissionOverrides ?? null;
     const permArgs = this.permissionGenerator.generateArgs(settings.claudePermissions, projectOverrides);
 
+    const shouldSkipAuto = permArgs.permissionMode !== 'plan' &&
+      (permArgs.skipPermissions || settings.claudePermissions.dangerouslySkipPermissions);
+
     const permissionConfig: PermissionConfig = {
-      skipPermissions: permArgs.skipPermissions,
-      allowedTools: permArgs.allowedTools,
-      disallowedTools: permArgs.disallowedTools,
+      skipPermissions: shouldSkipAuto,
+      allowedTools: shouldSkipAuto ? [] : permArgs.allowedTools,
+      disallowedTools: shouldSkipAuto ? [] : permArgs.disallowedTools,
       permissionMode: permArgs.permissionMode,
     };
 
@@ -1139,7 +1167,7 @@ export class DefaultAgentManager implements AgentManager {
         this.waitingVersions.set(projectId, status.version);
       }
 
-      this.emit('waitingForInput', projectId, status.isWaiting, status.version);
+      this.emit('waitingForInput', projectId, status);
     };
 
     const exitListener = (code: number | null): void => {
@@ -1154,12 +1182,17 @@ export class DefaultAgentManager implements AgentManager {
       void this.handleExitPlanMode(agent, planContent);
     };
 
+    const enterPlanModeListener = (): void => {
+      void this.handleEnterPlanMode(agent);
+    };
+
     agent.on('message', messageListener);
     agent.on('status', statusListener);
     agent.on('waitingForInput', waitingListener);
     agent.on('exit', exitListener);
     agent.on('sessionNotFound', sessionNotFoundListener);
     agent.on('exitPlanMode', exitPlanModeListener);
+    agent.on('enterPlanMode', enterPlanModeListener);
   }
 
   private async handleAgentExit(agent: ClaudeAgent, _code: number | null): Promise<void> {
@@ -1260,7 +1293,34 @@ export class DefaultAgentManager implements AgentManager {
     const waitingVersion = Date.now();
     this.waitingVersions.set(projectId, waitingVersion);
 
-    this.emit('waitingForInput', projectId, true, waitingVersion);
+    this.emit('waitingForInput', projectId, { isWaiting: true, version: waitingVersion });
+  }
+
+  private async handleEnterPlanMode(agent: ClaudeAgent): Promise<void> {
+    const projectId = agent.projectId;
+    const sessionId = agent.sessionId;
+
+    this.logger.info('EnterPlanMode detected, restarting with plan mode', {
+      projectId,
+      sessionId,
+    });
+
+    await this.stopAgent(projectId);
+    await this.delay(500);
+
+    await this.startInteractiveAgent(projectId, {
+      sessionId: sessionId || undefined,
+      permissionMode: 'plan',
+      initialMessage: 'Continue',
+    });
+
+    const systemMessage: AgentMessage = {
+      type: 'system',
+      content: '[Switched to Plan mode]',
+      timestamp: new Date().toISOString(),
+      hidden: true,
+    };
+    this.emit('message', projectId, systemMessage);
   }
 
   private async handlePlanApprovalResponse(

@@ -5,6 +5,7 @@ import {
   RepoListOptions,
   RepoSearchOptions,
   IssueListOptions,
+  IssueCreateOptions,
   PRListOptions,
 } from '../services/github-cli-service';
 import { ProjectService } from '../services/project';
@@ -169,6 +170,70 @@ export function createIntegrationsRouter(deps: IntegrationsRouterDependencies): 
 
     await githubCLIService.commentOnIssue(repo, issueNumber, body);
     res.json({ success: true });
+  }));
+
+  router.post('/github/issues', asyncHandler(async (req, res) => {
+    const { repo, title, body, labels, assignees, milestone } = req.body as {
+      repo?: string;
+      title?: string;
+      body?: string;
+      labels?: string[];
+      assignees?: string[];
+      milestone?: string;
+    };
+
+    if (!repo) {
+      throw new ValidationError('repo is required');
+    }
+
+    if (!title) {
+      throw new ValidationError('title is required');
+    }
+
+    const options: IssueCreateOptions = {
+      repo,
+      title,
+      body: body || '',
+      labels: labels || [],
+      assignees: assignees || [],
+      milestone: milestone || undefined,
+    };
+
+    const issue = await githubCLIService.createIssue(options);
+    res.json(issue);
+  }));
+
+  router.get('/github/labels', asyncHandler(async (req, res) => {
+    const repo = req.query['repo'] as string | undefined;
+
+    if (!repo) {
+      throw new ValidationError('repo parameter is required');
+    }
+
+    const labels = await githubCLIService.listLabels(repo);
+    res.json(labels);
+  }));
+
+  router.get('/github/milestones', asyncHandler(async (req, res) => {
+    const repo = req.query['repo'] as string | undefined;
+
+    if (!repo) {
+      throw new ValidationError('repo parameter is required');
+    }
+
+    const milestones = await githubCLIService.listMilestones(repo);
+    res.json(milestones);
+  }));
+
+  router.get('/github/collaborators', asyncHandler(async (req, res) => {
+    const repo = req.query['repo'] as string | undefined;
+
+    if (!repo) {
+      throw new ValidationError('repo parameter is required');
+    }
+
+    const collaborators = await githubCLIService.listCollaborators(repo);
+    res.json(collaborators);
   }));
 
   // =========================================================================

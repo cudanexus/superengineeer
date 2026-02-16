@@ -384,6 +384,125 @@ describe('Integrations Router', () => {
     });
   });
 
+  describe('POST /integrations/github/issues', () => {
+    it('should create an issue', async () => {
+      const { app, githubCLIService } = createApp();
+
+      const res = await request(app)
+        .post('/integrations/github/issues')
+        .send({ repo: 'owner/repo', title: 'Bug report', body: 'Broken', labels: ['bug'], assignees: ['dev1'] });
+
+      expect(res.status).toBe(200);
+      expect(res.body.number).toBeDefined();
+      expect(githubCLIService.createIssue).toHaveBeenCalledWith({
+        repo: 'owner/repo',
+        title: 'Bug report',
+        body: 'Broken',
+        labels: ['bug'],
+        assignees: ['dev1'],
+        milestone: undefined,
+      });
+    });
+
+    it('should return 400 when repo is missing', async () => {
+      const { app } = createApp();
+
+      const res = await request(app)
+        .post('/integrations/github/issues')
+        .send({ title: 'Test' });
+
+      expect(res.status).toBe(400);
+    });
+
+    it('should return 400 when title is missing', async () => {
+      const { app } = createApp();
+
+      const res = await request(app)
+        .post('/integrations/github/issues')
+        .send({ repo: 'owner/repo' });
+
+      expect(res.status).toBe(400);
+    });
+
+    it('should default optional fields', async () => {
+      const { app, githubCLIService } = createApp();
+
+      const res = await request(app)
+        .post('/integrations/github/issues')
+        .send({ repo: 'owner/repo', title: 'Minimal issue' });
+
+      expect(res.status).toBe(200);
+      expect(githubCLIService.createIssue).toHaveBeenCalledWith({
+        repo: 'owner/repo',
+        title: 'Minimal issue',
+        body: '',
+        labels: [],
+        assignees: [],
+        milestone: undefined,
+      });
+    });
+  });
+
+  describe('GET /integrations/github/labels', () => {
+    it('should return labels', async () => {
+      const { app, githubCLIService } = createApp();
+
+      const res = await request(app).get('/integrations/github/labels?repo=owner/repo');
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveLength(2);
+      expect(githubCLIService.listLabels).toHaveBeenCalledWith('owner/repo');
+    });
+
+    it('should return 400 when repo is missing', async () => {
+      const { app } = createApp();
+
+      const res = await request(app).get('/integrations/github/labels');
+
+      expect(res.status).toBe(400);
+    });
+  });
+
+  describe('GET /integrations/github/milestones', () => {
+    it('should return milestones', async () => {
+      const { app, githubCLIService } = createApp();
+
+      const res = await request(app).get('/integrations/github/milestones?repo=owner/repo');
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveLength(1);
+      expect(githubCLIService.listMilestones).toHaveBeenCalledWith('owner/repo');
+    });
+
+    it('should return 400 when repo is missing', async () => {
+      const { app } = createApp();
+
+      const res = await request(app).get('/integrations/github/milestones');
+
+      expect(res.status).toBe(400);
+    });
+  });
+
+  describe('GET /integrations/github/collaborators', () => {
+    it('should return collaborators', async () => {
+      const { app, githubCLIService } = createApp();
+
+      const res = await request(app).get('/integrations/github/collaborators?repo=owner/repo');
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveLength(2);
+      expect(githubCLIService.listCollaborators).toHaveBeenCalledWith('owner/repo');
+    });
+
+    it('should return 400 when repo is missing', async () => {
+      const { app } = createApp();
+
+      const res = await request(app).get('/integrations/github/collaborators');
+
+      expect(res.status).toBe(400);
+    });
+  });
+
   describe('POST /integrations/github/pr', () => {
     it('should create a PR', async () => {
       const { app, githubCLIService } = createApp();

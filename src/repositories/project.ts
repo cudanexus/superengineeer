@@ -48,6 +48,24 @@ export interface ProjectStatus {
   modelOverride: string | null;
   /** Project-specific MCP server overrides */
   mcpOverrides: McpOverrides | null;
+  /** Run configurations for this project */
+  runConfigurations?: RunConfiguration[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RunConfiguration {
+  id: string;
+  name: string;
+  command: string;
+  args: string[];
+  cwd: string;
+  env: Record<string, string>;
+  shell: string | null;
+  autoRestart: boolean;
+  autoRestartDelay: number;
+  autoRestartMaxRetries: number;
+  preLaunchConfigId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -75,6 +93,7 @@ export interface ProjectRepository {
   updatePermissionOverrides(id: string, overrides: ProjectPermissionOverrides | null): Promise<ProjectStatus | null>;
   updateModelOverride(id: string, model: string | null): Promise<ProjectStatus | null>;
   updateMcpOverrides(id: string, overrides: McpOverrides | null): Promise<ProjectStatus | null>;
+  updateRunConfigurations(id: string, configs: RunConfiguration[]): Promise<ProjectStatus | null>;
   delete(id: string): Promise<boolean>;
 }
 
@@ -444,6 +463,18 @@ export class FileProjectRepository implements ProjectRepository {
     }
 
     status.mcpOverrides = overrides;
+    this.saveStatus(status);
+    return Promise.resolve({ ...status });
+  }
+
+  updateRunConfigurations(id: string, configs: RunConfiguration[]): Promise<ProjectStatus | null> {
+    const status = this.loadStatus(id);
+
+    if (!status) {
+      return Promise.resolve(null);
+    }
+
+    status.runConfigurations = configs;
     this.saveStatus(status);
     return Promise.resolve({ ...status });
   }
