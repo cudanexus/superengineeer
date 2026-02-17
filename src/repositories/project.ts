@@ -480,14 +480,14 @@ export class FileProjectRepository implements ProjectRepository {
     return Promise.resolve({ ...status });
   }
 
-  async updateProjectPath(
+  updateProjectPath(
     id: string,
     newName: string,
     newPath: string,
   ): Promise<ProjectStatus | null> {
     const status = this.loadStatus(id);
 
-    if (!status) return null;
+    if (!status) return Promise.resolve(null);
 
     const newId = generateIdFromPath(newPath);
 
@@ -508,7 +508,7 @@ export class FileProjectRepository implements ProjectRepository {
     this.saveIndex();
     this.saveStatus(status);
 
-    return { ...status };
+    return Promise.resolve({ ...status });
   }
 
   delete(id: string): Promise<boolean> {
