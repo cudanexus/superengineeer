@@ -1481,4 +1481,53 @@ describe('DefaultClaudeAgent', () => {
       );
     });
   });
+
+  describe('sendToolResult idempotency', () => {
+    beforeEach(() => {
+      agent = new DefaultClaudeAgent({
+        ...defaultConfig,
+        processSpawner: mockSpawner,
+      });
+    });
+
+    it('should send tool result to stdin', () => {
+      agent.start('initial');
+      mockProcess.stdin.write.mockClear();
+
+      agent.sendToolResult('tool-1', '{"answers":{"0":"Yes"}}');
+
+      expect(mockProcess.stdin.write).toHaveBeenCalledTimes(1);
+      const writtenData = mockProcess.stdin.write.mock.calls[0]![0] as string;
+      const parsed = JSON.parse(writtenData.replace('\n', ''));
+      expect(parsed.type).toBe('user');
+      expect(parsed.message.content[0].type).toBe('tool_result');
+      expect(parsed.message.content[0].tool_use_id).toBe('tool-1');
+    });
+
+    it('should ignore duplicate sendToolResult for the same toolUseId', () => {
+      agent.start('initial');
+      mockProcess.stdin.write.mockClear();
+
+      agent.sendToolResult('tool-dup-1', '{"answers":{"0":"A"}}');
+      agent.sendToolResult('tool-dup-1', '{"answers":{"0":"B"}}');
+
+      // Only the first call should write to stdin
+      expect(mockProcess.stdin.write).toHaveBeenCalledTimes(1);
+    });
+
+    it('should allow different toolUseIds', () => {
+      agent.start('initial');
+      mockProcess.stdin.write.mockClear();
+
+      agent.sendToolResult('tool-a', '{"answers":{"0":"Yes"}}');
+      agent.sendToolResult('tool-b', '{"answers":{"0":"No"}}');
+
+      expect(mockProcess.stdin.write).toHaveBeenCalledTimes(2);
+    });
+
+    it('should throw when agent is not running', () => {
+      expect(() => agent.sendToolResult('tool-1', 'content'))
+        .toThrow('Agent is not running');
+    });
+  });
 });

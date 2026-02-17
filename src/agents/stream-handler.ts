@@ -558,11 +558,13 @@ export class StreamHandler extends EventEmitter {
     if (this.currentToolUse && this.partialJson) {
       try {
         const toolInput = JSON.parse(this.partialJson) as Record<string, unknown>;
-        this.emitToolMessage(
-          this.currentToolUse.name || 'unknown',
-          toolInput,
-          this.currentToolUse.id
-        );
+
+        // Route through processToolUseBlock for dedup + special tool handling
+        this.processToolUseBlock({
+          id: this.currentToolUse.id,
+          name: this.currentToolUse.name,
+          input: toolInput,
+        });
       } catch (error) {
         this.logger.error('Failed to parse tool input JSON', {
           error: error instanceof Error ? error.message : 'Unknown error',
@@ -658,6 +660,11 @@ export class StreamHandler extends EventEmitter {
    */
   private handleToolResultEvent(event: StreamEvent): void {
     if (event.tool_use_id) {
+      // Skip AskUserQuestion tool results — frontend manages its own lifecycle
+      if (this.askUserQuestionToolIds.has(event.tool_use_id)) {
+        return;
+      }
+
       this.emitToolResultWithId(
         event.tool_use_id,
         'completed',

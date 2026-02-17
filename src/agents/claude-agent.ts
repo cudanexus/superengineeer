@@ -167,6 +167,7 @@ export class DefaultClaudeAgent implements ClaudeAgent {
   private _sessionError: string | null = null;
   private _ralphLoopPhase: 'worker' | 'reviewer' | undefined;
   private _mcpConfigPath: string | null = null;
+  private answeredToolIds = new Set<string>();
 
   constructor(config: ClaudeAgentConfig) {
     this.projectId = config.projectId;
@@ -398,6 +399,14 @@ export class DefaultClaudeAgent implements ClaudeAgent {
     if (!this.processManager.isRunning()) {
       throw new Error('Agent is not running');
     }
+
+    // Prevent duplicate tool_result for the same tool_use_id
+    if (this.answeredToolIds.has(toolUseId)) {
+      this.logger.warn('Duplicate tool result ignored', { toolUseId });
+      return;
+    }
+
+    this.answeredToolIds.add(toolUseId);
 
     const jsonMessage = JSON.stringify({
       type: 'user',
@@ -726,6 +735,7 @@ export class DefaultClaudeAgent implements ClaudeAgent {
     this.lastActivityTimestamp = 0;
     this.inputQueue = [];
     this._sessionError = null;
+    this.answeredToolIds.clear();
     this._ralphLoopPhase = undefined;
     this.streamHandler.reset();
 

@@ -165,7 +165,8 @@
     chromeEnabled: false, // Chrome browser usage for agents
     deferredPlanMessage: null, // Stores ExitPlanMode message when questions are pending
     settings: null, // Global settings object
-    selectedGitHubRepo: null // Selected repo full name for GitHub clone
+    selectedGitHubRepo: null, // Selected repo full name for GitHub clone
+    submittedQuestionToolIds: {} // Track toolIds already submitted to prevent duplicates
   };
 
   // Local storage keys - use module's KEYS
@@ -962,7 +963,17 @@
   }
 
   function scrollConversationToBottom() {
-    if (state.agentOutputScrollLock) return;
+    if (state.agentOutputScrollLock) {
+      // Show "new messages" badge on scroll-to-bottom button
+      var $btn = $('#btn-scroll-bottom');
+      $btn.removeClass('hidden');
+
+      if (!$btn.find('.new-msg-badge').length) {
+        $btn.append('<span class="new-msg-badge absolute -top-1 -right-1 w-3 h-3 bg-purple-500 rounded-full animate-pulse"></span>');
+      }
+
+      return;
+    }
 
     var $container = $('#conversation-container');
     $container.scrollTop($container[0].scrollHeight);
@@ -1576,6 +1587,7 @@
         // User scrolled back to bottom - re-enable auto-scroll
         state.agentOutputScrollLock = false;
         updateScrollLockButton();
+        $('#btn-scroll-bottom').find('.new-msg-badge').remove();
       }
 
       // Update floating scroll buttons visibility
@@ -1590,6 +1602,7 @@
     $('#btn-scroll-bottom').on('click', function() {
       var $container = $('#conversation-container');
       $container.animate({ scrollTop: $container[0].scrollHeight }, 200);
+      $(this).find('.new-msg-badge').remove();
     });
 
     $(document).on('keydown', function(e) {
@@ -2708,6 +2721,13 @@
   }
 
   function submitQuestionAnswers(toolId, $container) {
+    // Prevent duplicate submissions for the same tool ID
+    if (state.submittedQuestionToolIds[toolId]) {
+      return;
+    }
+
+    state.submittedQuestionToolIds[toolId] = true;
+
     var mqs = getMultiQuestionState();
     var totalQuestions = mqs.totalQuestions;
 
@@ -2732,11 +2752,15 @@
 
     var summary = summaryParts.join(', ');
 
-    // Disable all buttons and submit after sending
-    $container.find('.ask-user-option')
-      .prop('disabled', true)
-      .addClass('opacity-50 cursor-not-allowed');
-    $container.find('.ask-user-submit').prop('disabled', true).addClass('opacity-50');
+    // Disable ALL question UIs with this toolId (handles duplicate renders)
+    $('.ask-user-question[data-tool-id="' + toolId + '"]').each(function() {
+      $(this).find('.ask-user-option')
+        .prop('disabled', true)
+        .addClass('opacity-50 cursor-not-allowed');
+      $(this).find('.ask-user-submit')
+        .prop('disabled', true)
+        .addClass('opacity-50');
+    });
 
     // Send as tool_result via the answer endpoint
     if (state.selectedProjectId) {

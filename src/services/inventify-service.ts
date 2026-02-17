@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { v4 as uuidv4 } from 'uuid';
+import { generateUUID } from '../utils/uuid';
 import { Logger } from '../utils/logger';
 import { AgentManager } from '../agents/agent-manager';
 import { AgentMessage, AgentStatus } from '../agents/claude-agent';
@@ -60,7 +60,7 @@ export class DefaultInventifyService implements InventifyService {
     this.pendingIdeas = null;
     this.pendingState = null;
 
-    const placeholderName = `inventify-${uuidv4().slice(0, 8)}`;
+    const placeholderName = `inventify-${generateUUID().slice(0, 8)}`;
     const placeholderPath = path.join(
       request.inventifyFolder,
       placeholderName,

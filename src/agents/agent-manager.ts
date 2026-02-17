@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { v4 as uuidv4 } from 'uuid';
+import { generateUUID } from '../utils/uuid';
 import {
   ClaudeAgent,
   DefaultClaudeAgent,
@@ -809,7 +809,7 @@ export class DefaultAgentManager implements AgentManager {
       throw new Error(`Project not found: ${options.projectId}`);
     }
 
-    const oneOffId = `oneoff-${uuidv4()}`;
+    const oneOffId = `oneoff-${generateUUID()}`;
 
     this.logger.info('Starting one-off agent', {
       oneOffId,

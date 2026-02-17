@@ -1130,6 +1130,105 @@ describe('StreamHandler', () => {
       expect(questionMessages).toHaveLength(2);
     });
 
+    it('should not duplicate AskUserQuestion when both assistant and content_block_stop fire', () => {
+      // Path 1: assistant event with cumulative content (tool_use block)
+      handler.processLine(JSON.stringify({
+        type: 'assistant',
+        message: {
+          content: [{
+            type: 'tool_use',
+            id: 'ask-dup-1',
+            name: 'AskUserQuestion',
+            input: { questions: [{ question: 'Pick one', options: [{ label: 'A' }] }] },
+          }],
+        },
+      }));
+
+      // Path 2: content_block_start + delta + stop for the same tool
+      handler.processLine(JSON.stringify({
+        type: 'content_block_start',
+        content_block: {
+          toolUse: { id: 'ask-dup-1', name: 'AskUserQuestion' },
+        },
+      }));
+
+      handler.processLine(JSON.stringify({
+        type: 'content_block_delta',
+        delta: { partial_json: '{"questions":[{"question":"Pick one","options":[{"label":"A"}]}]}' },
+      }));
+
+      handler.processLine(JSON.stringify({ type: 'content_block_stop' }));
+
+      // Should only emit ONE tool_use for AskUserQuestion
+      const toolUseMessages = messages.filter(m => m.type === 'tool_use');
+      expect(toolUseMessages).toHaveLength(1);
+      expect(toolUseMessages[0]!.toolInfo?.name).toBe('AskUserQuestion');
+
+      // Should only emit ONE waitingForInput
+      expect(waitingStatuses).toHaveLength(1);
+    });
+
+    it('should not duplicate tool from content_block_stop when assistant already emitted it', () => {
+      // Simulate: assistant event arrives first with a regular tool
+      handler.processLine(JSON.stringify({
+        type: 'assistant',
+        message: {
+          content: [{
+            type: 'tool_use',
+            id: 'tool-dedup-1',
+            name: 'Read',
+            input: { file_path: '/test.ts' },
+          }],
+        },
+      }));
+
+      // Then content_block_stop fires for same tool
+      handler.processLine(JSON.stringify({
+        type: 'content_block_start',
+        content_block: {
+          toolUse: { id: 'tool-dedup-1', name: 'Read' },
+        },
+      }));
+
+      handler.processLine(JSON.stringify({
+        type: 'content_block_delta',
+        delta: { partial_json: '{"file_path":"/test.ts"}' },
+      }));
+
+      handler.processLine(JSON.stringify({ type: 'content_block_stop' }));
+
+      // Should only have ONE tool_use message
+      const toolUseMessages = messages.filter(m => m.type === 'tool_use');
+      expect(toolUseMessages).toHaveLength(1);
+    });
+
+    it('should skip assistant_event tool_result for AskUserQuestion tools', () => {
+      // Register an AskUserQuestion tool
+      handler.processLine(JSON.stringify({
+        type: 'assistant',
+        message: {
+          content: [{
+            type: 'tool_use',
+            id: 'ask-result-1',
+            name: 'AskUserQuestion',
+            input: { questions: [{ question: 'Test?' }] },
+          }],
+        },
+      }));
+
+      // Simulate assistant_event tool_result for the same tool
+      handler.processLine(JSON.stringify({
+        type: 'assistant_event',
+        assistant_event_type: 'tool_result',
+        tool_use_id: 'ask-result-1',
+        content: 'some result',
+      }));
+
+      // Should NOT emit a tool_result message for this tool
+      const toolResultMessages = messages.filter(m => m.type === 'tool_result');
+      expect(toolResultMessages).toHaveLength(0);
+    });
+
     it('should reset dedup state on system init', () => {
       // Emit a question
       handler.processLine(JSON.stringify({
