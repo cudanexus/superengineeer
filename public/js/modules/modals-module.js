@@ -190,7 +190,18 @@
       // Apply syntax highlighting to code blocks
       if (hljs) {
         $preview.find('pre code').each(function() {
-          hljs.highlightElement(this);
+          var el = this;
+          var classes = el.className.split(/\s+/);
+
+          for (var i = 0; i < classes.length; i++) {
+            var match = classes[i].match(/^(?:language-|lang-)(.+)/);
+
+            if (match && !hljs.getLanguage(match[1])) {
+              el.classList.remove(classes[i]);
+            }
+          }
+
+          hljs.highlightElement(el);
         });
       }
     } catch (e) {

@@ -44,6 +44,7 @@ export interface CreateProjectResult {
 
 export interface ProjectService {
   createProject(options: CreateProjectOptions): Promise<CreateProjectResult>;
+  updateProjectPath(id: string, newName: string, newPath: string): Promise<Project | null>;
   hasRoadmap(projectPath: string): Promise<boolean>;
   getRoadmapContent(projectPath: string): Promise<string | null>;
 }
@@ -80,6 +81,14 @@ export class DefaultProjectService implements ProjectService {
     const project = await this.projectRepository.create(data);
 
     return { success: true, project };
+  }
+
+  async updateProjectPath(
+    id: string,
+    newName: string,
+    newPath: string,
+  ): Promise<Project | null> {
+    return this.projectRepository.updateProjectPath(id, newName, newPath);
   }
 
   async hasRoadmap(projectPath: string): Promise<boolean> {

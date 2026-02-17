@@ -952,7 +952,73 @@
       MessageRenderer.injectMermaidToolbars();
     }
 
+    restorePromptState(messages);
     scrollConversationToBottom();
+  }
+
+  function restorePromptState(messages) {
+    if (!messages || messages.length === 0) return;
+
+    extractPlanFileFromMessages(messages);
+
+    var pendingType = findPendingPromptType(messages);
+
+    if (!pendingType) return;
+
+    setPromptBlockingState(pendingType);
+
+    if (pendingType === 'plan_mode') {
+      var $planContainer = $('.plan-content-container').last();
+
+      if ($planContainer.length > 0) {
+        loadPlanContent($planContainer);
+      }
+    }
+  }
+
+  function extractPlanFileFromMessages(messages) {
+    for (var i = messages.length - 1; i >= 0; i--) {
+      var msg = messages[i];
+
+      if (msg.type !== 'tool_use' || !msg.toolInfo) continue;
+      if (msg.toolInfo.name !== 'Write' && msg.toolInfo.name !== 'Edit') continue;
+      if (!msg.toolInfo.input || !msg.toolInfo.input.file_path) continue;
+
+      var filePath = msg.toolInfo.input.file_path;
+
+      if (filePath.includes('plans') && filePath.endsWith('.md')) {
+        state.currentPlanFile = filePath;
+        return;
+      }
+    }
+  }
+
+  function findPendingPromptType(messages) {
+    for (var i = messages.length - 1; i >= 0; i--) {
+      var msg = messages[i];
+
+      if (msg.type === 'plan_mode' && msg.planModeInfo &&
+          msg.planModeInfo.action === 'exit') {
+        return 'plan_mode';
+      }
+
+      if (msg.type === 'question') return 'question';
+      if (msg.type === 'permission') return 'permission';
+
+      if (msg.type === 'tool_use' && msg.toolInfo &&
+          msg.toolInfo.name === 'AskUserQuestion' &&
+          msg.toolInfo.status !== 'completed') {
+        return 'askuser';
+      }
+
+      // If we hit a user/assistant/result message, no pending prompt
+      if (msg.type === 'user' || msg.type === 'result' ||
+          msg.type === 'assistant') {
+        return null;
+      }
+    }
+
+    return null;
   }
 
   // Message rendering functions are now in MessageRenderer module
@@ -5110,6 +5176,10 @@
         if (typeof OneOffTabsModule !== 'undefined') {
           OneOffTabsModule.appendMessage(message.projectId, message.data.oneOffId, message.data);
         }
+
+        if (InventifyModule) {
+          InventifyModule.handleOneOffMessage(message.data.oneOffId, message.data);
+        }
         break;
       case 'oneoff_status':
         if (typeof OneOffTabsModule !== 'undefined') {
@@ -5999,6 +6069,11 @@
         escapeHtml: escapeHtml,
         state: state,
         FolderBrowserModule: FolderBrowserModule,
+        subscribeToProject: subscribeToProject,
+        unsubscribeFromProject: unsubscribeFromProject,
+        selectProject: selectProject,
+        loadProjects: loadProjects,
+        startInteractiveAgentWithMessage: startInteractiveAgentWithMessage,
       });
     }
 

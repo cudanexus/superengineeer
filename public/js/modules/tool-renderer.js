@@ -69,6 +69,10 @@
       return escapeHtml(code);
     }
 
+    if (!hljs.getLanguage(language)) {
+      return escapeHtml(code);
+    }
+
     try {
       var result = hljs.highlight(code, { language: language, ignoreIllegals: true });
       return result.value;

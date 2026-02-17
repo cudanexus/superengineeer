@@ -53,7 +53,8 @@ describe('ToolRenderer', () => {
     };
 
     mockHljs = {
-      highlight: jest.fn((code, opts) => ({ value: `<span class="hljs">${code}</span>` }))
+      highlight: jest.fn((code, opts) => ({ value: `<span class="hljs">${code}</span>` })),
+      getLanguage: jest.fn(() => true)
     };
 
     ToolRenderer.init({

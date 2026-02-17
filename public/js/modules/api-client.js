@@ -1974,12 +1974,54 @@
     });
   };
 
-  ApiClient.selectInventifyIdea = function(selectedIndex) {
+  ApiClient.cancelInventify = function() {
+    return $.ajax({
+      url: baseUrl + '/api/projects/inventify/cancel',
+      method: 'POST',
+    });
+  };
+
+  ApiClient.suggestInventifyNames = function(selectedIndex) {
+    return $.ajax({
+      url: baseUrl + '/api/projects/inventify/suggest-names',
+      method: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify({ selectedIndex: selectedIndex }),
+    });
+  };
+
+  ApiClient.getInventifyNameSuggestions = function() {
+    return $.ajax({
+      url: baseUrl + '/api/projects/inventify/name-suggestions',
+      method: 'GET',
+    });
+  };
+
+  ApiClient.selectInventifyIdea = function(selectedIndex, projectName) {
     return $.ajax({
       url: baseUrl + '/api/projects/inventify/select',
       method: 'POST',
       contentType: 'application/json',
-      data: JSON.stringify({ selectedIndex: selectedIndex }),
+      data: JSON.stringify({
+        selectedIndex: selectedIndex,
+        projectName: projectName,
+      }),
+    });
+  };
+
+  ApiClient.getInventifyBuildResult = function() {
+    return $.ajax({
+      url: baseUrl + '/api/projects/inventify/build-result',
+      method: 'GET',
+    });
+  };
+
+  ApiClient.completeInventifyBuild = function(projectId) {
+    return $.ajax({
+      url: baseUrl + '/api/projects/inventify/complete-build',
+      method: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify({ projectId: projectId }),
     });
   };
 

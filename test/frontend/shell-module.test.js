@@ -20,7 +20,8 @@ const mockWS = {
 };
 
 const mockState = {
-  selectedProjectId: 'test-project'
+  selectedProjectId: 'test-project',
+  shellEnabled: true
 };
 
 const mockShowToast = jest.fn();
@@ -183,6 +184,23 @@ describe('Shell Module - Basic Tests for Node.js v24', () => {
     expect(mockApi.getShellStatus).toHaveBeenCalledWith('test-project');
     expect(mockPromise.done).toHaveBeenCalled();
     expect(mockPromise.fail).toHaveBeenCalled();
+  });
+
+  it('should skip shell status check when shell is disabled', () => {
+    ShellModule = require('../../public/js/modules/shell-module.js');
+
+    mockApi.getShellStatus.mockClear();
+
+    ShellModule.init({
+      state: { selectedProjectId: 'test-project', shellEnabled: false },
+      api: mockApi,
+      showToast: mockShowToast,
+      showErrorToast: mockShowErrorToast
+    });
+
+    ShellModule.checkShellStatus();
+
+    expect(mockApi.getShellStatus).not.toHaveBeenCalled();
   });
 
   it('should handle tab activation', () => {

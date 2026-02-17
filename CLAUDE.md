@@ -77,7 +77,7 @@ All project routes prefixed with `/api/projects/:id`. Standard REST verbs (GET/P
 
 **Run Configurations** (`/:id/run-configs`): GET / (list), GET `/importable` (scan project files), POST / (create), PUT `/:configId` (update), DELETE `/:configId`, POST `/:configId/start`, POST `/:configId/stop`, GET `/:configId/status`
 
-**Inventify** (`/api/projects/inventify`): `POST /start` (body: projectTypes[], themes[]) — brainstorms 5 project ideas, `GET /ideas` — returns pending ideas, `POST /select` (body: selectedIndex) — picks an idea and builds it (creates directory + plan, registers project, starts Ralph Loop)
+**Inventify** (`/api/projects/inventify`): `POST /start` (body: projectTypes[], themes[]) — brainstorms 5 project ideas, `GET /ideas` — returns pending ideas, `POST /suggest-names` (body: selectedIndex) — suggests 5 project names for selected idea, `GET /name-suggestions` — returns pending name suggestions, `POST /select` (body: selectedIndex, projectName) — picks an idea + name and builds it (creates directory + plan, registers project, starts Ralph Loop), `GET /build-result` — returns `{newProjectId, projectName}` after build completes (polled by frontend)
 
 ## WebSocket Messages
 

@@ -539,14 +539,15 @@ export class DefaultClaudeAgent implements ClaudeAgent {
         timestamp: new Date().toISOString(),
       });
 
-      this.emitter.emit('exit', code);
-
-      // Set status based on exit code
+      // Set status based on exit code BEFORE emitting exit,
+      // so oneOffMeta still exists when WebSocket relays the status event
       if (code !== null && code !== 0) {
         this.setStatus('error');
       } else {
         this.setStatus('stopped');
       }
+
+      this.emitter.emit('exit', code);
 
       this.reset();
     });

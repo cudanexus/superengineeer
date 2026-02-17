@@ -3232,7 +3232,7 @@
             </svg>
             Inventify - Project Idea Generator
           </h3>
-          <button class="modal-close text-gray-400 hover:text-white" onclick="$('#modal-inventify').addClass('hidden')">&times;</button>
+          <button id="btn-inventify-close" class="modal-close text-gray-400 hover:text-white">&times;</button>
         </div>
         <div class="p-3 overflow-y-auto flex-1 space-y-4">
           <div id="inventify-form-sections">
@@ -3279,14 +3279,24 @@
           </div>
           <!-- Ideas cards -->
           <div id="inventify-ideas" class="hidden space-y-2"></div>
+          <!-- Name suggestions -->
+          <div id="inventify-names" class="hidden space-y-2"></div>
+          <!-- Agent output -->
+          <div id="inventify-output" class="hidden">
+            <div class="text-xs text-gray-500 mb-1">Agent output:</div>
+            <div id="inventify-output-content" class="bg-gray-900 rounded p-2 text-xs text-gray-300 font-mono max-h-48 overflow-y-auto whitespace-pre-wrap"></div>
+          </div>
           <!-- Status -->
           <div id="inventify-status" class="text-sm hidden"></div>
         </div>
         <div class="p-3 border-t border-gray-700 flex justify-between">
           <button id="btn-inventify-back" class="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1.5 rounded text-xs transition-colors hidden">Back</button>
+          <button id="btn-inventify-regenerate" class="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded text-xs transition-colors hidden">Regenerate</button>
           <div class="flex gap-2 ml-auto">
             <button id="btn-inventify-cancel" class="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1.5 rounded text-xs transition-colors">Cancel</button>
             <button id="btn-inventify-generate" class="bg-yellow-600 hover:bg-yellow-500 text-white px-3 py-1.5 rounded text-xs transition-colors font-medium">Generate!</button>
+            <button id="btn-inventify-select" class="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded text-xs transition-colors font-medium hidden" disabled>Build this idea</button>
+            <button id="btn-inventify-build" class="bg-green-600 hover:bg-green-500 text-white px-3 py-1.5 rounded text-xs transition-colors font-medium hidden" disabled>Start building</button>
           </div>
         </div>
       </div>

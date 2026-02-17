@@ -305,7 +305,7 @@
    * Check shell status for the current project
    */
   function checkShellStatus() {
-    if (!state.selectedProjectId) {
+    if (!state.selectedProjectId || !state.shellEnabled) {
       updateShellButtons(false);
       return;
     }

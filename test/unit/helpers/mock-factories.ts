@@ -362,6 +362,25 @@ export function createMockProjectRepository(
       project.updatedAt = new Date().toISOString();
       return Promise.resolve({ ...project });
     }),
+    updateProjectPath: jest.fn().mockImplementation((id: string, newName: string, newPath: string) => {
+      const project = projects.get(id);
+
+      if (!project) return Promise.resolve(null);
+
+      const newId = newPath.replace(/[^a-zA-Z0-9]/g, '_');
+      projects.delete(id);
+
+      const updated = {
+        ...project,
+        id: newId,
+        name: newName,
+        path: newPath,
+        updatedAt: new Date().toISOString(),
+      };
+
+      projects.set(newId, updated);
+      return Promise.resolve({ ...updated });
+    }),
     delete: jest.fn().mockImplementation((id: string) => {
       const existed = projects.has(id);
       projects.delete(id);
@@ -876,6 +895,26 @@ export function createMockProjectService(): jest.Mocked<ProjectService> {
         project,
       };
       return Promise.resolve(result);
+    }),
+    updateProjectPath: jest.fn().mockImplementation((_id: string, newName: string, newPath: string) => {
+      const newId = newPath.replace(/[^a-zA-Z0-9]/g, '_');
+      const now = new Date().toISOString();
+      const project: Project = {
+        id: newId,
+        name: newName,
+        path: newPath,
+        status: 'stopped',
+        currentConversationId: null,
+        nextItem: null,
+        currentItem: null,
+        lastContextUsage: null,
+        permissionOverrides: null,
+        modelOverride: null,
+        mcpOverrides: null,
+        createdAt: now,
+        updatedAt: now,
+      };
+      return Promise.resolve(project);
     }),
     hasRoadmap: jest.fn().mockResolvedValue(true),
     getRoadmapContent: jest.fn().mockResolvedValue('# Roadmap\n## Phase 1'),
@@ -1721,9 +1760,18 @@ export function createMockInventifyService(): jest.Mocked<InventifyService> {
     } as InventifyResult),
     isRunning: jest.fn().mockReturnValue(false),
     getIdeas: jest.fn().mockReturnValue(null),
-    selectIdea: jest.fn().mockResolvedValue({
-      oneOffId: 'inventify-build-oneoff-id',
+    suggestNames: jest.fn().mockResolvedValue({
+      oneOffId: 'inventify-names-oneoff-id',
       placeholderProjectId: 'inventify-project-id',
     } as InventifyResult),
+    getNameSuggestions: jest.fn().mockReturnValue(null),
+    selectIdea: jest.fn().mockResolvedValue({
+      placeholderProjectId: 'inventify-project-id',
+      newProjectId: 'inventify-new-project-id',
+      prompt: 'Build plan prompt...',
+    } as InventifyResult),
+    completeBuild: jest.fn().mockResolvedValue(undefined),
+    getBuildResult: jest.fn().mockReturnValue(null),
+    cancel: jest.fn().mockResolvedValue(undefined),
   };
 }

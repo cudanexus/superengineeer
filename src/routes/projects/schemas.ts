@@ -165,8 +165,20 @@ export const inventifyStartSchema = z.object({
   themes: z.array(z.string()).min(1, 'At least one theme is required'),
 });
 
+export const inventifySuggestNamesSchema = z.object({
+  selectedIndex: z.number().int().min(0).max(4),
+});
+
 export const inventifySelectSchema = z.object({
   selectedIndex: z.number().int().min(0).max(4),
+  projectName: z.string().min(1).max(100).regex(
+    /^[a-z0-9-]+$/,
+    'Project name must be lowercase with hyphens and numbers only',
+  ),
+});
+
+export const inventifyCompleteBuildSchema = z.object({
+  projectId: z.string().min(1, 'projectId is required'),
 });
 
 // Run Configuration schemas

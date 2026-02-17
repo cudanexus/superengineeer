@@ -94,6 +94,7 @@ export interface ProjectRepository {
   updateModelOverride(id: string, model: string | null): Promise<ProjectStatus | null>;
   updateMcpOverrides(id: string, overrides: McpOverrides | null): Promise<ProjectStatus | null>;
   updateRunConfigurations(id: string, configs: RunConfiguration[]): Promise<ProjectStatus | null>;
+  updateProjectPath(id: string, newName: string, newPath: string): Promise<ProjectStatus | null>;
   delete(id: string): Promise<boolean>;
 }
 
@@ -477,6 +478,37 @@ export class FileProjectRepository implements ProjectRepository {
     status.runConfigurations = configs;
     this.saveStatus(status);
     return Promise.resolve({ ...status });
+  }
+
+  async updateProjectPath(
+    id: string,
+    newName: string,
+    newPath: string,
+  ): Promise<ProjectStatus | null> {
+    const status = this.loadStatus(id);
+
+    if (!status) return null;
+
+    const newId = generateIdFromPath(newPath);
+
+    this.index.delete(id);
+    this.statusCache.delete(id);
+
+    status.id = newId;
+    status.name = newName;
+    status.path = newPath;
+
+    const indexEntry: ProjectIndexEntryWithPath = {
+      id: newId,
+      name: newName,
+      path: newPath,
+    };
+
+    this.index.set(newId, indexEntry);
+    this.saveIndex();
+    this.saveStatus(status);
+
+    return { ...status };
   }
 
   delete(id: string): Promise<boolean> {

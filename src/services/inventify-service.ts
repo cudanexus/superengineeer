@@ -3,7 +3,7 @@ import path from 'path';
 import { generateUUID } from '../utils/uuid';
 import { Logger } from '../utils/logger';
 import { AgentManager } from '../agents/agent-manager';
-import { AgentMessage, AgentStatus } from '../agents/claude-agent';
+import { AgentMessage, AgentStatus } from '../agents/types';
 import { ProjectService } from './project';
 import { RalphLoopService, RalphLoopConfig } from './ralph-loop/types';
 import { SettingsRepository } from '../repositories/settings';
@@ -12,6 +12,8 @@ import {
   InventifyRequest,
   InventifyResult,
   InventifyIdea,
+  InventifyNameSuggestion,
+  InventifyBuildResult,
 } from './inventify-types';
 
 export interface InventifyServiceDependencies {
@@ -43,6 +45,8 @@ export class DefaultInventifyService implements InventifyService {
   private collectedOutput = '';
   private pendingIdeas: InventifyIdea[] | null = null;
   private pendingState: PendingState | null = null;
+  private pendingNames: InventifyNameSuggestion | null = null;
+  private completedResult: InventifyBuildResult | null = null;
 
   constructor(deps: InventifyServiceDependencies) {
     this.logger = deps.logger;
@@ -59,6 +63,7 @@ export class DefaultInventifyService implements InventifyService {
 
     this.pendingIdeas = null;
     this.pendingState = null;
+    this.completedResult = null;
 
     const placeholderName = `inventify-${generateUUID().slice(0, 8)}`;
     const placeholderPath = path.join(
@@ -110,11 +115,19 @@ export class DefaultInventifyService implements InventifyService {
     return this.activeOneOffId !== null;
   }
 
+  getBuildResult(): InventifyBuildResult | null {
+    return this.completedResult;
+  }
+
   getIdeas(): InventifyIdea[] | null {
     return this.pendingIdeas;
   }
 
-  async selectIdea(index: number): Promise<InventifyResult> {
+  getNameSuggestions(): InventifyNameSuggestion | null {
+    return this.pendingNames;
+  }
+
+  async suggestNames(index: number): Promise<InventifyResult> {
     if (!this.pendingIdeas || !this.pendingState) {
       throw new Error('No pending ideas to select from');
     }
@@ -131,31 +144,110 @@ export class DefaultInventifyService implements InventifyService {
 
     const idea = this.pendingIdeas[index]!;
     const { placeholderProjectId } = this.pendingState;
-    const prompt = this.buildPlanPrompt(idea);
+    const prompt = this.buildNameSuggestionPrompt(idea);
 
     const oneOffId = await this.agentManager.startOneOffAgent({
       projectId: placeholderProjectId,
       message: prompt,
       permissionMode: 'acceptEdits',
-      label: `Inventify Plan: ${idea.name}`,
+      label: `Inventify Names: ${idea.name}`,
     });
 
     this.activeOneOffId = oneOffId;
     this.collectedOutput = '';
+    this.pendingNames = null;
 
-    this.setupBuildListeners(oneOffId);
+    this.setupNameListeners(oneOffId, index);
 
     return { oneOffId, placeholderProjectId };
   }
 
+  async cancel(): Promise<void> {
+    if (this.activeOneOffId) {
+      await this.agentManager.stopOneOffAgent(this.activeOneOffId);
+    }
+
+    this.activeOneOffId = null;
+    this.collectedOutput = '';
+    this.pendingIdeas = null;
+    this.pendingState = null;
+    this.pendingNames = null;
+    this.completedResult = null;
+  }
+
+  async selectIdea(
+    index: number,
+    projectName: string,
+  ): Promise<InventifyResult> {
+    if (!this.pendingIdeas || !this.pendingState) {
+      throw new Error('No pending ideas to select from');
+    }
+
+    if (index < 0 || index >= this.pendingIdeas.length) {
+      throw new Error(
+        `Invalid idea index: ${index}. Must be 0-${this.pendingIdeas.length - 1}`,
+      );
+    }
+
+    if (this.activeOneOffId) {
+      throw new Error('Inventify is already running');
+    }
+
+    const idea = this.pendingIdeas[index]!;
+    const { placeholderProjectId, placeholderPath, request } =
+      this.pendingState;
+
+    const newProjectId = await this.renameAndUpdateProject(
+      placeholderProjectId,
+      placeholderPath,
+      request.inventifyFolder,
+      projectName,
+    );
+
+    const prompt = this.buildPlanPrompt(idea, projectName);
+
+    this.pendingIdeas = null;
+    this.pendingState = null;
+    this.pendingNames = null;
+
+    return { placeholderProjectId, newProjectId, prompt };
+  }
+
+  async completeBuild(
+    projectId: string,
+    projectPath: string,
+  ): Promise<void> {
+    const planPath = path.join(projectPath, 'doc', 'plan.md');
+
+    const plan = await fs.promises.readFile(planPath, 'utf-8');
+
+    await this.startRalphLoop(projectId, plan);
+
+    this.completedResult = {
+      newProjectId: projectId,
+      projectName: path.basename(projectPath),
+    };
+
+    this.logger.info('Inventify build completed', {
+      projectId,
+      projectName: path.basename(projectPath),
+    });
+  }
+
   private setupBrainstormListeners(oneOffId: string): void {
+    const removeAllListeners = (): void => {
+      this.agentManager.off('oneOffMessage', messageHandler);
+      this.agentManager.off('oneOffStatus', statusHandler);
+      this.agentManager.off('oneOffWaiting', waitingHandler);
+    };
+
     const messageHandler = (
       msgOneOffId: string,
       message: AgentMessage,
     ): void => {
       if (msgOneOffId !== oneOffId) return;
 
-      if (message.type === 'stdout') {
+      if (message.type === 'stdout' || message.type === 'result') {
         this.collectedOutput += message.content;
       }
     };
@@ -168,8 +260,7 @@ export class DefaultInventifyService implements InventifyService {
 
       if (status !== 'stopped' && status !== 'error') return;
 
-      this.agentManager.off('oneOffStatus', statusHandler);
-      this.agentManager.off('oneOffMessage', messageHandler);
+      removeAllListeners();
 
       const output = this.collectedOutput;
       this.activeOneOffId = null;
@@ -180,18 +271,44 @@ export class DefaultInventifyService implements InventifyService {
       }
     };
 
+    const waitingHandler = (
+      waitOneOffId: string,
+      isWaiting: boolean,
+    ): void => {
+      if (waitOneOffId !== oneOffId || !isWaiting) return;
+
+      removeAllListeners();
+
+      const output = this.collectedOutput;
+      this.activeOneOffId = null;
+      this.collectedOutput = '';
+
+      this.agentManager.stopOneOffAgent(oneOffId).catch(() => {});
+      this.handleBrainstormCompletion(output);
+    };
+
     this.agentManager.on('oneOffMessage', messageHandler);
     this.agentManager.on('oneOffStatus', statusHandler);
+    this.agentManager.on('oneOffWaiting', waitingHandler);
   }
 
-  private setupBuildListeners(oneOffId: string): void {
+  private setupNameListeners(
+    oneOffId: string,
+    ideaIndex: number,
+  ): void {
+    const removeAllListeners = (): void => {
+      this.agentManager.off('oneOffMessage', messageHandler);
+      this.agentManager.off('oneOffStatus', statusHandler);
+      this.agentManager.off('oneOffWaiting', waitingHandler);
+    };
+
     const messageHandler = (
       msgOneOffId: string,
       message: AgentMessage,
     ): void => {
       if (msgOneOffId !== oneOffId) return;
 
-      if (message.type === 'stdout') {
+      if (message.type === 'stdout' || message.type === 'result') {
         this.collectedOutput += message.content;
       }
     };
@@ -204,23 +321,44 @@ export class DefaultInventifyService implements InventifyService {
 
       if (status !== 'stopped' && status !== 'error') return;
 
-      this.agentManager.off('oneOffStatus', statusHandler);
-      this.agentManager.off('oneOffMessage', messageHandler);
+      removeAllListeners();
 
       const output = this.collectedOutput;
       this.activeOneOffId = null;
       this.collectedOutput = '';
 
-      if (status === 'stopped' && this.pendingState) {
-        void this.handleBuildCompletion(output);
+      if (status === 'stopped') {
+        this.handleNameCompletion(output, ideaIndex);
       }
+    };
+
+    const waitingHandler = (
+      waitOneOffId: string,
+      isWaiting: boolean,
+    ): void => {
+      if (waitOneOffId !== oneOffId || !isWaiting) return;
+
+      removeAllListeners();
+
+      const output = this.collectedOutput;
+      this.activeOneOffId = null;
+      this.collectedOutput = '';
+
+      this.agentManager.stopOneOffAgent(oneOffId).catch(() => {});
+      this.handleNameCompletion(output, ideaIndex);
     };
 
     this.agentManager.on('oneOffMessage', messageHandler);
     this.agentManager.on('oneOffStatus', statusHandler);
+    this.agentManager.on('oneOffWaiting', waitingHandler);
   }
 
   private handleBrainstormCompletion(output: string): void {
+    this.logger.info('Inventify brainstorm output', {
+      outputLength: output.length,
+      preview: output.substring(0, 500),
+    });
+
     try {
       const ideas = this.parseIdeas(output);
       this.pendingIdeas = ideas;
@@ -237,33 +375,47 @@ export class DefaultInventifyService implements InventifyService {
     }
   }
 
-  private async handleBuildCompletion(output: string): Promise<void> {
-    if (!this.pendingState) return;
-
-    const { placeholderProjectId, placeholderPath, request } =
-      this.pendingState;
+  private handleNameCompletion(
+    output: string,
+    ideaIndex: number,
+  ): void {
+    this.logger.info('Inventify name suggestion output', {
+      outputLength: output.length,
+      preview: output.substring(0, 500),
+    });
 
     try {
-      const parsed = this.parseAgentOutput(output);
-      const finalPath = path.join(request.inventifyFolder, parsed.name);
+      const names = this.parseNames(output);
+      this.pendingNames = { names, ideaIndex };
 
-      await this.renameDirectory(placeholderPath, finalPath);
-      await this.writePlan(finalPath, parsed.plan);
-      await this.startRalphLoop(placeholderProjectId, parsed.plan);
-
-      this.logger.info('Inventify build completed', {
-        name: parsed.name,
-        projectId: placeholderProjectId,
+      this.logger.info('Inventify names suggested', {
+        nameCount: names.length,
       });
     } catch (error) {
-      this.logger.error('Inventify build completion failed', {
+      this.logger.error('Failed to parse name suggestions', {
         error: error instanceof Error ? error.message : 'Unknown error',
-        projectId: placeholderProjectId,
       });
-    } finally {
-      this.pendingIdeas = null;
-      this.pendingState = null;
+      this.pendingNames = null;
     }
+  }
+
+  private async renameAndUpdateProject(
+    placeholderProjectId: string,
+    placeholderPath: string,
+    inventifyFolder: string,
+    projectName: string,
+  ): Promise<string> {
+    const finalPath = path.join(inventifyFolder, projectName);
+
+    await this.renameDirectory(placeholderPath, finalPath);
+
+    const updatedProject = await this.projectService.updateProjectPath(
+      placeholderProjectId,
+      projectName,
+      finalPath,
+    );
+
+    return updatedProject?.id ?? placeholderProjectId;
   }
 
   private async renameDirectory(
@@ -273,20 +425,6 @@ export class DefaultInventifyService implements InventifyService {
     if (oldPath === newPath) return;
 
     await fs.promises.rename(oldPath, newPath);
-  }
-
-  private async writePlan(
-    projectPath: string,
-    plan: string,
-  ): Promise<void> {
-    const docDir = path.join(projectPath, 'doc');
-
-    await fs.promises.mkdir(docDir, { recursive: true });
-    await fs.promises.writeFile(
-      path.join(docDir, 'plan.md'),
-      plan,
-      'utf-8',
-    );
   }
 
   private async startRalphLoop(
@@ -319,73 +457,82 @@ export class DefaultInventifyService implements InventifyService {
       `**Themes**: ${themeList}`,
       '',
       'Invent exactly 5 creative, practical project ideas.',
-      'Each idea must have a unique name, tagline, and description.',
-      '',
-      'You MUST output each idea using these exact markers:',
-      '',
-      'IDEA_1_NAME: project-name (lowercase, numbers, hyphens only)',
-      'IDEA_1_TAGLINE: A catchy one-liner',
-      'IDEA_1_DESCRIPTION: 2-3 sentences describing the project',
-      '',
-      'IDEA_2_NAME: another-project',
-      'IDEA_2_TAGLINE: Another catchy line',
-      'IDEA_2_DESCRIPTION: 2-3 sentences',
-      '',
-      '...and so on for IDEA_3, IDEA_4, IDEA_5.',
-      '',
       'Make each idea distinct and interesting.',
       'Cover different approaches to the given types and themes.',
+      '',
+      'You MUST output ONLY a JSON array with exactly 5 objects.',
+      'Each object must have: name (lowercase, hyphens, numbers only), tagline (catchy one-liner), description (2-3 sentences).',
+      '',
+      'Output NOTHING before or after the JSON. Example:',
+      '',
+      '```json',
+      '[',
+      '  {"name": "pixel-garden", "tagline": "Grow your own pixel forest", "description": "A virtual garden app."},',
+      '  {"name": "code-quest", "tagline": "Learn coding through adventure", "description": "An RPG to teach programming."}',
+      ']',
+      '```',
     ].join('\n');
   }
 
-  buildPlanPrompt(idea: InventifyIdea): string {
+  buildNameSuggestionPrompt(idea: InventifyIdea): string {
     return [
-      'You are a software architect creating a detailed plan.',
+      'You are a creative software project naming expert.',
       '',
-      `**Project**: ${idea.name}`,
+      `**Project Concept**: ${idea.name}`,
       `**Tagline**: ${idea.tagline}`,
       `**Description**: ${idea.description}`,
       '',
-      'Create a detailed implementation plan. You MUST:',
+      'Suggest exactly 5 creative project names.',
+      'Names must be lowercase, use hyphens, and contain only letters, numbers, and hyphens.',
+      'Names should be memorable, concise (1-3 words), and relate to the concept.',
       '',
-      '1. Output: PROJECT_NAME: ' + idea.name,
-      '2. Write a detailed implementation plan covering:',
-      '   - Overview and goals',
-      '   - Technology stack',
-      '   - Core features (prioritized)',
-      '   - Architecture and file structure',
-      '   - Implementation phases with tasks',
-      '3. Wrap the plan between PLAN_START and PLAN_END markers',
+      'You MUST output ONLY a JSON array of 5 strings.',
+      'Output NOTHING before or after the JSON. Example:',
       '',
-      'Example format:',
-      `PROJECT_NAME: ${idea.name}`,
+      '```json',
+      '["pixel-garden", "green-bits", "flora-sim", "byte-bloom", "digiplant"]',
+      '```',
+    ].join('\n');
+  }
+
+  buildPlanPrompt(
+    idea: InventifyIdea,
+    projectName: string,
+  ): string {
+    return [
+      'You are a software architect creating a detailed implementation plan.',
       '',
-      'PLAN_START',
-      `# ${idea.name}`,
-      '...(detailed plan in markdown)...',
-      'PLAN_END',
+      `**Project Name**: ${projectName}`,
+      `**Concept**: ${idea.name}`,
+      `**Tagline**: ${idea.tagline}`,
+      `**Description**: ${idea.description}`,
+      '',
+      'Create a detailed implementation plan and write it to `doc/plan.md`.',
+      '',
+      'The plan must cover:',
+      '- Overview and goals',
+      '- Technology stack',
+      '- Core features (prioritized)',
+      '- Architecture and file structure',
+      '- Implementation phases with tasks',
     ].join('\n');
   }
 
   parseIdeas(output: string): InventifyIdea[] {
+    const jsonArray = extractJsonArray(output);
+
+    if (!jsonArray) {
+      throw new Error('Could not parse any ideas from agent output');
+    }
+
     const ideas: InventifyIdea[] = [];
 
-    for (let i = 1; i <= 5; i++) {
-      const nameMatch = output.match(
-        new RegExp(`IDEA_${i}_NAME:\\s*([^\\n]+)`),
-      );
-      const taglineMatch = output.match(
-        new RegExp(`IDEA_${i}_TAGLINE:\\s*([^\\n]+)`),
-      );
-      const descMatch = output.match(
-        new RegExp(`IDEA_${i}_DESCRIPTION:\\s*([^\\n]+)`),
-      );
-
-      if (nameMatch && taglineMatch && descMatch) {
+    for (const item of jsonArray) {
+      if (isValidIdea(item)) {
         ideas.push({
-          name: nameMatch[1]!.trim(),
-          tagline: taglineMatch[1]!.trim(),
-          description: descMatch[1]!.trim(),
+          name: String(item.name).trim(),
+          tagline: String(item.tagline).trim(),
+          description: String(item.description).trim(),
         });
       }
     }
@@ -397,6 +544,34 @@ export class DefaultInventifyService implements InventifyService {
     return ideas;
   }
 
+  parseNames(output: string): string[] {
+    const jsonArray = extractJsonArray(output);
+
+    if (!jsonArray) {
+      throw new Error('Could not parse name suggestions from agent output');
+    }
+
+    const names = jsonArray
+      .filter((item): item is string => typeof item === 'string')
+      .map((name) => name.trim().toLowerCase());
+
+    if (names.length === 0) {
+      throw new Error('Could not parse name suggestions from agent output');
+    }
+
+    return names;
+  }
+
+  parsePlan(output: string): string {
+    const planMatch = output.match(/PLAN_START\n([\s\S]*?)\nPLAN_END/);
+
+    if (!planMatch) {
+      throw new Error('Could not parse plan from agent output');
+    }
+
+    return planMatch[1]!.trim();
+  }
+
   parseAgentOutput(output: string): ParsedOutput {
     const nameMatch = output.match(/PROJECT_NAME:\s*([a-z0-9-]+)/i);
 
@@ -404,19 +579,48 @@ export class DefaultInventifyService implements InventifyService {
       throw new Error('Could not parse project name from agent output');
     }
 
-    const planMatch = output.match(/PLAN_START\n([\s\S]*?)\nPLAN_END/);
-
-    if (!planMatch) {
-      throw new Error('Could not parse plan from agent output');
-    }
+    const plan = this.parsePlan(output);
 
     return {
       name: nameMatch[1]!.toLowerCase(),
-      plan: planMatch[1]!.trim(),
+      plan,
     };
   }
 }
 
 function buildRalphTaskDescription(plan: string): string {
   return `Implement the project according to the following plan:\n\n${plan}`;
+}
+
+function extractJsonArray(output: string): unknown[] | null {
+  // Try to find a JSON array in the output (may be wrapped in ```json fences)
+  const fencedMatch = output.match(/```(?:json)?\s*\n?([\s\S]*?)```/);
+  const candidate = fencedMatch ? fencedMatch[1]!.trim() : output.trim();
+
+  // Find the first [ and last ] to extract the array
+  const start = candidate.indexOf('[');
+  const end = candidate.lastIndexOf(']');
+
+  if (start === -1 || end === -1 || end <= start) return null;
+
+  try {
+    const parsed: unknown = JSON.parse(candidate.substring(start, end + 1));
+
+    if (Array.isArray(parsed)) return parsed as unknown[];
+  } catch {
+    // JSON parse failed
+  }
+
+  return null;
+}
+
+function isValidIdea(item: unknown): item is Record<string, unknown> {
+  if (typeof item !== 'object' || item === null) return false;
+
+  const obj = item as Record<string, unknown>;
+  return (
+    typeof obj.name === 'string' &&
+    typeof obj.tagline === 'string' &&
+    typeof obj.description === 'string'
+  );
 }

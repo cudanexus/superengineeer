@@ -316,8 +316,9 @@ Generate new project ideas and have them automatically built:
 2. Select project types (Web App, API, CLI, Desktop, Mobile, Library, Extension)
 3. Select themes (Games, Enterprise, Dev Tools, Education, Social, Finance, Health, Creative, Data, IoT)
 4. Click "Generate!" -- a one-off agent brainstorms **5 unique project ideas**, each with a name, tagline, and description
-5. Browse the 5 idea cards and click one to select it
-6. On selection: creates the project directory, writes `doc/plan.md` with a detailed plan, registers in Claudito, and starts a Ralph Loop to build it
+5. Browse the 5 idea cards, select one with the radio button, and click "Build this idea"
+6. A one-off agent suggests **5 creative project names** -- select one and click "Start building"
+7. Creates the project directory, writes `doc/plan.md` with a detailed plan, registers in Claudito, starts a Ralph Loop to build it, and automatically navigates to the new project
 
 Configure the output folder in Settings > General > Inventify Folder.
 
@@ -628,9 +629,12 @@ GET    /api/projects/:id/run-configs/:configId/status  # Get process status
 ### Inventify
 
 ```
-POST   /api/projects/inventify/start       # Start brainstorming (body: projectTypes[], themes[])
-GET    /api/projects/inventify/ideas       # Get generated idea cards (5 ideas)
-POST   /api/projects/inventify/select      # Select an idea to build (body: ideaIndex or idea object)
+POST   /api/projects/inventify/start             # Start brainstorming (body: projectTypes[], themes[])
+GET    /api/projects/inventify/ideas             # Get generated idea cards (5 ideas)
+POST   /api/projects/inventify/suggest-names     # Suggest 5 names for idea (body: selectedIndex)
+GET    /api/projects/inventify/name-suggestions  # Get pending name suggestions
+POST   /api/projects/inventify/select            # Select idea + name to build (body: selectedIndex, projectName)
+POST   /api/projects/inventify/cancel            # Cancel current inventify operation
 ```
 
 ### Authentication
