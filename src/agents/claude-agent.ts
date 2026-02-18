@@ -418,6 +418,8 @@ export class DefaultClaudeAgent implements ClaudeAgent {
     const messageToSend = jsonMessage + '\n';
 
     this.logger.info('STDIN >>> Sending tool result', {
+      direction: 'input',
+      eventType: 'tool_result',
       toolUseId,
       contentLength: content.length,
     });
@@ -570,8 +572,10 @@ export class DefaultClaudeAgent implements ClaudeAgent {
     if (stdout) {
       stdout.on('data', (data: Buffer) => {
         this.logger.debug('STDOUT <<< Raw data', {
+          direction: 'output',
+          eventType: 'raw_data',
           bytes: data.length,
-          preview: data.toString().substring(0, 200),
+          preview: data.toString(),
         });
         this.processStreamData(data.toString());
       });
@@ -581,8 +585,10 @@ export class DefaultClaudeAgent implements ClaudeAgent {
       stderr.on('data', (data: Buffer) => {
         const content = data.toString();
         this.logger.warn('STDERR <<< Error output', {
+          direction: 'output',
+          eventType: 'stderr',
           bytes: data.length,
-          content: content.substring(0, 500),
+          content,
         });
 
         // Check for session ID conflict
@@ -652,12 +658,18 @@ export class DefaultClaudeAgent implements ClaudeAgent {
     const messageToSend = jsonMessage + '\n';
 
     this.logger.info('STDIN >>> Sending message', {
+      direction: 'input',
+      eventType: 'message',
       contentLength: input.length,
       contentPreview: input.substring(0, 100),
     });
 
     const success = this.processManager.sendInput(messageToSend);
-    this.logger.info('STDIN >>> Message sent', { success });
+    this.logger.info('STDIN >>> Message sent', {
+      direction: 'input',
+      eventType: 'message_sent',
+      success,
+    });
 
     if (success) {
       // Note: Don't emit user message here - the UI already shows it when user sends

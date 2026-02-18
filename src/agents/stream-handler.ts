@@ -110,6 +110,8 @@ export class StreamHandler extends EventEmitter {
     }
 
     this.logger.debug('STDOUT <<< Processing line', {
+      direction: 'output',
+      eventType: 'stream_line',
       length: trimmed.length,
       preview: trimmed.substring(0, 200),
     });

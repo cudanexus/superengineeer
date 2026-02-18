@@ -65,6 +65,13 @@ export class MessageBuilder {
       args.push('--model', options.model);
     }
 
+    // Always disallow AskUserQuestion — in --print mode the CLI auto-responds
+    // with is_error:true before our app can send the real answer via stdin
+    const disallowed = MessageBuilder.buildDisallowedTools(options.disallowedTools);
+    if (disallowed.length > 0) {
+      args.push('--disallowedTools', disallowed.join(' '));
+    }
+
     // Permissions
     if (options.skipPermissions) {
       args.push('--dangerously-skip-permissions');
@@ -76,11 +83,6 @@ export class MessageBuilder {
       // Allowed tools (space-separated string)
       if (options.allowedTools && options.allowedTools.length > 0) {
         args.push('--allowedTools', options.allowedTools.join(' '));
-      }
-
-      // Disallowed tools (space-separated string)
-      if (options.disallowedTools && options.disallowedTools.length > 0) {
-        args.push('--disallowedTools', options.disallowedTools.join(' '));
       }
 
       // Append system prompt (only when not skipping permissions)
@@ -187,6 +189,17 @@ export class MessageBuilder {
     fs.writeFileSync(configPath, JSON.stringify({ mcpServers }, null, 2));
 
     return configPath;
+  }
+
+  /**
+   * Build the disallowed tools list, always including AskUserQuestion.
+   * In --print mode the CLI auto-responds to AskUserQuestion with is_error:true
+   * before our app can provide the real answer via stdin.
+   */
+  static buildDisallowedTools(userDisallowed?: string[]): string[] {
+    const tools = new Set(userDisallowed || []);
+    tools.add('AskUserQuestion');
+    return Array.from(tools);
   }
 
   /**

@@ -251,7 +251,10 @@ describe('DefaultClaudeAgent', () => {
 
       const args = getSpawnArgs(mockSpawner);
       expect(args).toContain('--disallowedTools');
-      expect(args).toContain('Bash');
+      const disallowedIdx = args.indexOf('--disallowedTools');
+      const disallowedValue = args[disallowedIdx + 1]!;
+      expect(disallowedValue).toContain('Bash');
+      expect(disallowedValue).toContain('AskUserQuestion');
     });
 
     it('should add --append-system-prompt when appendSystemPrompt provided', () => {

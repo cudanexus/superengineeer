@@ -288,7 +288,31 @@ describe('MessageBuilder', () => {
       });
 
       expect(args).toContain('--disallowedTools');
-      expect(args).toContain('Bash');
+      const disallowedIdx = args.indexOf('--disallowedTools');
+      const disallowedValue = args[disallowedIdx + 1]!;
+      expect(disallowedValue).toContain('Bash');
+      expect(disallowedValue).toContain('AskUserQuestion');
+    });
+
+    it('should always disallow AskUserQuestion even with no user-provided disallowedTools', () => {
+      const args = MessageBuilder.buildArgs({ mode: 'interactive' });
+
+      expect(args).toContain('--disallowedTools');
+      const disallowedIdx = args.indexOf('--disallowedTools');
+      const disallowedValue = args[disallowedIdx + 1]!;
+      expect(disallowedValue).toContain('AskUserQuestion');
+    });
+
+    it('should disallow AskUserQuestion even when skipPermissions is true', () => {
+      const args = MessageBuilder.buildArgs({
+        mode: 'interactive',
+        skipPermissions: true,
+      });
+
+      expect(args).toContain('--disallowedTools');
+      const disallowedIdx = args.indexOf('--disallowedTools');
+      const disallowedValue = args[disallowedIdx + 1]!;
+      expect(disallowedValue).toContain('AskUserQuestion');
     });
 
     it('should add --append-system-prompt when not skipping permissions', () => {
