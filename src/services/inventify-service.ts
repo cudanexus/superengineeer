@@ -134,23 +134,25 @@ export class DefaultInventifyService implements InventifyService {
     return this.pendingNames;
   }
 
-  async suggestNames(index: number): Promise<InventifyResult> {
+  suggestNames(index: number): Promise<InventifyResult> {
     if (!this.pendingIdeas || !this.pendingState) {
-      throw new Error('No pending ideas to select from');
+      return Promise.reject(new Error('No pending ideas to select from'));
     }
 
     if (index < 0 || index >= this.pendingIdeas.length) {
-      throw new Error(
-        `Invalid idea index: ${index}. Must be 0-${this.pendingIdeas.length - 1}`,
+      return Promise.reject(
+        new Error(
+          `Invalid idea index: ${index}. Must be 0-${this.pendingIdeas.length - 1}`,
+        ),
       );
     }
 
     if (this.activeOneOffId) {
-      throw new Error('Inventify is already running');
+      return Promise.reject(new Error('Inventify is already running'));
     }
 
     if (!this.sessionOneOffId) {
-      throw new Error('No active session agent');
+      return Promise.reject(new Error('No active session agent'));
     }
 
     const idea = this.pendingIdeas[index]!;
@@ -165,7 +167,10 @@ export class DefaultInventifyService implements InventifyService {
 
     this.setupNameListeners(this.sessionOneOffId, index);
 
-    return { oneOffId: this.sessionOneOffId, placeholderProjectId };
+    return Promise.resolve({
+      oneOffId: this.sessionOneOffId,
+      placeholderProjectId,
+    });
   }
 
   async cancel(): Promise<void> {
