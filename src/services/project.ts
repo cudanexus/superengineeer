@@ -111,7 +111,7 @@ export class DefaultProjectService implements ProjectService {
   }
 
   private async initializeClauditoFolder(projectPath: string): Promise<void> {
-    const clauditoPath = path.join(projectPath, '.claudito');
+    const clauditoPath = path.join(projectPath, '.superengineer-v5');
     const clauditoExists = await this.fileSystem.exists(clauditoPath);
 
     if (!clauditoExists) {

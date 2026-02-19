@@ -463,9 +463,9 @@ Toggle Chrome browser usage for Claude agents via the **Chrome** button in the c
 ### Danger Zone (Factory Reset)
 
 Access via Settings > Danger Zone. The "Wipe All Data" button permanently deletes:
-- All project registrations and per-project `.claudito/` directories
+- All project registrations and per-project `.superengineer-v5/` directories
 - All conversation history
-- Global settings, PID tracking, and project index (`~/.claudito/`)
+- Global settings, PID tracking, and project index (`~/.superengineer-v5/`)
 - Temporary MCP config files (`{OS_TEMP}/claudito-mcp/`)
 
 Project source files are **never** deleted.
@@ -484,13 +484,13 @@ Customize how instructions are given to agents. Available variables:
 All data is stored locally in your home directory:
 
 ```
-~/.claudito/
+~/.superengineer-v5/
 ├── projects/
 │   └── index.json          # Project registry
 ├── settings.json           # Global settings
 └── pids.json              # Active process tracking
 
-{project-root}/.claudito/
+{project-root}/.superengineer-v5/
 ├── status.json            # Project status
 └── conversations/
     └── {id}.json          # Conversation history

@@ -28,14 +28,14 @@ doc/
 
 ## Data Storage Structure
 
-Global data in `$HOME/.claudito/`:
+Global data in `$HOME/.superengineer-v5/`:
 ```
 projects/
   index.json                      # [{ id, name, path }] - project registry
 settings.json                     # Global settings + agentPromptTemplate
 ```
 
-Project-specific data in `{project-root}/.claudito/`:
+Project-specific data in `{project-root}/.superengineer-v5/`:
 ```
 status.json                       # ProjectStatus object
 conversations/
@@ -123,7 +123,7 @@ Sessions use UUID v4 IDs: `--session-id {uuid}` (new) or `--resume {uuid}` (exis
 
 ## Features
 
-**Server**: Graceful shutdown (SIGINT/SIGTERM), PID tracking (`$HOME/.claudito/pids.json`, orphans killed on startup), conversation statistics (duration, messages, tool calls, tokens), context usage persistence
+**Server**: Graceful shutdown (SIGINT/SIGTERM), PID tracking (`$HOME/.superengineer-v5/pids.json`, orphans killed on startup), conversation statistics (duration, messages, tool calls, tokens), context usage persistence
 
 **UI Tabs**: Agent Output (conversation + tool usage) and Project Files (tree view, multi-tab editor, Ctrl+S save, delete files/folders)
 - **One-Off Agent Sub-Tabs**: Full rendering per tab, per-tab input/toolbar (Tasks, Search, Permission Mode, Model, Font Size), direct file editing

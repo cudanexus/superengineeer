@@ -2,7 +2,7 @@ import path from 'path';
 import os from 'os';
 import fs from 'fs';
 
-const DATA_DIR_NAME = '.claudito';
+const DATA_DIR_NAME = '.superengineer-v5';
 
 export function getDataDirectory(): string {
   const homeDir = os.homedir();

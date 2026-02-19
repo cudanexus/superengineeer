@@ -102,7 +102,7 @@ Run Claude Code agents inside Docker containers with the project directory mount
 - [ ] Create `DockerService` interface for container lifecycle management
 - [ ] Add Docker settings in UI: enable/disable, base image, resource limits (CPU, memory)
 - [ ] Implement Docker availability detection with fallback to host execution
-- [ ] Create `Dockerfile.claudito-agent` with Claude Code CLI, Node.js, and common dev tools
+- [ ] Create `Dockerfile.superengineer-v5-agent` with Claude Code CLI, Node.js, and common dev tools
 - [ ] Add `GET /api/settings/docker` and `PUT /api/settings/docker` endpoints
 
 ### Milestone 3.2: Container Lifecycle Management
@@ -117,7 +117,7 @@ Run Claude Code agents inside Docker containers with the project directory mount
 
 - [ ] Modify `ClaudeAgent` to optionally spawn inside Docker container via `docker exec`
 - [ ] Stream agent stdout/stderr from container through existing WebSocket pipeline
-- [ ] Implement file sync strategy for `.claudito/` metadata (conversations, status)
+- [ ] Implement file sync strategy for `.superengineer-v5/` metadata (conversations, status)
 - [ ] Add per-project Docker override (some projects sandboxed, others on host)
 - [ ] Create network isolation options (no network, host network, custom bridge)
 

@@ -48,7 +48,7 @@ export function buildProjectDataPath(
   projectPath: string,
   ...subdirs: string[]
 ): string {
-  return path.join(projectPath, '.claudito', ...subdirs);
+  return path.join(projectPath, '.superengineer-v5', ...subdirs);
 }
 
 /**

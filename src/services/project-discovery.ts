@@ -88,7 +88,7 @@ export class DefaultProjectDiscoveryService implements ProjectDiscoveryService {
             continue;
           }
 
-          // Add all directories as potential projects (remove .claudito check)
+          // Add all directories as potential projects (remove .superengineer-v5 check)
           projects.push(fullPath);
 
           // Still recurse to find nested projects
@@ -134,7 +134,7 @@ export class DefaultProjectDiscoveryService implements ProjectDiscoveryService {
   private async isValidProjectDirectory(projectPath: string): Promise<boolean> {
     try {
       const stats = await fs.promises.stat(projectPath);
-      // Only check if it's a directory, don't require .claudito
+      // Only check if it's a directory, don't require .superengineer-v5
       return stats.isDirectory();
     } catch {
       return false;

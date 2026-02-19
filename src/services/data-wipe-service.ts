@@ -52,7 +52,7 @@ export class DefaultDataWipeService implements DataWipeService {
     let wiped = 0;
 
     for (const projectPath of projectPaths) {
-      const clauditoDir = path.join(projectPath, '.claudito');
+      const clauditoDir = path.join(projectPath, '.superengineer-v5');
 
       if (this.deleteDirectoryRecursive(clauditoDir)) {
         wiped++;

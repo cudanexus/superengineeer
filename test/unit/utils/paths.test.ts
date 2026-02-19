@@ -21,12 +21,12 @@ describe('paths utilities', () => {
   });
 
   describe('getDataDirectory', () => {
-    it('should return path to .claudito in home directory', () => {
+    it('should return path to .superengineer-v5 in home directory', () => {
       (fs.existsSync as jest.Mock).mockReturnValue(true);
 
       const result = getDataDirectory();
 
-      expect(result).toBe(path.join('/mock/home', '.claudito'));
+      expect(result).toBe(path.join('/mock/home', '.superengineer-v5'));
     });
 
     it('should create directory if it does not exist', () => {
@@ -35,7 +35,7 @@ describe('paths utilities', () => {
       getDataDirectory();
 
       expect(fs.mkdirSync).toHaveBeenCalledWith(
-        path.join('/mock/home', '.claudito'),
+        path.join('/mock/home', '.superengineer-v5'),
         { recursive: true }
       );
     });
@@ -62,7 +62,7 @@ describe('paths utilities', () => {
 
       const result = getDataDirectory();
 
-      expect(result).toBe(path.join('/users/testuser', '.claudito'));
+      expect(result).toBe(path.join('/users/testuser', '.superengineer-v5'));
     });
 
     it('should return consistent path on multiple calls', () => {

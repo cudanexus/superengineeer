@@ -87,7 +87,7 @@ describe('FileRalphLoopRepository', () => {
       await repository.create(initialState);
 
       expect(mockFileSystem.mkdir).toHaveBeenCalledWith(
-        expect.stringContaining('.claudito')
+        expect.stringContaining('.superengineer-v5')
       );
       expect(mockFileSystem.mkdir).toHaveBeenCalledWith(
         expect.stringContaining('summaries')

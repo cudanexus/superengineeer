@@ -120,7 +120,7 @@ export function generateIdFromPath(projectPath: string): string {
   return projectPath.replace(/[^a-zA-Z0-9]/g, '_');
 }
 
-// Extended index entry that includes project path for locating .claudito folder
+// Extended index entry that includes project path for locating .superengineer-v5 folder
 export interface ProjectIndexEntryWithPath extends ProjectIndexEntry {
   path: string;
 }
@@ -172,9 +172,9 @@ export class FileProjectRepository implements ProjectRepository {
     this.fileSystem.writeFileSync(this.indexPath, data);
   }
 
-  // Project data is now stored in {project-root}/.claudito/
+  // Project data is now stored in {project-root}/.superengineer-v5/
   private getProjectDataDir(projectPath: string): string {
-    return path.join(projectPath, '.claudito');
+    return path.join(projectPath, '.superengineer-v5');
   }
 
   private getStatusPath(projectPath: string): string {
@@ -363,7 +363,7 @@ export class FileProjectRepository implements ProjectRepository {
       updatedAt: now,
     };
 
-    // Store path in index so we can locate the .claudito folder
+    // Store path in index so we can locate the .superengineer-v5 folder
     const indexEntry: ProjectIndexEntryWithPath = { id, name: data.name, path: data.path };
     this.index.set(id, indexEntry);
     this.saveIndex();
@@ -522,7 +522,7 @@ export class FileProjectRepository implements ProjectRepository {
     this.saveIndex();
     this.statusCache.delete(id);
 
-    // Delete the .claudito folder in the project root
+    // Delete the .superengineer-v5 folder in the project root
     const dataDir = this.getProjectDataDir(entry.path);
 
     if (this.fileSystem.existsSync(dataDir)) {

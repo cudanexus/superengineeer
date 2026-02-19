@@ -53,8 +53,8 @@ graph TB
     end
 
     subgraph "File System"
-        GD[Global Data<br/>~/.claudito/]
-        PD[Project Data<br/>{project}/.claudito/]
+        GD[Global Data<br/>~/.superengineer-v5/]
+        PD[Project Data<br/>{project}/.superengineer-v5/]
         PF[Project Files]
     end
 
@@ -267,13 +267,13 @@ sequenceDiagram
 
 ```mermaid
 graph TD
-    subgraph "~/.claudito/ (Global)"
+    subgraph "~/.superengineer-v5/ (Global)"
         GS[settings.json]
         PI[projects/index.json]
         PID[pids.json]
     end
 
-    subgraph "{project}/.claudito/ (Per Project)"
+    subgraph "{project}/.superengineer-v5/ (Per Project)"
         PS[status.json]
         subgraph "conversations/"
             C1["{uuid}.json"]
