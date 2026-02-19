@@ -1,7 +1,7 @@
 # Superengineer
 
 [![npm version](https://img.shields.io/npm/v/superengineer.svg)](https://www.npmjs.com/package/superengineer)
-[![CI](https://github.com/comfortablynumb/claudito/actions/workflows/ci.yml/badge.svg)](https://github.com/comfortablynumb/claudito/actions/workflows/ci.yml)
+[![CI](https://github.com/cudanexus/superengineeer/actions/workflows/ci.yml/badge.svg)](https://github.com/cudanexus/superengineeer/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 > **Warning**: This project is under active development. Features may change, and bugs are expected. Use at your own risk.

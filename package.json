@@ -40,12 +40,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/anthropics/superengineer.git"
+    "url": "git+https://github.com/cudanexus/superengineeer.git"
   },
   "bugs": {
-    "url": "https://github.com/anthropics/claudito/issues"
+    "url": "https://github.com/cudanexus/superengineeer/issues"
   },
-  "homepage": "https://github.com/anthropics/superengineer#readme",
+  "homepage": "https://github.com/cudanexus/superengineeer#readme",
   "engines": {
     "node": ">=20.0.0"
   },
