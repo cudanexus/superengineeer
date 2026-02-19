@@ -67,7 +67,7 @@
 
         // Auto-select requested file or first file if available
         if (data.files && data.files.length > 0) {
-          if (fileToSelect) {
+          if (typeof fileToSelect === 'string' && fileToSelect) {
             selectClaudeFile(fileToSelect);
           } else {
             selectClaudeFile(data.files[0].path);
