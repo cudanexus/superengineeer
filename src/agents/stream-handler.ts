@@ -212,7 +212,7 @@ export class StreamHandler extends EventEmitter {
 
     switch (cliEvent.subtype) {
       case 'init':
-        this.logger.info('Claude CLI initialized', {
+        this.logger.info('Superengineer agent initialized', {
           sessionId: cliEvent.session_id,
         });
         // Reset tracking for new session
@@ -423,19 +423,19 @@ export class StreamHandler extends EventEmitter {
     // Build question data from tool input
     const questions = Array.isArray(input.questions)
       ? (input.questions as Array<{
-          question?: string;
-          header?: string;
-          options?: Array<{ label?: string; description?: string }>;
-          multiSelect?: boolean;
-        }>).map(q => ({
-          question: q.question || '',
-          header: q.header,
-          options: Array.isArray(q.options) ? q.options.map(o => ({
-            label: o.label || '',
-            description: o.description,
-          })) : [],
-          multiSelect: q.multiSelect,
-        }))
+        question?: string;
+        header?: string;
+        options?: Array<{ label?: string; description?: string }>;
+        multiSelect?: boolean;
+      }>).map(q => ({
+        question: q.question || '',
+        header: q.header,
+        options: Array.isArray(q.options) ? q.options.map(o => ({
+          label: o.label || '',
+          description: o.description,
+        })) : [],
+        multiSelect: q.multiSelect,
+      }))
       : [];
 
     // Also emit the waiting for input state with question data

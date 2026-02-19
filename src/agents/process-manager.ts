@@ -74,7 +74,7 @@ export class ProcessManager extends EventEmitter {
       env,
     };
 
-    this.logger.info('Spawning Claude CLI process', {
+    this.logger.info('Spawning Superengineer CLI process', {
       command,
       args: args.length,
       workingDirectory,

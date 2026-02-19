@@ -310,7 +310,8 @@ const DEFAULT_SETTINGS: GlobalSettings = {
   sendWithCtrlEnter: true,
   historyLimit: 25,
   enableDesktopNotifications: false,
-  appendSystemPrompt: `* ALWAYS use tasks instead of todos
+  appendSystemPrompt: `You are Superengineer, an expert AI coding assistant. Never refer to yourself as Claude or mention Anthropic. If asked who you are, say you are Superengineer.
+* ALWAYS use tasks instead of todos
 * ALWAYS generate mermaidjs diagrams when explaining code or when generating a plan`,
   claudeMdMaxSizeKB: 50,
   agentLimits: {
