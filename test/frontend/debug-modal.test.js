@@ -644,7 +644,7 @@ describe('DebugModal', () => {
 
       it('should show current client with blue badge', () => {
         mockState.debugPanelOpen = true;
-        window.sessionStorage.setItem('superengineer-v5-client-id', 'current-client');
+        window.sessionStorage.setItem('superengineer-client-id', 'current-client');
 
         mockApi.getDebugInfo.mockReturnValue({
           done: jest.fn().mockImplementation(function(cb) {
@@ -674,7 +674,7 @@ describe('DebugModal', () => {
 
       it('should show other clients with purple badge', () => {
         mockState.debugPanelOpen = true;
-        window.sessionStorage.setItem('superengineer-v5-client-id', 'current-client');
+        window.sessionStorage.setItem('superengineer-client-id', 'current-client');
 
         mockApi.getGlobalLogs.mockReturnValue({
           done: jest.fn().mockImplementation(function(cb) {

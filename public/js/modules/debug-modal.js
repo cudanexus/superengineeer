@@ -390,7 +390,7 @@
     currentLogsData.ioLogs = ioLogs;
 
     html += '<div class="flex items-center justify-between mb-3">';
-    html += '<span class="text-gray-400 text-sm">Showing ' + ioLogs.length + ' Claude I/O events</span>';
+    html += '<span class="text-gray-400 text-sm">Showing ' + ioLogs.length + ' AI events</span>';
     html += '<div class="flex items-center gap-2">';
     html += '<span class="flex items-center gap-1 text-xs"><span class="w-2 h-2 bg-blue-500 rounded-full"></span> Input</span>';
     html += '<span class="flex items-center gap-1 text-xs"><span class="w-2 h-2 bg-green-500 rounded-full"></span> Output</span>';
@@ -472,7 +472,7 @@
 
       html += '</div>';
     } else {
-      html += '<div class="text-gray-500 text-center py-8">No Claude I/O events yet. Start an agent to see input/output.</div>';
+      html += '<div class="text-gray-500 text-center py-8">No AI events yet. Start an agent to see input/output.</div>';
     }
 
     $('#debug-claude-io-content').html(html);

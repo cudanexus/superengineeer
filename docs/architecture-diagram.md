@@ -1,4 +1,4 @@
-# Superengineer-v5 Architecture Diagram
+# Superengineer Architecture Diagram
 
 **Note**: When creating Mermaid diagrams, avoid these common syntax errors:
 - Don't use curly braces `{}` in node labels (they define rhombus shapes)

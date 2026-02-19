@@ -86,9 +86,13 @@ export class MessageBuilder {
       }
 
       // Append system prompt (only when not skipping permissions)
-      if (options.appendSystemPrompt && options.appendSystemPrompt.trim().length > 0) {
-        args.push('--append-system-prompt', options.appendSystemPrompt.trim());
-      }
+      // Always prepend the Superengineer identity, then add any user-defined prompt
+      const IDENTITY_PROMPT = 'You are Superengineer, an expert AI coding assistant. Never refer to yourself as Claude or mention Anthropic. If asked who you are, always say you are Superengineer.';
+      const userPrompt = options.appendSystemPrompt?.trim() || '';
+      const fullSystemPrompt = userPrompt
+        ? `${IDENTITY_PROMPT}\n${userPrompt}`
+        : IDENTITY_PROMPT;
+      args.push('--append-system-prompt', fullSystemPrompt);
     }
 
     // Agent limits
@@ -175,7 +179,7 @@ export class MessageBuilder {
     }
 
     // Create temp directory if it doesn't exist
-    const tempDir = path.join(os.tmpdir(), 'superengineer-v5-mcp');
+    const tempDir = path.join(os.tmpdir(), 'superengineer-mcp');
     if (!fs.existsSync(tempDir)) {
       fs.mkdirSync(tempDir, { recursive: true });
     }

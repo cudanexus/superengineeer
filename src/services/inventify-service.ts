@@ -42,6 +42,7 @@ export class DefaultInventifyService implements InventifyService {
   private readonly ralphLoopService: RalphLoopService;
   private readonly settingsRepository: SettingsRepository;
   private activeOneOffId: string | null = null;
+  private sessionOneOffId: string | null = null;
   private collectedOutput = '';
   private pendingIdeas: InventifyIdea[] | null = null;
   private pendingState: PendingState | null = null;
@@ -60,6 +61,8 @@ export class DefaultInventifyService implements InventifyService {
     if (this.activeOneOffId) {
       throw new Error('Inventify is already running');
     }
+
+    await this.stopSessionAgent();
 
     this.pendingIdeas = null;
     this.pendingState = null;
@@ -88,6 +91,9 @@ export class DefaultInventifyService implements InventifyService {
     const prompt = this.buildBrainstormPrompt(
       request.projectTypes,
       request.themes,
+      request.languages,
+      request.technologies,
+      request.customPrompt,
     );
 
     const oneOffId = await this.agentManager.startOneOffAgent({
@@ -98,6 +104,7 @@ export class DefaultInventifyService implements InventifyService {
     });
 
     this.activeOneOffId = oneOffId;
+    this.sessionOneOffId = oneOffId;
     this.collectedOutput = '';
 
     this.pendingState = {
@@ -127,45 +134,47 @@ export class DefaultInventifyService implements InventifyService {
     return this.pendingNames;
   }
 
-  async suggestNames(index: number): Promise<InventifyResult> {
+  suggestNames(index: number): Promise<InventifyResult> {
     if (!this.pendingIdeas || !this.pendingState) {
-      throw new Error('No pending ideas to select from');
+      return Promise.reject(new Error('No pending ideas to select from'));
     }
 
     if (index < 0 || index >= this.pendingIdeas.length) {
-      throw new Error(
-        `Invalid idea index: ${index}. Must be 0-${this.pendingIdeas.length - 1}`,
+      return Promise.reject(
+        new Error(
+          `Invalid idea index: ${index}. Must be 0-${this.pendingIdeas.length - 1}`,
+        ),
       );
     }
 
     if (this.activeOneOffId) {
-      throw new Error('Inventify is already running');
+      return Promise.reject(new Error('Inventify is already running'));
+    }
+
+    if (!this.sessionOneOffId) {
+      return Promise.reject(new Error('No active session agent'));
     }
 
     const idea = this.pendingIdeas[index]!;
     const { placeholderProjectId } = this.pendingState;
     const prompt = this.buildNameSuggestionPrompt(idea);
 
-    const oneOffId = await this.agentManager.startOneOffAgent({
-      projectId: placeholderProjectId,
-      message: prompt,
-      permissionMode: 'acceptEdits',
-      label: `Inventify Names: ${idea.name}`,
-    });
+    this.agentManager.sendOneOffInput(this.sessionOneOffId, prompt);
 
-    this.activeOneOffId = oneOffId;
+    this.activeOneOffId = this.sessionOneOffId;
     this.collectedOutput = '';
     this.pendingNames = null;
 
-    this.setupNameListeners(oneOffId, index);
+    this.setupNameListeners(this.sessionOneOffId, index);
 
-    return { oneOffId, placeholderProjectId };
+    return Promise.resolve({
+      oneOffId: this.sessionOneOffId,
+      placeholderProjectId,
+    });
   }
 
   async cancel(): Promise<void> {
-    if (this.activeOneOffId) {
-      await this.agentManager.stopOneOffAgent(this.activeOneOffId);
-    }
+    await this.stopSessionAgent();
 
     this.activeOneOffId = null;
     this.collectedOutput = '';
@@ -192,6 +201,8 @@ export class DefaultInventifyService implements InventifyService {
     if (this.activeOneOffId) {
       throw new Error('Inventify is already running');
     }
+
+    await this.stopSessionAgent();
 
     const idea = this.pendingIdeas[index]!;
     const { placeholderProjectId, placeholderPath, request } =
@@ -232,6 +243,16 @@ export class DefaultInventifyService implements InventifyService {
       projectId,
       projectName: path.basename(projectPath),
     });
+  }
+
+  private async stopSessionAgent(): Promise<void> {
+    const agentId = this.sessionOneOffId || this.activeOneOffId;
+
+    if (agentId) {
+      await this.agentManager.stopOneOffAgent(agentId);
+    }
+
+    this.sessionOneOffId = null;
   }
 
   private setupBrainstormListeners(oneOffId: string): void {
@@ -283,7 +304,6 @@ export class DefaultInventifyService implements InventifyService {
       this.activeOneOffId = null;
       this.collectedOutput = '';
 
-      this.agentManager.stopOneOffAgent(oneOffId).catch(() => {});
       this.handleBrainstormCompletion(output);
     };
 
@@ -344,7 +364,6 @@ export class DefaultInventifyService implements InventifyService {
       this.activeOneOffId = null;
       this.collectedOutput = '';
 
-      this.agentManager.stopOneOffAgent(oneOffId).catch(() => {});
       this.handleNameCompletion(output, ideaIndex);
     };
 
@@ -446,19 +465,40 @@ export class DefaultInventifyService implements InventifyService {
   buildBrainstormPrompt(
     projectTypes: string[],
     themes: string[],
+    languages: string[],
+    technologies: string[],
+    customPrompt: string,
   ): string {
     const types = projectTypes.join(', ');
     const themeList = themes.join(', ');
 
-    return [
+    const lines = [
       'You are a creative software project inventor.',
       '',
       `**Project Types**: ${types}`,
       `**Themes**: ${themeList}`,
+    ];
+
+    if (languages.length > 0) {
+      lines.push(`**Languages**: ${languages.join(', ')}`);
+    }
+
+    if (technologies.length > 0) {
+      lines.push(`**Technologies/Frameworks**: ${technologies.join(', ')}`);
+    }
+
+    lines.push(
       '',
       'Invent exactly 5 creative, practical project ideas.',
       'Make each idea distinct and interesting.',
       'Cover different approaches to the given types and themes.',
+    );
+
+    if (customPrompt.trim()) {
+      lines.push('', `**Additional Instructions**: ${customPrompt.trim()}`);
+    }
+
+    lines.push(
       '',
       'You MUST output ONLY a JSON array with exactly 5 objects.',
       'Each object must have: name (lowercase, hyphens, numbers only), tagline (catchy one-liner), description (2-3 sentences).',
@@ -471,7 +511,9 @@ export class DefaultInventifyService implements InventifyService {
       '  {"name": "code-quest", "tagline": "Learn coding through adventure", "description": "An RPG to teach programming."}',
       ']',
       '```',
-    ].join('\n');
+    );
+
+    return lines.join('\n');
   }
 
   buildNameSuggestionPrompt(idea: InventifyIdea): string {

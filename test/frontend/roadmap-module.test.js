@@ -97,18 +97,18 @@ describe('RoadmapModule', () => {
       const result = RoadmapModule.toggleMilestoneExpanded(key);
 
       expect(result).toBe(true);
-      const stored = JSON.parse(localStorage.getItem('superengineer-v5-milestone-expanded'));
+      const stored = JSON.parse(localStorage.getItem('superengineer-milestone-expanded'));
       expect(stored[key]).toBe(true);
     });
 
     it('should toggle from expanded to collapsed', () => {
       const key = 'phase1-milestone1';
-      localStorage.setItem('superengineer-v5-milestone-expanded', JSON.stringify({ [key]: true }));
+      localStorage.setItem('superengineer-milestone-expanded', JSON.stringify({ [key]: true }));
 
       const result = RoadmapModule.toggleMilestoneExpanded(key);
 
       expect(result).toBe(false);
-      const stored = JSON.parse(localStorage.getItem('superengineer-v5-milestone-expanded'));
+      const stored = JSON.parse(localStorage.getItem('superengineer-milestone-expanded'));
       expect(stored[key]).toBe(false);
     });
 
@@ -119,7 +119,7 @@ describe('RoadmapModule', () => {
       RoadmapModule.toggleMilestoneExpanded(key1);
       RoadmapModule.toggleMilestoneExpanded(key2);
 
-      const stored = JSON.parse(localStorage.getItem('superengineer-v5-milestone-expanded'));
+      const stored = JSON.parse(localStorage.getItem('superengineer-milestone-expanded'));
       expect(stored[key1]).toBe(true);
       expect(stored[key2]).toBe(true);
     });
@@ -127,11 +127,11 @@ describe('RoadmapModule', () => {
     it('should preserve other milestone states when toggling', () => {
       const key1 = 'phase1-milestone1';
       const key2 = 'phase1-milestone2';
-      localStorage.setItem('superengineer-v5-milestone-expanded', JSON.stringify({ [key1]: true }));
+      localStorage.setItem('superengineer-milestone-expanded', JSON.stringify({ [key1]: true }));
 
       RoadmapModule.toggleMilestoneExpanded(key2);
 
-      const stored = JSON.parse(localStorage.getItem('superengineer-v5-milestone-expanded'));
+      const stored = JSON.parse(localStorage.getItem('superengineer-milestone-expanded'));
       expect(stored[key1]).toBe(true);
       expect(stored[key2]).toBe(true);
     });

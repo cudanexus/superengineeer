@@ -367,7 +367,6 @@ export class DefaultAgentManager implements AgentManager {
       allowedTools: shouldSkip ? [] : permArgs.allowedTools,
       disallowedTools: shouldSkip ? [] : permArgs.disallowedTools,
       permissionMode: effectiveMode,
-      appendSystemPrompt: settings.appendSystemPrompt,
     };
 
     // Create agent
@@ -830,7 +829,6 @@ export class DefaultAgentManager implements AgentManager {
       allowedTools: shouldSkipOneOff ? [] : permArgs.allowedTools,
       disallowedTools: shouldSkipOneOff ? [] : permArgs.disallowedTools,
       permissionMode: effectiveOneOffMode,
-      appendSystemPrompt: settings.appendSystemPrompt,
     };
 
     const model = await this.getModelForProject(options.projectId);
@@ -1029,7 +1027,6 @@ export class DefaultAgentManager implements AgentManager {
       allowedTools: shouldSkipAuto ? [] : permArgs.allowedTools,
       disallowedTools: shouldSkipAuto ? [] : permArgs.disallowedTools,
       permissionMode: permArgs.permissionMode,
-      appendSystemPrompt: settings.appendSystemPrompt,
     };
 
     const model = await this.getModelForProject(projectId);

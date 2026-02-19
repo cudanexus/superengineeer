@@ -1,4 +1,4 @@
-# Superengineer-v5 Roadmap
+# Superengineer Roadmap
 
 ## Progress Summary
 
@@ -13,7 +13,7 @@
 
 ## Phase 1: GitHub Integration (via GitHub CLI)
 
-Integrate with GitHub using the `gh` CLI tool to browse repositories, clone projects, and work on issues directly from the Claudito UI. Requires `gh` to be installed and authenticated on the host machine.
+Integrate with GitHub using the `gh` CLI tool to browse repositories, clone projects, and work on issues directly from the Superengineer UI. Requires `gh` to be installed and authenticated on the host machine.
 
 ### Milestone 1.1: GitHub CLI Detection & Service Layer
 
@@ -27,7 +27,7 @@ Integrate with GitHub using the `gh` CLI tool to browse repositories, clone proj
 
 - [x] Add `GET /api/integrations/github/repos` endpoint using `gh repo list` with owner/type/language filters
 - [x] Create repository browser modal with org/user filtering, search (`gh search repos`), and sorting
-- [x] Implement `POST /api/integrations/github/clone` using `gh repo clone` and register as Claudito project
+- [x] Implement `POST /api/integrations/github/clone` using `gh repo clone` and register as Superengineer project
 - [x] Support selecting target directory and branch during clone (`gh repo clone -- --branch`)
 - [x] Show clone progress via WebSocket events (`github_clone_progress`) by streaming `gh` stdout
 
@@ -102,7 +102,7 @@ Run Claude Code agents inside Docker containers with the project directory mount
 - [ ] Create `DockerService` interface for container lifecycle management
 - [ ] Add Docker settings in UI: enable/disable, base image, resource limits (CPU, memory)
 - [ ] Implement Docker availability detection with fallback to host execution
-- [ ] Create `Dockerfile.claudito-agent` with Claude Code CLI, Node.js, and common dev tools
+- [ ] Create `Dockerfile.superengineer-v5-agent` with Claude Code CLI, Node.js, and common dev tools
 - [ ] Add `GET /api/settings/docker` and `PUT /api/settings/docker` endpoints
 
 ### Milestone 3.2: Container Lifecycle Management
@@ -117,7 +117,7 @@ Run Claude Code agents inside Docker containers with the project directory mount
 
 - [ ] Modify `ClaudeAgent` to optionally spawn inside Docker container via `docker exec`
 - [ ] Stream agent stdout/stderr from container through existing WebSocket pipeline
-- [ ] Implement file sync strategy for `.claudito/` metadata (conversations, status)
+- [ ] Implement file sync strategy for `.superengineer-v5/` metadata (conversations, status)
 - [ ] Add per-project Docker override (some projects sandboxed, others on host)
 - [ ] Create network isolation options (no network, host network, custom bridge)
 

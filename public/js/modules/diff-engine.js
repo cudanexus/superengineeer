@@ -1,5 +1,5 @@
 /**
- * DiffEngine module for Superengineer-v5
+ * DiffEngine module for Superengineer
  * Provides diff computation algorithms: LCS, line diff, word diff, unified diff parsing
  */
 

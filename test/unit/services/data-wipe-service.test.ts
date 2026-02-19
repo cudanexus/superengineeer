@@ -32,7 +32,7 @@ function createProject(id: string, projectPath: string): ProjectStatus {
 describe('DefaultDataWipeService', () => {
   let mockProjectRepository: jest.Mocked<ProjectRepository>;
   let service: DefaultDataWipeService;
-  const dataDirectory = '/home/user/.claudito';
+  const dataDirectory = '/home/user/.superengineer-v5';
 
   beforeEach(() => {
     jest.resetAllMocks();
@@ -51,15 +51,15 @@ describe('DefaultDataWipeService', () => {
     });
   });
 
-  it('should wipe per-project .claudito directories', async () => {
+  it('should wipe per-project .superengineer-v5 directories', async () => {
     const summary = await service.wipeAll();
 
     expect(mockFs.rmSync).toHaveBeenCalledWith(
-      path.join('/projects/alpha', '.claudito'),
+      path.join('/projects/alpha', '.superengineer-v5'),
       { recursive: true, force: true },
     );
     expect(mockFs.rmSync).toHaveBeenCalledWith(
-      path.join('/projects/beta', '.claudito'),
+      path.join('/projects/beta', '.superengineer-v5'),
       { recursive: true, force: true },
     );
     expect(summary.projectsWiped).toBe(2);
@@ -79,7 +79,7 @@ describe('DefaultDataWipeService', () => {
     const summary = await service.wipeAll();
 
     expect(mockFs.rmSync).toHaveBeenCalledWith(
-      path.join('/tmp', 'claudito-mcp'),
+      path.join('/tmp', 'superengineer-mcp'),
       { recursive: true, force: true },
     );
     expect(summary.mcpTempDeleted).toBe(true);

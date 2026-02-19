@@ -109,7 +109,7 @@ export class DefaultProjectDiscoveryService implements ProjectDiscoveryService {
   }
 
   private getProjectSearchPaths(): string[] {
-    const customPaths = process.env.SUPERENGINEER_V5_PROJECT_PATHS?.split(':') || [];
+    const customPaths = process.env.SUPERENGINEER_PROJECT_PATHS?.split(':') || [];
     const homedir = os.homedir();
 
     // Common development directories

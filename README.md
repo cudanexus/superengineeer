@@ -1,18 +1,18 @@
-# Superengineer-v5
+# Superengineer
 
-[![npm version](https://img.shields.io/npm/v/superengineer-v5.svg)](https://www.npmjs.com/package/superengineer-v5)
-[![CI](https://github.com/comfortablynumb/superengineer-v5/actions/workflows/ci.yml/badge.svg)](https://github.com/comfortablynumb/superengineer-v5/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/superengineer.svg)](https://www.npmjs.com/package/superengineer)
+[![CI](https://github.com/cudanexus/superengineeer/actions/workflows/ci.yml/badge.svg)](https://github.com/cudanexus/superengineeer/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 > **Warning**: This project is under active development. Features may change, and bugs are expected. Use at your own risk.
 
 A web-based manager for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) agents. Run and monitor multiple Claude agents across different projects with a modern UI. Features include Ralph Loop iterative development, Mermaid.js diagram rendering, MCP server configuration, and more.
 
-![Superengineer-v5 Screenshot](doc/images/preview-01.png)
+![Superengineer Screenshot](doc/images/preview-01.png)
 
 ## Security Considerations
 
-> **Important**: Superengineer-v5 runs Claude Code agents that can execute code and modify files on your system. Take these precautions:
+> **Important**: Superengineer runs Claude Code agents that can execute code and modify files on your system. Take these precautions:
 
 | Scenario | Recommended HOST | Notes |
 |----------|------------------|-------|
@@ -21,9 +21,9 @@ A web-based manager for [Claude Code](https://docs.anthropic.com/en/docs/claude-
 | **All interfaces** | `0.0.0.0` | Accessible from anywhere - use with caution |
 
 **Best Practices:**
-1. **Use authentication**: Superengineer-v5 requires login by default. Set custom credentials for production:
+1. **Use authentication**: Superengineer requires login by default. Set custom credentials for production:
    ```bash
-   SUPERENGINEER_V5_USERNAME=myuser SUPERENGINEER_V5_PASSWORD=mystrongpassword superengineer-v5
+   SUPERENGINEER_USERNAME=myuser SUPERENGINEER_PASSWORD=mystrongpassword superengineer
    ```
 2. **Avoid exposing to the internet**: Use a reverse proxy with HTTPS if needed
 3. **Configure firewall rules**: Only allow trusted IP addresses
@@ -35,11 +35,11 @@ See [Security Recommendations](#security-recommendations) for more details.
 
 ```bash
 # Run directly with npx (no installation required)
-npx superengineer-v5
+npx superengineer
 
 # Or install globally
-npm install -g superengineer-v5
-superengineer-v5
+npm install -g superengineer
+superengineer
 ```
 
 Open your browser at **http://localhost:3000** to access the web UI.
@@ -68,7 +68,7 @@ Open your browser at **http://localhost:3000** to access the web UI.
 
 ### Installing and Authenticating Claude Code CLI
 
-Before using Superengineer-v5, you must have the Claude Code CLI installed and **logged in**. Superengineer-v5 works with either:
+Before using Superengineer, you must have the Claude Code CLI installed and **logged in**. Superengineer works with either:
 - **Claude Pro/Max subscription** (recommended for personal use)
 - **Anthropic API key** (for API-based usage)
 
@@ -79,11 +79,11 @@ npm install -g @anthropic-ai/claude-code
 # Verify installation
 claude --version
 
-# Log in to Claude Code (required before using Superengineer-v5)
+# Log in to Claude Code (required before using Superengineer)
 claude auth
 ```
 
-> **Important:** Superengineer-v5 requires an active Claude Code session. Make sure you can run `claude` directly in your terminal before starting Superengineer-v5.
+> **Important:** Superengineer requires an active Claude Code session. Make sure you can run `claude` directly in your terminal before starting Superengineer.
 
 For more details, see the [Claude Code documentation](https://docs.anthropic.com/en/docs/claude-code).
 
@@ -94,7 +94,7 @@ For more details, see the [Claude Code documentation](https://docs.anthropic.com
 No installation required. Run directly:
 
 ```bash
-npx superengineer-v5
+npx superengineer
 ```
 
 This downloads and runs the latest version automatically.
@@ -104,8 +104,8 @@ This downloads and runs the latest version automatically.
 Install once, run anywhere:
 
 ```bash
-npm install -g superengineer-v5
-superengineer-v5
+npm install -g superengineer
+superengineer
 ```
 
 ### Option 3: Local Installation
@@ -113,8 +113,8 @@ superengineer-v5
 For development or integration into a project:
 
 ```bash
-npm install superengineer-v5
-npx superengineer-v5
+npm install superengineer
+npx superengineer
 ```
 
 ## Usage
@@ -123,17 +123,17 @@ npx superengineer-v5
 
 ```bash
 # Start with defaults (localhost:3000)
-superengineer-v5
+superengineer
 
 # Specify a custom port
-superengineer-v5 --port 8080
-superengineer-v5 -p 8080
+superengineer --port 8080
+superengineer -p 8080
 
 # Listen on all network interfaces
-superengineer-v5 --host 0.0.0.0
+superengineer --host 0.0.0.0
 
 # Combine options
-superengineer-v5 -p 8080 --host 0.0.0.0
+superengineer -p 8080 --host 0.0.0.0
 ```
 
 ### CLI Options
@@ -151,13 +151,13 @@ All options can also be set via environment variables:
 
 ```bash
 # Linux/macOS
-PORT=8080 HOST=0.0.0.0 LOG_LEVEL=debug superengineer-v5
+PORT=8080 HOST=0.0.0.0 LOG_LEVEL=debug superengineer
 
 # Windows (PowerShell)
-$env:PORT=8080; $env:HOST="0.0.0.0"; superengineer-v5
+$env:PORT=8080; $env:HOST="0.0.0.0"; superengineer
 
 # Windows (CMD)
-set PORT=8080 && set HOST=0.0.0.0 && superengineer-v5
+set PORT=8080 && set HOST=0.0.0.0 && superengineer
 ```
 
 | Variable | Default | Description |
@@ -168,31 +168,31 @@ set PORT=8080 && set HOST=0.0.0.0 && superengineer-v5
 | `LOG_LEVEL` | `info` | Log level (debug/info/warn/error) |
 | `MAX_CONCURRENT_AGENTS` | `3` | Maximum concurrent agents |
 | `DEV_MODE` | `true` (dev) / `false` (prod) | Enable development features |
-| `SUPERENGINEER_V5_USERNAME` | (generated) | Override login username |
-| `SUPERENGINEER_V5_PASSWORD` | (generated) | Override login password |
-| `SUPERENGINEER_V5_FORCE_SHELL_ENABLED` | `0` | Force-enable shell on all interfaces (security risk) |
+| `SUPERENGINEER_USERNAME` | (generated) | Override login username |
+| `SUPERENGINEER_PASSWORD` | (generated) | Override login password |
+| `SUPERENGINEER_FORCE_SHELL_ENABLED` | `0` | Force-enable shell on all interfaces (security risk) |
 
 ## Features
 
 ### Agent Modes
 
 #### Interactive Mode (Default)
-Chat with Claude in real-time. The agent auto-starts when you send your first message.
+Chat with AI in real-time. The agent auto-starts when you send your first message.
 
-- Real-time streaming of Claude's responses
+- Real-time streaming of AI responses
 - See tool usage as it happens (file reads, edits, bash commands)
 - Code diffs with syntax highlighting and inline change highlighting
 - Send follow-up messages naturally
 - Toggle permission mode (Plan/Accept Edits) at runtime
 - Plan mode with approve/reject/request changes options
-- **Plan Mode Auto-Continue**: When Claude calls `EnterPlanMode`, the agent automatically restarts in plan mode and sends "Continue" so work proceeds without manual intervention
+- **Plan Mode Auto-Continue**: When AI calls `EnterPlanMode`, the agent automatically restarts in plan mode and sends "Continue" so work proceeds without manual intervention
 - Per-project model selection (Claude Sonnet 4/Opus 4/Opus 4.5/Haiku)
 
 #### Ralph Loop Mode (Advanced)
 Implements Geoffrey Huntley's "Ralph Wiggum technique" - an iterative worker/reviewer pattern for complex tasks:
 
-- **Worker Phase**: Fresh Claude instance executes the task
-- **Reviewer Phase**: Another Claude instance reviews the work and provides structured feedback
+- **Worker Phase**: Fresh AI instance executes the task
+- **Reviewer Phase**: Another AI instance reviews the work and provides structured feedback
 - **Iteration**: Worker addresses feedback, reviewer re-evaluates
 - **Completion**: Reviewer approves work, max iterations reached, or critical failure
 - **Configuration**: Set max iterations, worker/reviewer models, custom prompts
@@ -205,7 +205,7 @@ Access via the Ralph Loop tab when an agent is running.
 ### Project Management
 
 - **Add Projects**: Point to any directory with a codebase
-- **Import from GitHub**: Browse and search your GitHub repos, clone directly into Claudito as a project
+- **Import from GitHub**: Browse and search your GitHub repos, clone directly into Superengineer as a project
 - **GitHub Issues**: Browse project issues with filters, create new issues (with labels, assignees, milestones), "Start Working" sends issue as agent prompt, "Add to Roadmap" creates a task, close issues and add comments
 - **GitHub PRs**: Create PRs with auto-generated title/description from conversation history and diff, browse PRs with state filters, view PR detail with reviews and comments, "Fix PR Feedback" sends review feedback as agent prompt
 - **Multi-Project Support**: Manage multiple projects simultaneously
@@ -214,12 +214,12 @@ Access via the Ralph Loop tab when an agent is running.
 
 ### Authentication
 
-Superengineer-v5 includes built-in authentication to protect your agent manager:
+Superengineer includes built-in authentication to protect your agent manager:
 
 - **Auto-generated credentials**: On each server start, a unique username and password are generated
 - **QR Code login**: Scan the QR code displayed in the terminal for quick access
 - **Session persistence**: Sessions last 7 days
-- **Custom credentials**: Set `SUPERENGINEER_V5_USERNAME` and `SUPERENGINEER_V5_PASSWORD` environment variables for persistent credentials
+- **Custom credentials**: Set `SUPERENGINEER_USERNAME` and `SUPERENGINEER_PASSWORD` environment variables for persistent credentials
 - **Logout**: Click the logout button in the sidebar header
 
 ### User Interface
@@ -230,10 +230,10 @@ Superengineer-v5 includes built-in authentication to protect your agent manager:
 | **Shell Terminal** | Full PTY terminal with directory restriction to project folder |
 | **File Browser** | Browse, view, edit, create, delete files and folders. Folder browser includes a "New Folder" button for creating directories inline while browsing |
 | **Syntax Highlighting** | 30+ languages supported via highlight.js |
-| **Tool Visualization** | See Claude's tool usage with icons and arguments |
+| **Tool Visualization** | See AI tool usage with icons and arguments |
 | **Code Diffs** | Side-by-side diff view with word-level inline change highlighting |
 | **Context Monitor** | View token usage and context window utilization |
-| **Task Tracking** | View Claude's current tasks and progress |
+| **Task Tracking** | View AI current tasks and progress |
 | **Project Optimizations** | Check for CLAUDE.md issues and optimization suggestions |
 | **One-Off Agent Tabs** | Interactive sub-tabs with full rendering, per-tab toolbar (Tasks, Search, Permission Mode, Model, Font Size), and tool result previews |
 | **Font Controls** | Adjust text size with +/- buttons |
@@ -267,7 +267,7 @@ Full Git support directly in the UI:
 - **Conversation Stats**: Duration, message count, tool calls, tokens
 - **Resource Monitor**: Running and queued agent counts
 - **Context Usage**: Token usage persisted even when agent is stopped
-- **Session Recovery**: Automatic recovery when Claude sessions are lost
+- **Session Recovery**: Automatic recovery when AI sessions are lost
 
 ### Diff Visualization
 
@@ -288,7 +288,7 @@ A full PTY-based terminal integrated into the UI:
 | **PowerShell/Bash** | Uses PowerShell on Windows, bash on Unix |
 | **Session Persistence** | Shell sessions persist while browsing other tabs |
 
-> **Security Note**: The shell terminal is **automatically disabled** when the server is bound to all interfaces (`0.0.0.0`). This prevents remote shell access. To enable shell on all interfaces, set `SUPERENGINEER_V5_FORCE_SHELL_ENABLED=1` (not recommended).
+> **Security Note**: The shell terminal is **automatically disabled** when the server is bound to all interfaces (`0.0.0.0`). This prevents remote shell access. To enable shell on all interfaces, set `SUPERENGINEER_FORCE_SHELL_ENABLED=1` (not recommended).
 
 ### Run Configurations
 
@@ -315,17 +315,19 @@ Generate new project ideas and have them automatically built:
 1. Click the lightbulb icon in the sidebar
 2. Select project types (Web App, API, CLI, Desktop, Mobile, Library, Extension)
 3. Select themes (Games, Enterprise, Dev Tools, Education, Social, Finance, Health, Creative, Data, IoT)
-4. Click "Generate!" -- a one-off agent brainstorms **5 unique project ideas**, each with a name, tagline, and description
-5. Browse the 5 idea cards, select one with the radio button, and click "Build this idea"
-6. A one-off agent suggests **5 creative project names** -- select one and click "Start building"
-7. Creates the project directory, writes `doc/plan.md` with a detailed plan, registers in Claudito, starts a Ralph Loop to build it, and automatically navigates to the new project
+4. Optionally select languages (TypeScript, JavaScript, Python, Rust, Go, Java, C#, C++, Ruby, Swift, Kotlin, PHP) and technologies (React, Next.js, Express, FastAPI, Django, Spring Boot, Actix, Tokio, Tauri, Electron, Flutter, TailwindCSS)
+5. Optionally add custom instructions in the textarea to guide the brainstorm
+6. Click "Generate!" -- a one-off agent brainstorms **5 unique project ideas**, each with a name, tagline, and description
+7. Browse the 5 idea cards, select one with the radio button, and click "Build this idea"
+8. A one-off agent suggests **5 creative project names** -- select one and click "Start building"
+9. Creates the project directory, writes `doc/plan.md` with a detailed plan, registers in Superengineer, starts a Ralph Loop to build it, and automatically navigates to the new project
 
 Configure the output folder in Settings > General > Inventify Folder.
 
 ### Additional Features
 
 - **CLAUDE.md Editor**: Edit global and project-specific CLAUDE.md files with preview and AI-powered optimization
-- **One-Off Agent Sub-Tabs**: Background agent tasks appear as interactive sub-tabs in Agent Output with full tool rendering, per-tab toolbar (Tasks with badge, Search with highlighting, Permission Mode, Model selector, Font Size controls), per-tab input matching main tab (rows=3, cancel+send buttons, hint text), and agent lifecycle management. Shared controls (Permission Mode, Model, Font Size) sync across all tabs. Optimization uses direct file editing via Claude's Edit tool
+- **One-Off Agent Sub-Tabs**: Background agent tasks appear as interactive sub-tabs in Agent Output with full tool rendering, per-tab toolbar (Tasks with badge, Search with highlighting, Permission Mode, Model selector, Font Size controls), per-tab input matching main tab (rows=3, cancel+send buttons, hint text), and agent lifecycle management. Shared controls (Permission Mode, Model, Font Size) sync across all tabs. Optimization uses direct file editing via AI Edit tool
 - **Conversation History**: Browse, restore, and rename previous conversations
 - **AskUserQuestion Support**: Interactive UI for Claude's AskUserQuestion tool — renders questions with clickable options, "Other" for custom text, multi-question support, answers sent as tool_result
 - **Session Resumption**: Resume Claude sessions across restarts
@@ -359,7 +361,7 @@ Access settings via the gear icon in the UI sidebar.
 
 Control what Claude agents can do without prompting. Access via Settings > Claude Code Permissions.
 
-> **⚠️ Important Limitation**: Superengineer-v5 currently only supports **Accept Edits** and **Plan** permission modes. The **Default** mode (which prompts for permission on each action) is not yet supported because Superengineer-v5 cannot currently handle Claude's permission prompts. We're working on adding this functionality in a future release.
+> **⚠️ Important Limitation**: Superengineer currently only supports **Accept Edits** and **Plan** permission modes. The **Default** mode (which prompts for permission on each action) is not yet supported because Superengineer cannot currently handle Claude's permission prompts. We're working on adding this functionality in a future release.
 
 #### Permission Modes
 
@@ -461,10 +463,10 @@ Toggle Chrome browser usage for Claude agents via the **Chrome** button in the c
 ### Danger Zone (Factory Reset)
 
 Access via Settings > Danger Zone. The "Wipe All Data" button permanently deletes:
-- All project registrations and per-project `.claudito/` directories
+- All project registrations and per-project `.superengineer-v5/` directories
 - All conversation history
-- Global settings, PID tracking, and project index (`~/.claudito/`)
-- Temporary MCP config files (`{OS_TEMP}/claudito-mcp/`)
+- Global settings, PID tracking, and project index (`~/.superengineer-v5/`)
+- Temporary MCP config files (`{OS_TEMP}/superengineer-mcp/`)
 
 Project source files are **never** deleted.
 
@@ -629,7 +631,7 @@ GET    /api/projects/:id/run-configs/:configId/status  # Get process status
 ### Inventify
 
 ```
-POST   /api/projects/inventify/start             # Start brainstorming (body: projectTypes[], themes[])
+POST   /api/projects/inventify/start             # Start brainstorming (body: projectTypes[], themes[], languages?[], technologies?[], customPrompt?)
 GET    /api/projects/inventify/ideas             # Get generated idea cards (5 ideas)
 POST   /api/projects/inventify/suggest-names     # Suggest 5 names for idea (body: selectedIndex)
 GET    /api/projects/inventify/name-suggestions  # Get pending name suggestions
@@ -651,7 +653,7 @@ GET    /api/auth/check                     # Check session validity
 GET    /api/settings              # Get settings
 PUT    /api/settings              # Update settings
 GET    /api/settings/models       # Get available Claude models
-POST   /api/settings/wipe-all-data # Wipe all Claudito data (factory reset)
+POST   /api/settings/wipe-all-data # Wipe all Superengineer data (factory reset)
 ```
 
 ### Claude Files
@@ -713,8 +715,8 @@ ws.send(JSON.stringify({ type: 'subscribe', projectId: 'your-project-id' }));
 ### Setup
 
 ```bash
-git clone https://github.com/comfortablynumb/superengineer-v5.git
-cd superengineer-v5
+git clone https://github.com/comfortablynumb/superengineer.git
+cd superengineer
 npm install
 ```
 
@@ -734,7 +736,7 @@ npm install
 ### Project Structure
 
 ```
-superengineer-v5/
+superengineer/
 ├── src/
 │   ├── index.ts          # Library entry point
 │   ├── cli.ts            # CLI entry point
@@ -749,7 +751,7 @@ superengineer-v5/
 ├── public/               # Static frontend assets
 ├── test/                 # Test files
 ├── doc/                  # Documentation
-└── superengineer-v5-plugin/      # Bundled Claude Code plugin
+└── superengineer-plugin/      # Bundled Claude Code plugin
     ├── plugin.json       # Plugin manifest
     └── skills/           # Plugin skills
         └── mermaid.md    # Mermaid diagram generation skill
@@ -770,18 +772,18 @@ npm run build
 # Create the package tarball
 npm pack
 
-# This creates superengineer-v5-0.1.0.tgz (version may vary)
+# This creates superengineer-0.1.0.tgz (version may vary)
 
 # Install globally from the tarball
-npm install -g ./superengineer-v5-0.1.0.tgz
+npm install -g ./superengineer-0.1.0.tgz
 
 # Test the CLI
-superengineer-v5 --help
-superengineer-v5 --version
-superengineer-v5  # Starts the server
+superengineer --help
+superengineer --version
+superengineer  # Starts the server
 
 # Uninstall when done
-npm uninstall -g superengineer-v5
+npm uninstall -g superengineer
 ```
 
 ### Method 2: npm link
@@ -795,12 +797,12 @@ npm run build
 # Create global symlink
 npm link
 
-# Now 'superengineer-v5' command is available globally
-superengineer-v5 --help
-superengineer-v5
+# Now 'superengineer' command is available globally
+superengineer --help
+superengineer
 
 # Unlink when done
-npm unlink -g superengineer-v5
+npm unlink -g superengineer
 ```
 
 ### Method 3: Dry Run
@@ -854,26 +856,26 @@ For thorough testing, install in an isolated directory:
 
 ```bash
 # Create test directory
-mkdir /tmp/superengineer-v5-test
-cd /tmp/superengineer-v5-test
+mkdir /tmp/superengineer-test
+cd /tmp/superengineer-test
 
 # Install from tarball
 npm init -y
-npm install /path/to/superengineer-v5-0.1.0.tgz
+npm install /path/to/superengineer-0.1.0.tgz
 
 # Run via npx
-npx superengineer-v5 --help
+npx superengineer --help
 
 # Clean up
 cd ..
-rm -rf /tmp/superengineer-v5-test
+rm -rf /tmp/superengineer-test
 ```
 
 ## Security Recommendations
 
 ### Network Binding
 
-By default, Superengineer-v5 binds to `localhost` which only accepts connections from the local machine. When exposing Superengineer-v5 to other devices, consider these recommendations:
+By default, Superengineer binds to `localhost` which only accepts connections from the local machine. When exposing Superengineer to other devices, consider these recommendations:
 
 | Scenario | Recommended HOST | Notes |
 |----------|------------------|-------|
@@ -883,23 +885,23 @@ By default, Superengineer-v5 binds to `localhost` which only accepts connections
 
 ```bash
 # Local only (most secure)
-superengineer-v5 --host 127.0.0.1
+superengineer --host 127.0.0.1
 
 # Specific network interface (LAN access)
-superengineer-v5 --host 192.168.1.100
+superengineer --host 192.168.1.100
 
 # All interfaces (least secure - requires authentication)
-superengineer-v5 --host 0.0.0.0
+superengineer --host 0.0.0.0
 ```
 
 ### Best Practices
 
-1. **Use authentication**: Superengineer-v5 requires login by default. Set custom credentials via environment variables for production use:
+1. **Use authentication**: Superengineer requires login by default. Set custom credentials via environment variables for production use:
    ```bash
-   SUPERENGINEER_V5_USERNAME=myuser SUPERENGINEER_V5_PASSWORD=mystrongpassword superengineer-v5
+   SUPERENGINEER_USERNAME=myuser SUPERENGINEER_PASSWORD=mystrongpassword superengineer
    ```
 
-2. **Avoid exposing to the internet**: Superengineer-v5 is designed for local/LAN use. If you must expose it, use a reverse proxy with HTTPS.
+2. **Avoid exposing to the internet**: Superengineer is designed for local/LAN use. If you must expose it, use a reverse proxy with HTTPS.
 
 3. **Firewall rules**: When using LAN access, configure your firewall to only allow trusted IP addresses.
 
@@ -921,7 +923,7 @@ Another process is using port 3000:
 
 ```bash
 # Use a different port
-superengineer-v5 --port 3001
+superengineer --port 3001
 
 # Or find and kill the process using port 3000
 # Linux/macOS:

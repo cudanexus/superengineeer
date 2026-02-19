@@ -8,9 +8,9 @@ const VERSION = process.env.npm_package_version || '0.1.0';
 
 function printHelp(): void {
   console.log(`
-Superengineer-v5 - Claude Code Autonomous Agent Manager
+Superengineer - Claude Code Autonomous Agent Manager
 
-Usage: superengineer-v5 [options]
+Usage: superengineer [options]
 
 Options:
   -p, --port <port>     Server port (default: 3000, env: PORT)
@@ -26,14 +26,14 @@ Environment Variables:
   LOG_LEVEL             Log level (debug/info/warn/error)
   MAX_CONCURRENT_AGENTS Maximum concurrent agents (default: 3)
   DEV_MODE              Enable development mode (true/false)
-  SUPERENGINEER_V5_DEV_MODE     Enable development mode (1 to enable)
+  SUPERENGINEER_DEV_MODE     Enable development mode (1 to enable)
 
 Examples:
-  superengineer-v5                    Start with defaults (localhost:3000)
-  superengineer-v5 -p 8080            Start on port 8080
-  superengineer-v5 --host 0.0.0.0     Listen on all interfaces
-  superengineer-v5 --dev              Start with development features
-  PORT=8080 superengineer-v5          Start on port 8080 via env var
+  superengineer                    Start with defaults (localhost:3000)
+  superengineer -p 8080            Start on port 8080
+  superengineer --host 0.0.0.0     Listen on all interfaces
+  superengineer --dev              Start with development features
+  PORT=8080 superengineer          Start on port 8080 via env var
 `);
 }
 
@@ -91,7 +91,7 @@ async function main(): Promise<void> {
   }
 
   if (args.version) {
-    console.log(`superengineer-v5 v${VERSION}`);
+    console.log(`superengineer v${VERSION}`);
     process.exit(0);
   }
 
@@ -112,7 +112,7 @@ async function main(): Promise<void> {
   const config = configLoader.load();
 
   initializeLogger({ level: config.logLevel });
-  const logger = getLogger('superengineer-v5');
+  const logger = getLogger('superengineer');
 
   const server = new ExpressHttpServer({ config });
 
@@ -139,20 +139,20 @@ async function main(): Promise<void> {
   await server.start();
 
   console.log(`
-╔═══════════════════════════════════════════════════════════════╗
-║                                                               ║
-║   Superengineer-v5 - Claude Code Agent Manager                ║
-║                                                               ║
-║   Server running at: http://${config.host}:${config.port.toString().padEnd(5)}                     ║
-║                                                               ║
-║   Press Ctrl+C to stop                                        ║
-║                                                               ║
-╚═══════════════════════════════════════════════════════════════╝
+╔═══════════════════════════════════════════════════════════╗
+║                                                           ║
+║   Superengineer - Claude Code Agent Manager                    ║
+║                                                           ║
+║   Server running at: http://${config.host}:${config.port.toString().padEnd(5)}                 ║
+║                                                           ║
+║   Press Ctrl+C to stop                                    ║
+║                                                           ║
+╚═══════════════════════════════════════════════════════════╝
 `);
 }
 
 main().catch((error: unknown) => {
   const message = error instanceof Error ? error.message : String(error);
-  console.error('Failed to start Superengineer-v5:', message);
+  console.error('Failed to start Superengineer:', message);
   process.exit(1);
 });

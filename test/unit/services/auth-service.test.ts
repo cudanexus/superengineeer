@@ -11,8 +11,8 @@ describe('AuthService', () => {
   beforeEach(() => {
     // Reset environment before each test
     process.env = { ...originalEnv };
-    delete process.env.SUPERENGINEER_V5_USERNAME;
-    delete process.env.SUPERENGINEER_V5_PASSWORD;
+    delete process.env.SUPERENGINEER_USERNAME;
+    delete process.env.SUPERENGINEER_PASSWORD;
     authService = createAuthService();
   });
 
@@ -218,9 +218,9 @@ describe('AuthService', () => {
   });
 
   describe('Environment variable credentials', () => {
-    it('should use SUPERENGINEER_V5_USERNAME and SUPERENGINEER_V5_PASSWORD when both are set', () => {
-      process.env.SUPERENGINEER_V5_USERNAME = 'custom-user';
-      process.env.SUPERENGINEER_V5_PASSWORD = 'custom-pass-123';
+    it('should use SUPERENGINEER_USERNAME and SUPERENGINEER_PASSWORD when both are set', () => {
+      process.env.SUPERENGINEER_USERNAME = 'custom-user';
+      process.env.SUPERENGINEER_PASSWORD = 'custom-pass-123';
 
       const service = createAuthService();
       const credentials = service.getCredentials();
@@ -229,8 +229,8 @@ describe('AuthService', () => {
       expect(credentials.password).toBe('custom-pass-123');
     });
 
-    it('should generate credentials when only SUPERENGINEER_V5_USERNAME is set', () => {
-      process.env.SUPERENGINEER_V5_USERNAME = 'custom-user';
+    it('should generate credentials when only SUPERENGINEER_USERNAME is set', () => {
+      process.env.SUPERENGINEER_USERNAME = 'custom-user';
 
       const service = createAuthService();
       const credentials = service.getCredentials();
@@ -240,8 +240,8 @@ describe('AuthService', () => {
       expect(credentials.password.length).toBeGreaterThanOrEqual(16);
     });
 
-    it('should generate credentials when only SUPERENGINEER_V5_PASSWORD is set', () => {
-      process.env.SUPERENGINEER_V5_PASSWORD = 'custom-pass-123';
+    it('should generate credentials when only SUPERENGINEER_PASSWORD is set', () => {
+      process.env.SUPERENGINEER_PASSWORD = 'custom-pass-123';
 
       const service = createAuthService();
       const credentials = service.getCredentials();
@@ -260,8 +260,8 @@ describe('AuthService', () => {
     });
 
     it('should use env credentials even if they do not match typical format', () => {
-      process.env.SUPERENGINEER_V5_USERNAME = 'admin';
-      process.env.SUPERENGINEER_V5_PASSWORD = 'password';
+      process.env.SUPERENGINEER_USERNAME = 'admin';
+      process.env.SUPERENGINEER_PASSWORD = 'password';
 
       const service = createAuthService();
       const credentials = service.getCredentials();

@@ -291,7 +291,7 @@ export class DefaultClaudeAgent implements ClaudeAgent {
    * Initialize agent state for starting.
    */
   private initializeForStart(options: ClaudeAgentStartOptions): void {
-    this.logger.info('Starting Claude agent', {
+    this.logger.info('Starting Superengineer agent', {
       mode: this._mode,
       sessionId: options.sessionId,
       isNewSession: options.isNewSession,
@@ -305,7 +305,7 @@ export class DefaultClaudeAgent implements ClaudeAgent {
     // Emit system message about starting
     this.emitMessage({
       type: 'system',
-      content: `Starting Claude agent in ${this._mode} mode`,
+      content: `Starting Superengineer agent in ${this._mode} mode`,
       timestamp: new Date().toISOString(),
     });
 
@@ -372,7 +372,7 @@ export class DefaultClaudeAgent implements ClaudeAgent {
       return;
     }
 
-    this.logger.info('Stopping Claude agent');
+    this.logger.info('Stopping Superengineer agent');
 
     await this.processManager.stop();
     this.reset();
@@ -537,7 +537,7 @@ export class DefaultClaudeAgent implements ClaudeAgent {
       // Emit system message about exit
       this.emitMessage({
         type: 'system',
-        content: `Claude agent exited with code ${code}`,
+        content: `Superengineer agent exited with code ${code}`,
         timestamp: new Date().toISOString(),
       });
 

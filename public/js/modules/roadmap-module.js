@@ -194,16 +194,16 @@
   }
 
   function getMilestoneExpanded(key) {
-    var stored = localStorage.getItem('superengineer-v5-milestone-expanded');
+    var stored = localStorage.getItem('superengineer-milestone-expanded');
     var expanded = stored ? JSON.parse(stored) : {};
     return expanded[key] === true;
   }
 
   function setMilestoneExpanded(key, isExpanded) {
-    var stored = localStorage.getItem('superengineer-v5-milestone-expanded');
+    var stored = localStorage.getItem('superengineer-milestone-expanded');
     var expanded = stored ? JSON.parse(stored) : {};
     expanded[key] = isExpanded;
-    localStorage.setItem('superengineer-v5-milestone-expanded', JSON.stringify(expanded));
+    localStorage.setItem('superengineer-milestone-expanded', JSON.stringify(expanded));
   }
 
   function toggleMilestoneExpanded(key) {

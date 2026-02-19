@@ -38,7 +38,7 @@ router.get('/', asyncHandler(async (_req: Request, res: Response) => {
 
 ## Testing the Fix
 
-1. Start the Superengineer-v5 server
+1. Start the Superengineer server
 2. Create or open multiple projects
 3. Start agents in some projects
 4. Reload the page (F5 or browser refresh)

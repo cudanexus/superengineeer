@@ -172,33 +172,33 @@ export interface SessionRecoveryData {
 
 export interface WebSocketMessage {
   type:
-  | 'agent_message'
-  | 'agent_status'
-  | 'agent_waiting'
-  | 'queue_change'
-  | 'connected'
-  | 'roadmap_message'
-  | 'session_recovery'
-  | 'shell_output'
-  | 'shell_exit'
-  | 'shell_error'
-  | 'ralph_loop_status'
-  | 'ralph_loop_iteration'
-  | 'ralph_loop_output'
-  | 'ralph_loop_worker_complete'
-  | 'ralph_loop_reviewer_complete'
-  | 'ralph_loop_complete'
-  | 'ralph_loop_error'
-  | 'ralph_loop_tool_use'
-  | 'frontend_error'
-  | 'resource_event'
-  | 'oneoff_message'
-  | 'oneoff_status'
-  | 'oneoff_waiting'
-  | 'github_clone_progress'
-  | 'run_config_output'
-  | 'run_config_status'
-  ;
+    | 'agent_message'
+    | 'agent_status'
+    | 'agent_waiting'
+    | 'queue_change'
+    | 'connected'
+    | 'roadmap_message'
+    | 'session_recovery'
+    | 'shell_output'
+    | 'shell_exit'
+    | 'shell_error'
+    | 'ralph_loop_status'
+    | 'ralph_loop_iteration'
+    | 'ralph_loop_output'
+    | 'ralph_loop_worker_complete'
+    | 'ralph_loop_reviewer_complete'
+    | 'ralph_loop_complete'
+    | 'ralph_loop_error'
+    | 'ralph_loop_tool_use'
+    | 'frontend_error'
+    | 'resource_event'
+    | 'oneoff_message'
+    | 'oneoff_status'
+    | 'oneoff_waiting'
+    | 'github_clone_progress'
+    | 'run_config_output'
+    | 'run_config_status'
+;
   projectId?: string;
   data?: WebSocketMessageData | SessionRecoveryData;
 }
@@ -370,7 +370,7 @@ export class DefaultWebSocketServer implements ProjectWebSocketServer {
     client.isAlive = true;
     client.on('pong', () => { client.isAlive = true; });
 
-    this.sendMessage(ws, { type: 'connected', data: 'Connected to Claudito WebSocket' });
+    this.sendMessage(ws, { type: 'connected', data: 'Connected to Superengineer WebSocket' });
 
     ws.on('message', (data) => this.handleMessage(ws, String(data)));
     ws.on('close', () => this.handleDisconnect(ws));

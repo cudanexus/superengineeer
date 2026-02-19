@@ -1,4 +1,4 @@
-// Superengineer-v5 Frontend Application
+// Superengineer Frontend Application
 
 (function ($) {
   'use strict';
@@ -38,10 +38,10 @@
   var api = ApiClient;
 
   // Generate unique client ID for this session
-  var clientId = sessionStorage.getItem('superengineer-v5-client-id');
+  var clientId = sessionStorage.getItem('superengineer-client-id');
   if (!clientId) {
     clientId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-    sessionStorage.setItem('superengineer-v5-client-id', clientId);
+    sessionStorage.setItem('superengineer-client-id', clientId);
   }
 
   // Application state
@@ -112,7 +112,7 @@
     // Open files state
     openFiles: [], // [{path, name, content, modified, originalContent}]
     activeFilePath: null,
-    // Claude Files state
+    // AI Files state
     claudeFilesState: {
       files: [],
       currentFile: null // { path, name, content, originalContent, size, isGlobal }
@@ -525,7 +525,7 @@
   function doCloseAllModals() {
     $('.modal').addClass('hidden');
 
-    // Reset Claude files modal mobile view
+    // Reset AI files modal mobile view
     FileBrowser.hideMobileClaudeFileEditor();
 
     // Clean up debug modal if it was open
@@ -1947,21 +1947,21 @@
     if (state.sendWithCtrlEnter) {
       if (isMobile) {
         $('#input-hint-text').text('Tap Send to send');
-        $('#input-message').attr('placeholder', 'Type a message to Claude...');
+        $('#input-message').attr('placeholder', 'Type a message to Superengineer...');
         $('#btn-send-message').attr('title', 'Send');
       } else {
         $('#input-hint-text').text('Ctrl+Enter to send, Enter for new line');
-        $('#input-message').attr('placeholder', 'Type a message to Claude... (Ctrl+Enter to send)');
+        $('#input-message').attr('placeholder', 'Type a message to Superengineer... (Ctrl+Enter to send)');
         $('#btn-send-message').attr('title', 'Send (Ctrl+Enter)');
       }
     } else {
       if (isMobile) {
         $('#input-hint-text').text('Tap Send to send');
-        $('#input-message').attr('placeholder', 'Type a message to Claude...');
+        $('#input-message').attr('placeholder', 'Type a message to Superengineer...');
         $('#btn-send-message').attr('title', 'Send');
       } else {
         $('#input-hint-text').text('Enter to send, Shift+Enter for new line');
-        $('#input-message').attr('placeholder', 'Type a message to Claude... (Enter to send, Shift+Enter for new line)');
+        $('#input-message').attr('placeholder', 'Type a message to Superengineer... (Enter to send, Shift+Enter for new line)');
         $('#btn-send-message').attr('title', 'Send (Enter)');
       }
     }
@@ -2239,7 +2239,7 @@
     var size = state.fontSize + 'px';
 
     // Set CSS variable on document root for global scaling
-    document.documentElement.style.setProperty('--superengineer-v5-font-size', size);
+    document.documentElement.style.setProperty('--superengineer-font-size', size);
 
     $('#font-size-display').text(size);
 
@@ -2498,7 +2498,7 @@
         var fileName = filePath.split(/[\\\/]/).pop();
         FileBrowser.openFile(filePath, fileName);
       } else if (action === 'claude-files') {
-        // Open Claude Files modal
+        // Open AI Files modal
         ModalsModule.openClaudeFilesModal();
       }
     });
@@ -2519,7 +2519,7 @@
       }
     });
 
-    // Save Claude file button - handler is in ModalsModule
+    // Save AI file button - handler is in ModalsModule
 
     // Rename conversation button click
     $(document).on('click', '.btn-rename-conversation', function (e) {
@@ -3062,7 +3062,7 @@
         $('#input-message').val('');
       }
     } else {
-      $('#input-message').attr('placeholder', 'Type a message to Claude...');
+      $('#input-message').attr('placeholder', 'Type a message to Superengineer...');
       $('#form-send-message').removeClass('opacity-50');
 
       // Restore the pending message if it was cleared due to a question
@@ -3126,14 +3126,9 @@
       $('#btn-start-agent').addClass('hidden');
       $('#btn-stop-agent').removeClass('hidden');
       $('#btn-restart-agent').removeClass('hidden');
-    } else if (hasSession) {
-      // Agent was started but is now stopped: show Start, hide Stop + Restart
-      $('#btn-start-agent').removeClass('hidden');
-      $('#btn-stop-agent').addClass('hidden');
-      $('#btn-restart-agent').addClass('hidden');
     } else {
-      // Never started: hide all
-      $('#btn-start-agent').addClass('hidden');
+      // Agent not running: show Start, hide Stop + Restart
+      $('#btn-start-agent').removeClass('hidden');
       $('#btn-stop-agent').addClass('hidden');
       $('#btn-restart-agent').addClass('hidden');
     }
@@ -3713,7 +3708,7 @@
       .done(function (data) {
         // data = { projectModel, effectiveModel, globalDefault }
         // If no project override, default to Opus
-        var modelValue = data.projectModel || 'claude-opus-4-6';
+        var modelValue = data.projectModel || 'claude-sonnet-4-6';
         $('#project-model-select').val(modelValue);
         state.currentProjectModel = data.projectModel;
         state.effectiveModel = data.effectiveModel;
@@ -3722,13 +3717,13 @@
       })
       .fail(function () {
         // On failure, default to Opus
-        $('#project-model-select').val('claude-opus-4-6');
+        $('#project-model-select').val('claude-sonnet-4-6');
         state.currentProjectModel = null;
       });
   }
 
   function updateModelSelectorTitle(modelData) {
-    var title = 'Select Claude model for this project';
+    var title = 'Select AI model for this project';
 
     if (modelData.projectModel) {
       title = 'Using: ' + getModelDisplayName(modelData.projectModel) + ' (project override)';
@@ -3741,8 +3736,8 @@
 
   function getModelDisplayName(modelId) {
     var displayNames = {
-      'claude-opus-4-6': 'Opus 4.6',
       'claude-sonnet-4-6': 'Sonnet 4.6',
+      'claude-opus-4-6': 'Opus 4.6',
       'claude-sonnet-4-5-20250929': 'Sonnet 4.5',
       'claude-haiku-4-5-20251001': 'Haiku 4.5'
     };
@@ -3784,7 +3779,7 @@
       })
       .fail(function (xhr) {
         // Revert the selector to the previous value or Opus if no override
-        $('#project-model-select').val(state.currentProjectModel || 'claude-opus-4-6');
+        $('#project-model-select').val(state.currentProjectModel || 'claude-sonnet-4-6');
         showErrorToast(xhr, 'Failed to change model');
       });
   }
@@ -3815,7 +3810,7 @@
 
   function showShellDisabledNotification() {
     var message = 'Shell is disabled because the server is bound to all interfaces (0.0.0.0). ' +
-      'To enable, set SUPERENGINEER_V5_FORCE_SHELL_ENABLED=1 or bind to a specific host (e.g., HOST=127.0.0.1).';
+      'To enable, set SUPERENGINEER_FORCE_SHELL_ENABLED=1 or bind to a specific host (e.g., HOST=127.0.0.1).';
     showToast(message, 'warning');
   }
 
@@ -5198,6 +5193,10 @@
             message.data.isWaiting, message.data.version
           );
         }
+
+        if (InventifyModule) {
+          InventifyModule.handleOneOffWaiting(message.data.oneOffId, message.data.isWaiting);
+        }
         break;
       case 'github_clone_progress':
         if (message.data) {
@@ -5298,7 +5297,7 @@
     }
 
     if (Notification.permission === 'granted') {
-      new Notification('Superengineer-v5 - Input Required', {
+      new Notification('Superengineer - Input Required', {
         body: project.name + ' is waiting for your input',
         icon: '/favicon.ico',
         tag: 'waiting-' + project.id
@@ -5306,7 +5305,7 @@
     } else if (Notification.permission !== 'denied') {
       Notification.requestPermission().then(function (permission) {
         if (permission === 'granted') {
-          new Notification('Superengineer-v5 - Input Required', {
+          new Notification('Superengineer - Input Required', {
             body: project.name + ' is waiting for your input',
             icon: '/favicon.ico',
             tag: 'waiting-' + project.id

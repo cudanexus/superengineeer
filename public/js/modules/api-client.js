@@ -4,7 +4,7 @@
  * @requires jquery
  */
 
-(function (root, factory) {
+(function(root, factory) {
   'use strict';
 
   if (typeof module !== 'undefined' && module.exports) {
@@ -12,7 +12,7 @@
   } else {
     root.ApiClient = factory();
   }
-})(typeof window !== 'undefined' ? window : global, function () {
+})(typeof window !== 'undefined' ? window : global, function() {
   'use strict';
 
   var ApiClient = {};
@@ -24,7 +24,7 @@
    * Set the base URL for all API calls
    * @param {string} url - Base URL (e.g., 'http://localhost:3000')
    */
-  ApiClient.setBaseUrl = function (url) {
+  ApiClient.setBaseUrl = function(url) {
     baseUrl = url || '';
   };
 
@@ -32,7 +32,7 @@
    * Get the current base URL
    * @returns {string} Current base URL
    */
-  ApiClient.getBaseUrl = function () {
+  ApiClient.getBaseUrl = function() {
     return baseUrl;
   };
 
@@ -44,12 +44,12 @@
    * Get health status of the server
    * @function getHealth
    * @memberof module:ApiClient
-   * @returns {JQueryXHR<Superengineer-v5.API.HealthResponse>} Health check response
+   * @returns {JQueryXHR<Superengineer.API.HealthResponse>} Health check response
    * @example
    * const health = await ApiClient.getHealth();
    * console.log(health.status); // 'ok' or 'degraded'
    */
-  ApiClient.getHealth = function () {
+  ApiClient.getHealth = function() {
     return $.get(baseUrl + '/api/health');
   };
 
@@ -59,7 +59,7 @@
    * @memberof module:ApiClient
    * @returns {Promise<{devMode: boolean}>} Development mode status
    */
-  ApiClient.getDevStatus = function () {
+  ApiClient.getDevStatus = function() {
     return $.get(baseUrl + '/api/dev');
   };
 
@@ -70,7 +70,7 @@
    * @returns {Promise<void>} Resolves when shutdown initiated
    * @throws {Error} If not in development mode
    */
-  ApiClient.shutdownServer = function () {
+  ApiClient.shutdownServer = function() {
     return $.post(baseUrl + '/api/dev/shutdown');
   };
 
@@ -78,12 +78,12 @@
    * Get agent resource status across all projects
    * @function getAgentResourceStatus
    * @memberof module:ApiClient
-   * @returns {Promise<Superengineer-v5.API.ResourceStatus>} Resource usage information
+   * @returns {Promise<Superengineer.API.ResourceStatus>} Resource usage information
    * @example
    * const status = await ApiClient.getAgentResourceStatus();
    * console.log(`Running: ${status.runningCount}/${status.maxConcurrent}`);
    */
-  ApiClient.getAgentResourceStatus = function () {
+  ApiClient.getAgentResourceStatus = function() {
     return $.get(baseUrl + '/api/agents/status');
   };
 
@@ -94,7 +94,7 @@
    * @param {number} [limit=100] - Maximum number of log entries to retrieve
    * @returns {Promise<Array<{timestamp: string, level: string, message: string, context?: Object}>>} Log entries
    */
-  ApiClient.getGlobalLogs = function (limit) {
+  ApiClient.getGlobalLogs = function(limit) {
     var url = baseUrl + '/api/logs';
 
     if (limit) {
@@ -112,12 +112,12 @@
    * Get all projects
    * @function getProjects
    * @memberof module:ApiClient
-   * @returns {Promise<Array<Superengineer-v5.API.Project>>} Array of projects
+   * @returns {Promise<Array<Superengineer.API.Project>>} Array of projects
    * @example
    * const projects = await ApiClient.getProjects();
    * projects.forEach(p => console.log(p.name, p.path));
    */
-  ApiClient.getProjects = function () {
+  ApiClient.getProjects = function() {
     return $.get(baseUrl + '/api/projects');
   };
 
@@ -128,7 +128,7 @@
    * @param {Object} data - Project data
    * @param {string} data.name - Project name
    * @param {string} data.path - Absolute path to project directory
-   * @returns {Promise<Superengineer-v5.API.Project>} Created project
+   * @returns {Promise<Superengineer.API.Project>} Created project
    * @throws {Error} If project already exists at path
    * @throws {Error} If path is invalid or not accessible
    * @example
@@ -137,7 +137,7 @@
    *   path: '/home/user/projects/myproject'
    * });
    */
-  ApiClient.addProject = function (data) {
+  ApiClient.addProject = function(data) {
     return $.ajax({
       url: baseUrl + '/api/projects',
       method: 'POST',
@@ -155,7 +155,7 @@
    * @throws {Error} If project not found
    * @throws {Error} If agent is running for this project
    */
-  ApiClient.deleteProject = function (id) {
+  ApiClient.deleteProject = function(id) {
     return $.ajax({ url: baseUrl + '/api/projects/' + id, method: 'DELETE' });
   };
 
@@ -167,7 +167,7 @@
    * @param {string} data.searchPath - Directory path to search for projects
    * @returns {Promise<{discovered: number, registered: number, alreadyRegistered: number, failed: number, projects: Array}>} Discovery results
    */
-  ApiClient.discoverProjects = function (data) {
+  ApiClient.discoverProjects = function(data) {
     return $.ajax({
       url: baseUrl + '/api/projects/discover',
       method: 'POST',
@@ -183,7 +183,7 @@
    * @param {string} id - Project UUID
    * @returns {Promise<{agent: Object, logs: Array, processes: Array, ralphLoop: Object}>} Debug information
    */
-  ApiClient.getDebugInfo = function (id) {
+  ApiClient.getDebugInfo = function(id) {
     return $.get(baseUrl + '/api/projects/' + id + '/debug');
   };
 
@@ -196,10 +196,10 @@
    * @function getProjectRoadmap
    * @memberof module:ApiClient
    * @param {string} id - Project UUID
-   * @returns {Promise<{content: string, parsed: Superengineer-v5.API.Roadmap}>} Roadmap data
+   * @returns {Promise<{content: string, parsed: Superengineer.API.Roadmap}>} Roadmap data
    * @throws {Error} If project not found or roadmap doesn't exist
    */
-  ApiClient.getProjectRoadmap = function (id) {
+  ApiClient.getProjectRoadmap = function(id) {
     return $.get(baseUrl + '/api/projects/' + id + '/roadmap');
   };
 
@@ -215,7 +215,7 @@
    * await ApiClient.generateRoadmap(projectId, 'Create a roadmap for a React todo app');
    * // Listen for 'roadmap_message' WebSocket events for real-time output
    */
-  ApiClient.generateRoadmap = function (id, prompt) {
+  ApiClient.generateRoadmap = function(id, prompt) {
     return $.post(baseUrl + '/api/projects/' + id + '/roadmap/generate', { prompt: prompt });
   };
 
@@ -230,7 +230,7 @@
    * @example
    * await ApiClient.modifyRoadmap(projectId, 'Add a phase for performance optimization');
    */
-  ApiClient.modifyRoadmap = function (id, prompt) {
+  ApiClient.modifyRoadmap = function(id, prompt) {
     return $.ajax({
       url: baseUrl + '/api/projects/' + id + '/roadmap',
       method: 'PUT',
@@ -247,7 +247,7 @@
    * @param {string} response - User's response to Claude's question
    * @returns {Promise<void>} Resolves when response is sent
    */
-  ApiClient.sendRoadmapResponse = function (id, response) {
+  ApiClient.sendRoadmapResponse = function(id, response) {
     return $.ajax({
       url: baseUrl + '/api/projects/' + id + '/roadmap/respond',
       method: 'POST',
@@ -267,7 +267,7 @@
    * @returns {Promise<void>} Resolves when task is deleted
    * @throws {Error} If task not found
    */
-  ApiClient.deleteRoadmapTask = function (id, phaseId, milestoneId, taskIndex) {
+  ApiClient.deleteRoadmapTask = function(id, phaseId, milestoneId, taskIndex) {
     return $.ajax({
       url: baseUrl + '/api/projects/' + id + '/roadmap/task',
       method: 'DELETE',
@@ -286,7 +286,7 @@
    * @returns {Promise<void>} Resolves when milestone is deleted
    * @throws {Error} If milestone not found
    */
-  ApiClient.deleteRoadmapMilestone = function (id, phaseId, milestoneId) {
+  ApiClient.deleteRoadmapMilestone = function(id, phaseId, milestoneId) {
     return $.ajax({
       url: baseUrl + '/api/projects/' + id + '/roadmap/milestone',
       method: 'DELETE',
@@ -304,7 +304,7 @@
    * @returns {Promise<void>} Resolves when phase is deleted
    * @throws {Error} If phase not found
    */
-  ApiClient.deleteRoadmapPhase = function (id, phaseId) {
+  ApiClient.deleteRoadmapPhase = function(id, phaseId) {
     return $.ajax({
       url: baseUrl + '/api/projects/' + id + '/roadmap/phase',
       method: 'DELETE',
@@ -326,7 +326,7 @@
    * @throws {Error} If agent is already running
    * @deprecated Use startInteractiveAgent instead
    */
-  ApiClient.startAgent = function (id) {
+  ApiClient.startAgent = function(id) {
     return $.post(baseUrl + '/api/projects/' + id + '/agent/start');
   };
 
@@ -337,7 +337,7 @@
    * @param {string} id - Project UUID
    * @returns {Promise<void>} Resolves when agent stops
    */
-  ApiClient.stopAgent = function (id) {
+  ApiClient.stopAgent = function(id) {
     return $.post(baseUrl + '/api/projects/' + id + '/agent/stop');
   };
 
@@ -346,14 +346,14 @@
    * @function getAgentStatus
    * @memberof module:ApiClient
    * @param {string} id - Project UUID
-   * @returns {Promise<Superengineer-v5.API.AgentStatus>} Agent status information
+   * @returns {Promise<Superengineer.API.AgentStatus>} Agent status information
    * @example
    * const status = await ApiClient.getAgentStatus(projectId);
    * if (status.running && status.waitingForResponse) {
    *   console.log('Agent is waiting for input');
    * }
    */
-  ApiClient.getAgentStatus = function (id) {
+  ApiClient.getAgentStatus = function(id) {
     return $.get(baseUrl + '/api/projects/' + id + '/agent/status');
   };
 
@@ -364,7 +364,7 @@
    * @param {string} id - Project UUID
    * @returns {Promise<{active: boolean, currentMilestone?: string}>} Loop status
    */
-  ApiClient.getLoopStatus = function (id) {
+  ApiClient.getLoopStatus = function(id) {
     return $.get(baseUrl + '/api/projects/' + id + '/agent/loop');
   };
 
@@ -389,11 +389,11 @@
    *   'plan' // plan mode
    * );
    */
-  ApiClient.startInteractiveAgent = function (id, message, images, sessionId, permissionMode) {
+  ApiClient.startInteractiveAgent = function(id, message, images, sessionId, permissionMode) {
     var payload = { message: message || '' };
 
     if (images && images.length > 0) {
-      payload.images = images.map(function (img) {
+      payload.images = images.map(function(img) {
         return {
           type: img.mimeType,
           data: img.dataUrl.split(',')[1] // Remove data:image/xxx;base64, prefix
@@ -435,11 +435,11 @@
    *   { dataUrl: 'data:image/png;base64,...', mimeType: 'image/png' }
    * ]);
    */
-  ApiClient.sendAgentMessage = function (id, message, images) {
+  ApiClient.sendAgentMessage = function(id, message, images) {
     var payload = { message: message };
 
     if (images && images.length > 0) {
-      payload.images = images.map(function (img) {
+      payload.images = images.map(function(img) {
         return {
           type: img.mimeType,
           data: img.dataUrl.split(',')[1] // Remove data:image/xxx;base64, prefix
@@ -463,7 +463,7 @@
    * @param {string} oneOffId - One-off agent ID
    * @returns {Promise<void>} Resolves when agent stopped
    */
-  ApiClient.stopOneOffAgent = function (projectId, oneOffId) {
+  ApiClient.stopOneOffAgent = function(projectId, oneOffId) {
     return $.ajax({
       url: baseUrl + '/api/projects/' + projectId + '/agent/oneoff/' + encodeURIComponent(oneOffId) + '/stop',
       method: 'POST'
@@ -478,11 +478,11 @@
    * @param {Array} [images] - Optional images
    * @returns {Promise<void>}
    */
-  ApiClient.sendOneOffMessage = function (projectId, oneOffId, message, images) {
+  ApiClient.sendOneOffMessage = function(projectId, oneOffId, message, images) {
     var payload = { message: message };
 
     if (images && images.length > 0) {
-      payload.images = images.map(function (img) {
+      payload.images = images.map(function(img) {
         return {
           type: img.mimeType,
           data: img.dataUrl.split(',')[1]
@@ -504,7 +504,7 @@
    * @param {string} oneOffId - One-off agent ID
    * @returns {Promise<Object>}
    */
-  ApiClient.getOneOffStatus = function (projectId, oneOffId) {
+  ApiClient.getOneOffStatus = function(projectId, oneOffId) {
     return $.get(baseUrl + '/api/projects/' + projectId + '/agent/oneoff/' + encodeURIComponent(oneOffId) + '/status');
   };
 
@@ -514,7 +514,7 @@
    * @param {string} oneOffId - One-off agent ID
    * @returns {Promise<Object>}
    */
-  ApiClient.getOneOffContext = function (projectId, oneOffId) {
+  ApiClient.getOneOffContext = function(projectId, oneOffId) {
     return $.get(baseUrl + '/api/projects/' + projectId + '/agent/oneoff/' + encodeURIComponent(oneOffId) + '/context');
   };
 
@@ -525,7 +525,7 @@
    * @param {Object} answers - Map of question index to selected answer(s)
    * @returns {Promise<Object>}
    */
-  ApiClient.answerAgentQuestion = function (projectId, toolUseId, answers) {
+  ApiClient.answerAgentQuestion = function(projectId, toolUseId, answers) {
     return $.ajax({
       url: baseUrl + '/api/projects/' + projectId + '/agent/answer',
       method: 'POST',
@@ -545,7 +545,7 @@
    * @param {string} id - Project UUID
    * @returns {Promise<Array<string>>} Array of queued message texts
    */
-  ApiClient.getQueuedMessages = function (id) {
+  ApiClient.getQueuedMessages = function(id) {
     return $.get(baseUrl + '/api/projects/' + id + '/agent/queue');
   };
 
@@ -556,7 +556,7 @@
    * @param {string} id - Project UUID
    * @returns {Promise<void>} Resolves when project is removed from queue
    */
-  ApiClient.removeFromQueue = function (id) {
+  ApiClient.removeFromQueue = function(id) {
     return $.ajax({ url: baseUrl + '/api/projects/' + id + '/agent/queue', method: 'DELETE' });
   };
 
@@ -569,7 +569,7 @@
    * @returns {Promise<void>} Resolves when message is removed
    * @throws {Error} If index is out of bounds
    */
-  ApiClient.removeQueuedMessage = function (id, index) {
+  ApiClient.removeQueuedMessage = function(id, index) {
     return $.ajax({ url: baseUrl + '/api/projects/' + id + '/agent/queue/' + index, method: 'DELETE' });
   };
 
@@ -589,7 +589,7 @@
    *   console.log(`${conv.label || conv.id}: ${conv.messageCount} messages`);
    * });
    */
-  ApiClient.getConversations = function (id) {
+  ApiClient.getConversations = function(id) {
     return $.get(baseUrl + '/api/projects/' + id + '/conversations');
   };
 
@@ -599,13 +599,13 @@
    * @memberof module:ApiClient
    * @param {string} projectId - Project UUID
    * @param {string} conversationId - Conversation UUID
-   * @returns {Promise<Superengineer-v5.API.Conversation>} Conversation with all messages
+   * @returns {Promise<Superengineer.API.Conversation>} Conversation with all messages
    * @throws {Error} If conversation not found
    * @example
    * const conv = await ApiClient.getConversation(projectId, conversationId);
    * console.log(`Loaded ${conv.messages.length} messages`);
    */
-  ApiClient.getConversation = function (projectId, conversationId) {
+  ApiClient.getConversation = function(projectId, conversationId) {
     return $.get(baseUrl + '/api/projects/' + projectId + '/conversation', { conversationId: conversationId });
   };
 
@@ -620,7 +620,7 @@
    * const results = await ApiClient.searchConversationHistory(projectId, 'authentication');
    * results.forEach(r => console.log(`Found in ${r.conversationId}: ${r.content}`));
    */
-  ApiClient.searchConversationHistory = function (projectId, query) {
+  ApiClient.searchConversationHistory = function(projectId, query) {
     return $.get(baseUrl + '/api/projects/' + projectId + '/conversations/search', { q: query });
   };
 
@@ -636,7 +636,7 @@
    * @example
    * await ApiClient.renameConversation(projectId, conversationId, 'Auth Implementation');
    */
-  ApiClient.renameConversation = function (projectId, conversationId, label) {
+  ApiClient.renameConversation = function(projectId, conversationId, label) {
     return $.ajax({
       url: baseUrl + '/api/projects/' + projectId + '/conversations/' + conversationId,
       method: 'PUT',
@@ -654,7 +654,7 @@
    * @returns {Promise<void>} Resolves when set
    * @deprecated Frontend manages current conversation locally
    */
-  ApiClient.setCurrentConversation = function (projectId, conversationId) {
+  ApiClient.setCurrentConversation = function(projectId, conversationId) {
     return $.ajax({
       url: baseUrl + '/api/projects/' + projectId + '/conversation/current',
       method: 'PUT',
@@ -679,7 +679,7 @@
    *   console.log(`${f.filePath}: ${f.exists ? 'exists' : 'not found'}`);
    * });
    */
-  ApiClient.getClaudeFiles = function (projectId) {
+  ApiClient.getClaudeFiles = function(projectId) {
     return $.get(baseUrl + '/api/projects/' + projectId + '/claude-files');
   };
 
@@ -699,7 +699,7 @@
    *   '# Global Claude Instructions\n\n...'
    * );
    */
-  ApiClient.saveClaudeFile = function (projectId, filePath, content) {
+  ApiClient.saveClaudeFile = function(projectId, filePath, content) {
     return $.ajax({
       url: baseUrl + '/api/projects/' + projectId + '/claude-files',
       method: 'PUT',
@@ -725,7 +725,7 @@
    *   ['Remove duplicates', 'Improve clarity']
    * );
    */
-  ApiClient.optimizeClaudeFile = function (projectId, filePath, content, optimizationGoals) {
+  ApiClient.optimizeClaudeFile = function(projectId, filePath, content, optimizationGoals) {
     return $.ajax({
       url: baseUrl + '/api/projects/' + projectId + '/optimize-file',
       method: 'POST',
@@ -750,7 +750,7 @@
    *   console.log(`${s.file}: ${s.issue} - ${s.recommendation}`);
    * });
    */
-  ApiClient.getOptimizations = function (projectId) {
+  ApiClient.getOptimizations = function(projectId) {
     return $.get(baseUrl + '/api/projects/' + projectId + '/optimizations');
   };
 
@@ -762,13 +762,13 @@
    * Get global application settings
    * @function getSettings
    * @memberof module:ApiClient
-   * @returns {Promise<Superengineer-v5.API.Settings>} Global settings object
+   * @returns {Promise<Superengineer.API.Settings>} Global settings object
    * @example
    * const settings = await ApiClient.getSettings();
    * console.log(`Max agents: ${settings.maxConcurrentAgents}`);
    * console.log(`Default model: ${settings.defaultModel}`);
    */
-  ApiClient.getSettings = function () {
+  ApiClient.getSettings = function() {
     return $.get(baseUrl + '/api/settings');
   };
 
@@ -776,8 +776,8 @@
    * Update global application settings
    * @function updateSettings
    * @memberof module:ApiClient
-   * @param {Partial<Superengineer-v5.API.Settings>} settings - Settings to update
-   * @returns {Promise<Superengineer-v5.API.Settings>} Updated settings
+   * @param {Partial<Superengineer.API.Settings>} settings - Settings to update
+   * @returns {Promise<Superengineer.API.Settings>} Updated settings
    * @throws {Error} If validation fails
    * @example
    * // Update multiple settings
@@ -787,7 +787,7 @@
    *   defaultModel: 'claude-opus-4-6'
    * });
    */
-  ApiClient.updateSettings = function (settings) {
+  ApiClient.updateSettings = function(settings) {
     return $.ajax({
       url: baseUrl + '/api/settings',
       method: 'PUT',
@@ -807,17 +807,17 @@
    *   console.log(`${m.displayName} (${m.id})`);
    * });
    */
-  ApiClient.getAvailableModels = function () {
+  ApiClient.getAvailableModels = function() {
     return $.get(baseUrl + '/api/settings/models');
   };
 
   /**
-   * Wipe all Claudito data (factory reset)
+   * Wipe all Superengineer data (factory reset)
    * @function wipeAllData
    * @memberof module:ApiClient
    * @returns {Promise<{projectsWiped: number, globalDataDeleted: boolean, mcpTempDeleted: boolean}>}
    */
-  ApiClient.wipeAllData = function () {
+  ApiClient.wipeAllData = function() {
     return $.ajax({ url: baseUrl + '/api/settings/wipe-all-data', method: 'POST' });
   };
 
@@ -837,7 +837,7 @@
    * console.log(`Override: ${config.projectModel || 'none'}`);
    * console.log(`Default: ${config.globalDefault}`);
    */
-  ApiClient.getProjectModel = function (projectId) {
+  ApiClient.getProjectModel = function(projectId) {
     return $.get(baseUrl + '/api/projects/' + projectId + '/model');
   };
 
@@ -855,7 +855,7 @@
    * // Clear override to use global default
    * await ApiClient.setProjectModel(projectId, null);
    */
-  ApiClient.setProjectModel = function (projectId, model) {
+  ApiClient.setProjectModel = function(projectId, model) {
     return $.ajax({
       url: baseUrl + '/api/projects/' + projectId + '/model',
       method: 'PUT',
@@ -874,7 +874,7 @@
    * const overrides = await ApiClient.getProjectMcpOverrides(projectId);
    * console.log(`MCP enabled: ${overrides.enabled}`);
    */
-  ApiClient.getProjectMcpOverrides = function (projectId) {
+  ApiClient.getProjectMcpOverrides = function(projectId) {
     return $.get(baseUrl + '/api/projects/' + projectId + '/mcp-overrides');
   };
 
@@ -894,7 +894,7 @@
    *   console.log('Agent was restarted');
    * }
    */
-  ApiClient.updateProjectMcpOverrides = function (projectId, overrides) {
+  ApiClient.updateProjectMcpOverrides = function(projectId, overrides) {
     return $.ajax({
       url: baseUrl + '/api/projects/' + projectId + '/mcp-overrides',
       method: 'PUT',
@@ -917,7 +917,7 @@
    * // On Windows: [{name: 'C:', path: 'C:\\'}, {name: 'D:', path: 'D:\\'}]
    * // On Unix: [{name: '/', path: '/'}]
    */
-  ApiClient.getDrives = function () {
+  ApiClient.getDrives = function() {
     return $.get(baseUrl + '/api/fs/drives');
   };
 
@@ -932,7 +932,7 @@
    * const dirs = await ApiClient.browseFolder('/home/user/projects');
    * dirs.forEach(d => console.log(d.name));
    */
-  ApiClient.browseFolder = function (path) {
+  ApiClient.browseFolder = function(path) {
     return $.get(baseUrl + '/api/fs/browse', { path: path });
   };
 
@@ -949,7 +949,7 @@
    *   console.log(`${e.name} (${e.isDirectory ? 'dir' : 'file'})`);
    * });
    */
-  ApiClient.browseWithFiles = function (path) {
+  ApiClient.browseWithFiles = function(path) {
     return $.get(baseUrl + '/api/fs/browse-with-files', { path: path });
   };
 
@@ -964,7 +964,7 @@
    * const content = await ApiClient.readFile('/project/README.md');
    * console.log(content);
    */
-  ApiClient.readFile = function (path) {
+  ApiClient.readFile = function(path) {
     return $.get(baseUrl + '/api/fs/read', { path: path });
   };
 
@@ -982,7 +982,7 @@
    *   JSON.stringify({debug: true}, null, 2)
    * );
    */
-  ApiClient.writeFile = function (path, content) {
+  ApiClient.writeFile = function(path, content) {
     return $.ajax({
       url: baseUrl + '/api/fs/write',
       method: 'PUT',
@@ -1001,7 +1001,7 @@
    * @example
    * await ApiClient.createFolder('/project/src/components');
    */
-  ApiClient.createFolder = function (path) {
+  ApiClient.createFolder = function(path) {
     return $.ajax({
       url: baseUrl + '/api/fs/mkdir',
       method: 'POST',
@@ -1025,7 +1025,7 @@
    * // Delete a directory
    * await ApiClient.deleteFileOrFolder('/project/temp', true);
    */
-  ApiClient.deleteFileOrFolder = function (targetPath, isDirectory) {
+  ApiClient.deleteFileOrFolder = function(targetPath, isDirectory) {
     return $.ajax({
       url: baseUrl + '/api/fs/delete',
       method: 'DELETE',
@@ -1043,14 +1043,14 @@
    * @function getGitStatus
    * @memberof module:ApiClient
    * @param {string} projectId - Project UUID
-   * @returns {Promise<Superengineer-v5.API.GitStatus>} Git status information
+   * @returns {Promise<Superengineer.API.GitStatus>} Git status information
    * @example
    * const status = await ApiClient.getGitStatus(projectId);
    * console.log(`On branch: ${status.branch}`);
    * console.log(`${status.staged.length} staged files`);
    * console.log(`${status.unstaged.length} unstaged changes`);
    */
-  ApiClient.getGitStatus = function (projectId) {
+  ApiClient.getGitStatus = function(projectId) {
     return $.get(baseUrl + '/api/projects/' + projectId + '/git/status');
   };
 
@@ -1065,7 +1065,7 @@
    * console.log(`Current: ${branches.current}`);
    * branches.local.forEach(b => console.log(`Local: ${b}`));
    */
-  ApiClient.getGitBranches = function (projectId) {
+  ApiClient.getGitBranches = function(projectId) {
     return $.get(baseUrl + '/api/projects/' + projectId + '/git/branches');
   };
 
@@ -1074,7 +1074,7 @@
    * @param {string} projectId - Project UUID
    * @returns {Promise<{name: string|null}>}
    */
-  ApiClient.getGitUserName = function (projectId) {
+  ApiClient.getGitUserName = function(projectId) {
     return $.get(baseUrl + '/api/projects/' + projectId + '/git/user-name');
   };
 
@@ -1092,7 +1092,7 @@
    * // Get staged changes
    * const stagedDiff = await ApiClient.getGitDiff(projectId, true);
    */
-  ApiClient.getGitDiff = function (projectId, staged) {
+  ApiClient.getGitDiff = function(projectId, staged) {
     return $.get(baseUrl + '/api/projects/' + projectId + '/git/diff', { staged: staged ? 'true' : 'false' });
   };
 
@@ -1111,7 +1111,7 @@
    *   false // unstaged
    * );
    */
-  ApiClient.getGitFileDiff = function (projectId, filePath, staged) {
+  ApiClient.getGitFileDiff = function(projectId, filePath, staged) {
     return $.get(baseUrl + '/api/projects/' + projectId + '/git/file-diff', {
       path: filePath,
       staged: staged ? 'true' : 'false'
@@ -1128,7 +1128,7 @@
    * const tags = await ApiClient.getGitTags(projectId);
    * tags.forEach(t => console.log(`${t.name} at ${t.commit}`));
    */
-  ApiClient.getGitTags = function (projectId) {
+  ApiClient.getGitTags = function(projectId) {
     return $.get(baseUrl + '/api/projects/' + projectId + '/git/tags');
   };
 
@@ -1143,7 +1143,7 @@
    * @example
    * await ApiClient.gitStage(projectId, ['src/app.js', 'README.md']);
    */
-  ApiClient.gitStage = function (projectId, paths) {
+  ApiClient.gitStage = function(projectId, paths) {
     return $.ajax({
       url: baseUrl + '/api/projects/' + projectId + '/git/stage',
       method: 'POST',
@@ -1159,7 +1159,7 @@
    * @param {string} projectId - Project UUID
    * @returns {Promise<void>} Resolves when all changes staged
    */
-  ApiClient.gitStageAll = function (projectId) {
+  ApiClient.gitStageAll = function(projectId) {
     return $.post(baseUrl + '/api/projects/' + projectId + '/git/stage-all');
   };
 
@@ -1173,7 +1173,7 @@
    * @example
    * await ApiClient.gitUnstage(projectId, ['src/test.js']);
    */
-  ApiClient.gitUnstage = function (projectId, paths) {
+  ApiClient.gitUnstage = function(projectId, paths) {
     return $.ajax({
       url: baseUrl + '/api/projects/' + projectId + '/git/unstage',
       method: 'POST',
@@ -1189,7 +1189,7 @@
    * @param {string} projectId - Project UUID
    * @returns {Promise<void>} Resolves when all changes unstaged
    */
-  ApiClient.gitUnstageAll = function (projectId) {
+  ApiClient.gitUnstageAll = function(projectId) {
     return $.post(baseUrl + '/api/projects/' + projectId + '/git/unstage-all');
   };
 
@@ -1208,7 +1208,7 @@
    * );
    * console.log(`Created commit: ${result.hash}`);
    */
-  ApiClient.gitCommit = function (projectId, message) {
+  ApiClient.gitCommit = function(projectId, message) {
     return $.ajax({
       url: baseUrl + '/api/projects/' + projectId + '/git/commit',
       method: 'POST',
@@ -1230,7 +1230,7 @@
    * // Create and checkout new branch
    * await ApiClient.gitCreateBranch(projectId, 'feature/auth', true);
    */
-  ApiClient.gitCreateBranch = function (projectId, name, checkout) {
+  ApiClient.gitCreateBranch = function(projectId, name, checkout) {
     return $.ajax({
       url: baseUrl + '/api/projects/' + projectId + '/git/branch',
       method: 'POST',
@@ -1250,7 +1250,7 @@
    * @example
    * await ApiClient.gitCheckout(projectId, 'main');
    */
-  ApiClient.gitCheckout = function (projectId, branch) {
+  ApiClient.gitCheckout = function(projectId, branch) {
     return $.ajax({
       url: baseUrl + '/api/projects/' + projectId + '/git/checkout',
       method: 'POST',
@@ -1273,7 +1273,7 @@
    * // Push with upstream
    * await ApiClient.gitPush(projectId, 'origin', 'feature/auth', true);
    */
-  ApiClient.gitPush = function (projectId, remote, branch, setUpstream) {
+  ApiClient.gitPush = function(projectId, remote, branch, setUpstream) {
     return $.ajax({
       url: baseUrl + '/api/projects/' + projectId + '/git/push',
       method: 'POST',
@@ -1294,7 +1294,7 @@
    * @example
    * await ApiClient.gitPull(projectId, 'origin', 'main');
    */
-  ApiClient.gitPull = function (projectId, remote, branch, rebase) {
+  ApiClient.gitPull = function(projectId, remote, branch, rebase) {
     return $.ajax({
       url: baseUrl + '/api/projects/' + projectId + '/git/pull',
       method: 'POST',
@@ -1314,7 +1314,7 @@
    * @example
    * await ApiClient.gitDiscard(projectId, ['src/test.js']);
    */
-  ApiClient.gitDiscard = function (projectId, paths) {
+  ApiClient.gitDiscard = function(projectId, paths) {
     return $.ajax({
       url: baseUrl + '/api/projects/' + projectId + '/git/discard',
       method: 'POST',
@@ -1336,7 +1336,7 @@
    * // Create annotated tag
    * await ApiClient.gitCreateTag(projectId, 'v1.0.0', 'Initial release');
    */
-  ApiClient.gitCreateTag = function (projectId, name, message) {
+  ApiClient.gitCreateTag = function(projectId, name, message) {
     return $.ajax({
       url: baseUrl + '/api/projects/' + projectId + '/git/tags',
       method: 'POST',
@@ -1357,7 +1357,7 @@
    * @example
    * await ApiClient.gitPushTag(projectId, 'v1.0.0', 'origin');
    */
-  ApiClient.gitPushTag = function (projectId, name, remote) {
+  ApiClient.gitPushTag = function(projectId, name, remote) {
     return $.ajax({
       url: baseUrl + '/api/projects/' + projectId + '/git/tags/' + encodeURIComponent(name) + '/push',
       method: 'POST',
@@ -1374,7 +1374,7 @@
    * @param {string} name - Tag name to delete
    * @returns {Promise<void>} Resolves when tag deleted
    */
-  ApiClient.gitDeleteTag = function (projectId, name) {
+  ApiClient.gitDeleteTag = function(projectId, name) {
     return $.ajax({
       url: baseUrl + '/api/projects/' + projectId + '/git/tags/' + encodeURIComponent(name),
       method: 'DELETE'
@@ -1388,7 +1388,7 @@
    * @param {string} projectId - Project UUID
    * @returns {Promise<{message: string}>} Generated commit message
    */
-  ApiClient.generateCommitMessage = function (projectId) {
+  ApiClient.generateCommitMessage = function(projectId) {
     return $.ajax({
       url: baseUrl + '/api/projects/' + projectId + '/git/generate-commit-message',
       method: 'POST',
@@ -1413,7 +1413,7 @@
    *   console.log('Shell is available');
    * }
    */
-  ApiClient.isShellEnabled = function (projectId) {
+  ApiClient.isShellEnabled = function(projectId) {
     return $.get(baseUrl + '/api/projects/' + projectId + '/shell/enabled');
   };
 
@@ -1428,7 +1428,7 @@
    * const shell = await ApiClient.startShell(projectId);
    * console.log(`Started shell with PID: ${shell.pid}`);
    */
-  ApiClient.startShell = function (projectId) {
+  ApiClient.startShell = function(projectId) {
     return $.post(baseUrl + '/api/projects/' + projectId + '/shell/start');
   };
 
@@ -1439,7 +1439,7 @@
    * @param {string} projectId - Project UUID
    * @returns {Promise<{running: boolean, pid?: number}>} Shell status
    */
-  ApiClient.getShellStatus = function (projectId) {
+  ApiClient.getShellStatus = function(projectId) {
     return $.get(baseUrl + '/api/projects/' + projectId + '/shell/status');
   };
 
@@ -1454,7 +1454,7 @@
    * @example
    * await ApiClient.sendShellInput(projectId, 'ls -la\n');
    */
-  ApiClient.sendShellInput = function (projectId, input) {
+  ApiClient.sendShellInput = function(projectId, input) {
     return $.ajax({
       url: baseUrl + '/api/projects/' + projectId + '/shell/input',
       method: 'POST',
@@ -1475,7 +1475,7 @@
    * // Resize to 120x30
    * await ApiClient.resizeShell(projectId, 120, 30);
    */
-  ApiClient.resizeShell = function (projectId, cols, rows) {
+  ApiClient.resizeShell = function(projectId, cols, rows) {
     return $.ajax({
       url: baseUrl + '/api/projects/' + projectId + '/shell/resize',
       method: 'POST',
@@ -1491,7 +1491,7 @@
    * @param {string} projectId - Project UUID
    * @returns {Promise<void>} Resolves when shell stopped
    */
-  ApiClient.stopShell = function (projectId) {
+  ApiClient.stopShell = function(projectId) {
     return $.post(baseUrl + '/api/projects/' + projectId + '/shell/stop');
   };
 
@@ -1509,7 +1509,7 @@
    * @param {number} [config.maxTurns=5] - Maximum iterations
    * @param {string} [config.workerModel] - Model for worker agent
    * @param {string} [config.reviewerModel] - Model for reviewer agent
-   * @returns {Promise<Superengineer-v5.API.RalphLoopState>} New Ralph Loop state
+   * @returns {Promise<Superengineer.API.RalphLoopState>} New Ralph Loop state
    * @throws {Error} If agent is already running
    * @example
    * const loop = await ApiClient.startRalphLoop(projectId, {
@@ -1520,7 +1520,7 @@
    * });
    * console.log(`Started loop ${loop.taskId}`);
    */
-  ApiClient.startRalphLoop = function (projectId, config) {
+  ApiClient.startRalphLoop = function(projectId, config) {
     return $.ajax({
       url: baseUrl + '/api/projects/' + projectId + '/ralph-loop/start',
       method: 'POST',
@@ -1540,7 +1540,7 @@
    * @example
    * await ApiClient.stopRalphLoop(projectId, taskId);
    */
-  ApiClient.stopRalphLoop = function (projectId, taskId) {
+  ApiClient.stopRalphLoop = function(projectId, taskId) {
     return $.ajax({
       url: baseUrl + '/api/projects/' + projectId + '/ralph-loop/' + taskId + '/stop',
       method: 'POST'
@@ -1558,7 +1558,7 @@
    * @example
    * await ApiClient.pauseRalphLoop(projectId, taskId);
    */
-  ApiClient.pauseRalphLoop = function (projectId, taskId) {
+  ApiClient.pauseRalphLoop = function(projectId, taskId) {
     return $.ajax({
       url: baseUrl + '/api/projects/' + projectId + '/ralph-loop/' + taskId + '/pause',
       method: 'POST'
@@ -1576,7 +1576,7 @@
    * @example
    * await ApiClient.resumeRalphLoop(projectId, taskId);
    */
-  ApiClient.resumeRalphLoop = function (projectId, taskId) {
+  ApiClient.resumeRalphLoop = function(projectId, taskId) {
     return $.ajax({
       url: baseUrl + '/api/projects/' + projectId + '/ralph-loop/' + taskId + '/resume',
       method: 'POST'
@@ -1588,14 +1588,14 @@
    * @function getRalphLoops
    * @memberof module:ApiClient
    * @param {string} projectId - Project UUID
-   * @returns {Promise<Array<Superengineer-v5.API.RalphLoopState>>} Array of Ralph Loop states
+   * @returns {Promise<Array<Superengineer.API.RalphLoopState>>} Array of Ralph Loop states
    * @example
    * const loops = await ApiClient.getRalphLoops(projectId);
    * loops.forEach(loop => {
    *   console.log(`${loop.taskId}: ${loop.status} (${loop.currentIteration}/${loop.maxTurns})`);
    * });
    */
-  ApiClient.getRalphLoops = function (projectId) {
+  ApiClient.getRalphLoops = function(projectId) {
     return $.get(baseUrl + '/api/projects/' + projectId + '/ralph-loop');
   };
 
@@ -1605,7 +1605,7 @@
    * @memberof module:ApiClient
    * @param {string} projectId - Project UUID
    * @param {string} taskId - Task ID of the loop
-   * @returns {Promise<Superengineer-v5.API.RalphLoopState>} Ralph Loop state
+   * @returns {Promise<Superengineer.API.RalphLoopState>} Ralph Loop state
    * @throws {Error} If loop not found
    * @example
    * const state = await ApiClient.getRalphLoopState(projectId, taskId);
@@ -1613,7 +1613,7 @@
    *   console.log(`Final result: ${state.finalResult}`);
    * }
    */
-  ApiClient.getRalphLoopState = function (projectId, taskId) {
+  ApiClient.getRalphLoopState = function(projectId, taskId) {
     return $.get(baseUrl + '/api/projects/' + projectId + '/ralph-loop/' + taskId);
   };
 
@@ -1628,7 +1628,7 @@
    * @example
    * await ApiClient.deleteRalphLoop(projectId, taskId);
    */
-  ApiClient.deleteRalphLoop = function (projectId, taskId) {
+  ApiClient.deleteRalphLoop = function(projectId, taskId) {
     return $.ajax({
       url: baseUrl + '/api/projects/' + projectId + '/ralph-loop/' + taskId,
       method: 'DELETE'
@@ -1662,7 +1662,7 @@
    *   );
    * };
    */
-  ApiClient.logFrontendError = function (message, source, line, column, errorObj, projectId, additionalData) {
+  ApiClient.logFrontendError = function(message, source, line, column, errorObj, projectId, additionalData) {
     var errorData = {
       message: message,
       source: source,
@@ -1703,9 +1703,9 @@
    *   ApiClient.init();
    * });
    */
-  ApiClient.init = function () {
+  ApiClient.init = function() {
     if (typeof $ !== 'undefined' && typeof document !== 'undefined') {
-      $(document).ajaxError(function (_event, jqXHR) {
+      $(document).ajaxError(function(_event, jqXHR) {
         if (jqXHR.status === 401) {
           window.location.href = '/login';
         }
@@ -1724,7 +1724,7 @@
    *   window.location.href = '/login';
    * }
    */
-  ApiClient.getAuthStatus = function () {
+  ApiClient.getAuthStatus = function() {
     return $.get(baseUrl + '/api/auth/status');
   };
 
@@ -1738,8 +1738,8 @@
    *   ApiClient.logout();
    * });
    */
-  ApiClient.logout = function () {
-    return $.post(baseUrl + '/api/auth/logout').done(function () {
+  ApiClient.logout = function() {
+    return $.post(baseUrl + '/api/auth/logout').done(function() {
       window.location.href = '/login';
     });
   };
@@ -1748,19 +1748,19 @@
   // GitHub Integration
   // =========================================================================
 
-  ApiClient.getGitHubStatus = function () {
+  ApiClient.getGitHubStatus = function() {
     return $.get(baseUrl + '/api/integrations/github/status');
   };
 
-  ApiClient.getGitHubRepos = function (params) {
+  ApiClient.getGitHubRepos = function(params) {
     return $.get(baseUrl + '/api/integrations/github/repos', params);
   };
 
-  ApiClient.searchGitHubRepos = function (params) {
+  ApiClient.searchGitHubRepos = function(params) {
     return $.get(baseUrl + '/api/integrations/github/repos/search', params);
   };
 
-  ApiClient.cloneGitHubRepo = function (data) {
+  ApiClient.cloneGitHubRepo = function(data) {
     return $.ajax({
       url: baseUrl + '/api/integrations/github/clone',
       method: 'POST',
@@ -1773,22 +1773,22 @@
   // GitHub Issues
   // =========================================================================
 
-  ApiClient.getGitHubIssues = function (params) {
+  ApiClient.getGitHubIssues = function(params) {
     return $.get(baseUrl + '/api/integrations/github/issues', params);
   };
 
-  ApiClient.getGitHubIssueDetail = function (issueNumber, repo) {
+  ApiClient.getGitHubIssueDetail = function(issueNumber, repo) {
     return $.get(baseUrl + '/api/integrations/github/issues/' + issueNumber, { repo: repo });
   };
 
-  ApiClient.closeGitHubIssue = function (issueNumber, repo) {
+  ApiClient.closeGitHubIssue = function(issueNumber, repo) {
     return $.ajax({
       url: baseUrl + '/api/integrations/github/issues/' + issueNumber + '/close?repo=' + encodeURIComponent(repo),
       method: 'POST',
     });
   };
 
-  ApiClient.commentOnGitHubIssue = function (issueNumber, repo, body) {
+  ApiClient.commentOnGitHubIssue = function(issueNumber, repo, body) {
     return $.ajax({
       url: baseUrl + '/api/integrations/github/issues/' + issueNumber + '/comment?repo=' + encodeURIComponent(repo),
       method: 'POST',
@@ -1797,7 +1797,7 @@
     });
   };
 
-  ApiClient.createGitHubIssue = function (data) {
+  ApiClient.createGitHubIssue = function(data) {
     return $.ajax({
       url: baseUrl + '/api/integrations/github/issues',
       method: 'POST',
@@ -1806,19 +1806,19 @@
     });
   };
 
-  ApiClient.getGitHubLabels = function (repo) {
+  ApiClient.getGitHubLabels = function(repo) {
     return $.get(baseUrl + '/api/integrations/github/labels', { repo: repo });
   };
 
-  ApiClient.getGitHubMilestones = function (repo) {
+  ApiClient.getGitHubMilestones = function(repo) {
     return $.get(baseUrl + '/api/integrations/github/milestones', { repo: repo });
   };
 
-  ApiClient.getGitHubCollaborators = function (repo) {
+  ApiClient.getGitHubCollaborators = function(repo) {
     return $.get(baseUrl + '/api/integrations/github/collaborators', { repo: repo });
   };
 
-  ApiClient.getGitHubRepoId = function (projectId) {
+  ApiClient.getGitHubRepoId = function(projectId) {
     return $.get(baseUrl + '/api/projects/' + projectId + '/git/github-repo');
   };
 
@@ -1826,7 +1826,7 @@
   // GitHub Pull Requests
   // =========================================================================
 
-  ApiClient.createGitHubPR = function (data) {
+  ApiClient.createGitHubPR = function(data) {
     return $.ajax({
       url: baseUrl + '/api/integrations/github/pr',
       method: 'POST',
@@ -1835,17 +1835,17 @@
     });
   };
 
-  ApiClient.getGitHubPulls = function (params) {
+  ApiClient.getGitHubPulls = function(params) {
     return $.get(baseUrl + '/api/integrations/github/pulls', params);
   };
 
-  ApiClient.getGitHubPRDetail = function (prNumber, repo) {
+  ApiClient.getGitHubPRDetail = function(prNumber, repo) {
     return $.get(baseUrl + '/api/integrations/github/pulls/' + prNumber, {
       repo: repo,
     });
   };
 
-  ApiClient.commentOnGitHubPR = function (prNumber, repo, body) {
+  ApiClient.commentOnGitHubPR = function(prNumber, repo, body) {
     return $.ajax({
       url: baseUrl + '/api/integrations/github/pulls/' + prNumber + '/comment?repo=' + encodeURIComponent(repo),
       method: 'POST',
@@ -1854,7 +1854,7 @@
     });
   };
 
-  ApiClient.mergeGitHubPR = function (prNumber, repo, options) {
+  ApiClient.mergeGitHubPR = function(prNumber, repo, options) {
     var opts = options || {};
 
     return $.ajax({
@@ -1868,7 +1868,7 @@
     });
   };
 
-  ApiClient.generatePRDescription = function (projectId) {
+  ApiClient.generatePRDescription = function(projectId) {
     return $.ajax({
       url: baseUrl + '/api/projects/' + projectId + '/git/generate-pr-description',
       method: 'POST',
@@ -1881,7 +1881,7 @@
   // Roadmap Task Addition
   // =========================================================================
 
-  ApiClient.addRoadmapTask = function (projectId, data) {
+  ApiClient.addRoadmapTask = function(projectId, data) {
     return $.ajax({
       url: baseUrl + '/api/projects/' + projectId + '/roadmap/task',
       method: 'POST',
@@ -1894,7 +1894,7 @@
   // Run Configurations
   // =========================================================================
 
-  ApiClient.getRunConfigs = function (projectId) {
+  ApiClient.getRunConfigs = function(projectId) {
     return $.get(baseUrl + '/api/projects/' + projectId + '/run-configs');
   };
 
@@ -1903,11 +1903,11 @@
    * @param {string} projectId - Project UUID
    * @returns {Promise<Object>} Scan result with importable configs
    */
-  ApiClient.getImportableRunConfigs = function (projectId) {
+  ApiClient.getImportableRunConfigs = function(projectId) {
     return $.get(baseUrl + '/api/projects/' + projectId + '/run-configs/importable');
   };
 
-  ApiClient.createRunConfig = function (projectId, data) {
+  ApiClient.createRunConfig = function(projectId, data) {
     return $.ajax({
       url: baseUrl + '/api/projects/' + projectId + '/run-configs',
       method: 'POST',
@@ -1916,7 +1916,7 @@
     });
   };
 
-  ApiClient.updateRunConfig = function (projectId, configId, data) {
+  ApiClient.updateRunConfig = function(projectId, configId, data) {
     return $.ajax({
       url: baseUrl + '/api/projects/' + projectId + '/run-configs/' + configId,
       method: 'PUT',
@@ -1925,14 +1925,14 @@
     });
   };
 
-  ApiClient.deleteRunConfig = function (projectId, configId) {
+  ApiClient.deleteRunConfig = function(projectId, configId) {
     return $.ajax({
       url: baseUrl + '/api/projects/' + projectId + '/run-configs/' + configId,
       method: 'DELETE',
     });
   };
 
-  ApiClient.startRunConfig = function (projectId, configId) {
+  ApiClient.startRunConfig = function(projectId, configId) {
     return $.ajax({
       url: baseUrl + '/api/projects/' + projectId + '/run-configs/' + configId + '/start',
       method: 'POST',
@@ -1941,7 +1941,7 @@
     });
   };
 
-  ApiClient.stopRunConfig = function (projectId, configId) {
+  ApiClient.stopRunConfig = function(projectId, configId) {
     return $.ajax({
       url: baseUrl + '/api/projects/' + projectId + '/run-configs/' + configId + '/stop',
       method: 'POST',
@@ -1950,7 +1950,7 @@
     });
   };
 
-  ApiClient.getRunConfigStatus = function (projectId, configId) {
+  ApiClient.getRunConfigStatus = function(projectId, configId) {
     return $.get(baseUrl + '/api/projects/' + projectId + '/run-configs/' + configId + '/status');
   };
 
@@ -1958,7 +1958,7 @@
   // Inventify
   // =========================================================================
 
-  ApiClient.startInventify = function (data) {
+  ApiClient.startInventify = function(data) {
     return $.ajax({
       url: baseUrl + '/api/projects/inventify/start',
       method: 'POST',
@@ -1967,21 +1967,21 @@
     });
   };
 
-  ApiClient.getInventifyIdeas = function () {
+  ApiClient.getInventifyIdeas = function() {
     return $.ajax({
       url: baseUrl + '/api/projects/inventify/ideas',
       method: 'GET',
     });
   };
 
-  ApiClient.cancelInventify = function () {
+  ApiClient.cancelInventify = function() {
     return $.ajax({
       url: baseUrl + '/api/projects/inventify/cancel',
       method: 'POST',
     });
   };
 
-  ApiClient.suggestInventifyNames = function (selectedIndex) {
+  ApiClient.suggestInventifyNames = function(selectedIndex) {
     return $.ajax({
       url: baseUrl + '/api/projects/inventify/suggest-names',
       method: 'POST',
@@ -1990,14 +1990,14 @@
     });
   };
 
-  ApiClient.getInventifyNameSuggestions = function () {
+  ApiClient.getInventifyNameSuggestions = function() {
     return $.ajax({
       url: baseUrl + '/api/projects/inventify/name-suggestions',
       method: 'GET',
     });
   };
 
-  ApiClient.selectInventifyIdea = function (selectedIndex, projectName) {
+  ApiClient.selectInventifyIdea = function(selectedIndex, projectName) {
     return $.ajax({
       url: baseUrl + '/api/projects/inventify/select',
       method: 'POST',
@@ -2009,14 +2009,14 @@
     });
   };
 
-  ApiClient.getInventifyBuildResult = function () {
+  ApiClient.getInventifyBuildResult = function() {
     return $.ajax({
       url: baseUrl + '/api/projects/inventify/build-result',
       method: 'GET',
     });
   };
 
-  ApiClient.completeInventifyBuild = function (projectId) {
+  ApiClient.completeInventifyBuild = function(projectId) {
     return $.ajax({
       url: baseUrl + '/api/projects/inventify/complete-build',
       method: 'POST',

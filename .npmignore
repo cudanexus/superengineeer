@@ -41,7 +41,7 @@ coverage/
 
 # Local data
 data/
-.claudito/
+.superengineer-v5/
 
 # Logs
 *.log

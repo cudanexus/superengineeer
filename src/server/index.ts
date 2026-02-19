@@ -2,6 +2,7 @@ import express, { Application, Request, Response } from 'express';
 import { Server, createServer } from 'http';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import { AppConfig } from '../config';
 import { createApiRouter, getAgentManager, getRoadmapGenerator, getShellService, getRalphLoopService, getConversationRepository, getProjectRepository, setWebSocketServer, getRunProcessManager } from '../routes';
 import { createAuthRouter } from '../routes/auth';
@@ -167,6 +168,9 @@ export class ExpressHttpServer implements HttpServer {
     // Cleanup any orphan processes from previous runs
     await this.cleanupOrphanProcesses();
 
+    // Auto-register default project if none exist
+    await this.ensureDefaultProject();
+
     return new Promise((resolve, reject) => {
       this.httpServer = createServer(this.app);
 
@@ -216,6 +220,52 @@ export class ExpressHttpServer implements HttpServer {
       if (result.failedPids.length > 0) {
         console.log(`Failed to kill: ${result.failedPids.join(', ')}`);
       }
+    }
+  }
+
+  private async ensureDefaultProject(): Promise<void> {
+    const DEFAULT_PROJECT_PATH = '/home/superengineer/super-code';
+    const DEFAULT_PROJECT_NAME = 'super-code';
+
+    try {
+      let projectRepository = getProjectRepository();
+
+      if (!projectRepository) {
+        const { getDataDirectory } = await import('../utils');
+        const { FileProjectRepository } = await import('../repositories');
+        projectRepository = new FileProjectRepository(getDataDirectory());
+      }
+
+      const projects = await projectRepository.findAll();
+
+      if (projects.length > 0) {
+        return;
+      }
+
+      // Create the directory if it doesn't exist
+      if (!fs.existsSync(DEFAULT_PROJECT_PATH)) {
+        try {
+          fs.mkdirSync(DEFAULT_PROJECT_PATH, { recursive: true });
+          console.log(`Created default project directory: ${DEFAULT_PROJECT_PATH}`);
+        } catch {
+          console.warn(`Could not create ${DEFAULT_PROJECT_PATH} — will register if it exists`);
+        }
+      }
+
+      // Only register if directory is accessible
+      if (!fs.existsSync(DEFAULT_PROJECT_PATH)) {
+        console.warn(`Default project path not accessible, skipping: ${DEFAULT_PROJECT_PATH}`);
+        return;
+      }
+
+      await projectRepository.create({
+        name: DEFAULT_PROJECT_NAME,
+        path: DEFAULT_PROJECT_PATH,
+      });
+
+      console.log(`Auto-registered default project: ${DEFAULT_PROJECT_PATH}`);
+    } catch (err) {
+      console.warn('Failed to auto-register default project:', err);
     }
   }
 
@@ -314,7 +364,7 @@ export class ExpressHttpServer implements HttpServer {
     if (!shellEnabled && isBindingToAllInterfaces) {
       console.log('\x1b[33m⚠ Shell terminal is DISABLED\x1b[0m');
       console.log('  Reason: Server is bound to all interfaces (0.0.0.0)');
-      console.log('  To enable: Set SUPERENGINEER_V5_FORCE_SHELL_ENABLED=1 (security risk)');
+      console.log('  To enable: Set SUPERENGINEER_FORCE_SHELL_ENABLED=1 (security risk)');
       console.log('         or: Bind to a specific host (e.g., --host 127.0.0.1)');
       console.log('');
     } else if (shellEnabled && shellForceEnabled && isBindingToAllInterfaces) {

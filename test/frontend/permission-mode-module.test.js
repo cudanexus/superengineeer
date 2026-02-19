@@ -224,15 +224,16 @@ describe('PermissionModeModule', () => {
       expect(mockOpenModal).not.toHaveBeenCalled();
     });
 
-    it('should show confirmation modal if agent is running', () => {
+    it('should restart agent directly if running', () => {
       mockState.permissionMode = 'acceptEdits';
       mockState.currentSessionId = 'session-123';
       mockFindProjectById.mockReturnValue({ status: 'running' });
 
       PermissionModeModule.setMode('plan');
 
-      expect(mockOpenModal).toHaveBeenCalledWith('modal-confirm-mode-change');
-      expect(mockState.permissionMode).toBe('acceptEdits');
+      expect(mockState.permissionMode).toBe('plan');
+      expect(mockApi.stopAgent).toHaveBeenCalledWith('test-project-id');
+      expect(mockOpenModal).not.toHaveBeenCalled();
     });
 
     it('should apply immediately if agent exists but not running', () => {
@@ -371,13 +372,5 @@ describe('PermissionModeModule', () => {
       expect(mockBtn.on).toHaveBeenCalledWith('click', expect.any(Function));
     });
 
-    it('should register confirm mode change button handler', () => {
-      const mockBtn = global.$();
-
-      PermissionModeModule.setupHandlers();
-
-      expect(global.$).toHaveBeenCalledWith('#btn-confirm-mode-change');
-      expect(mockBtn.on).toHaveBeenCalledWith('click', expect.any(Function));
-    });
   });
 });

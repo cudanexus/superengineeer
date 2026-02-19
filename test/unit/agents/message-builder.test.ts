@@ -72,7 +72,7 @@ describe('MessageBuilder', () => {
       MessageBuilder.generateMcpConfig(servers, 'test-project');
 
       expect(mockFs.mkdirSync).toHaveBeenCalledWith(
-        path.join('/tmp', 'superengineer-v5-mcp'),
+        path.join('/tmp', 'superengineer-mcp'),
         { recursive: true }
       );
     });

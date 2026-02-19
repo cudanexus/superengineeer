@@ -323,7 +323,7 @@ export class WorkerAgent {
     }
 
     // Add plugin directory
-    const pluginPath = path.join(this.projectPath, 'superengineer-v5-plugin');
+    const pluginPath = path.join(this.projectPath, 'superengineer-plugin');
     args.push('--plugin-dir', pluginPath);
 
     // Use stream-json for structured output

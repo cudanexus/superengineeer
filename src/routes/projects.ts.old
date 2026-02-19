@@ -1400,7 +1400,7 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
   // ===== Shell Routes =====
 
   const shellDisabledMessage = 'Shell is disabled when server is bound to all interfaces (0.0.0.0). ' +
-    'Set SUPERENGINEER_V5_FORCE_SHELL_ENABLED=1 to enable, or bind to a specific host.';
+    'Set SUPERENGINEER_FORCE_SHELL_ENABLED=1 to enable, or bind to a specific host.';
 
   // Check if shell is enabled
   router.get('/:id/shell/enabled', (_req: Request, res: Response) => {

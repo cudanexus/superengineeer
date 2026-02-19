@@ -281,7 +281,7 @@
    */
   function renderAssistantMessage(msg, typeClass) {
     var renderedContent = renderMarkdown(msg.content);
-    var senderName = 'Claude';
+    var senderName = 'Superengineer';
 
     // Check if this is a Ralph Loop message
     if (msg.ralphLoopPhase) {

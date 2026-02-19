@@ -18,7 +18,7 @@
 
 If the new templates aren't showing up in the UI, try these steps:
 
-1. **Restart the Superengineer-v5 server**
+1. **Restart the Superengineer server**
    - Stop the server (Ctrl+C)
    - Run `npm run build` to rebuild
    - Start the server again with `npm start` or `npm run dev`
@@ -42,14 +42,14 @@ If the new templates aren't showing up in the UI, try these steps:
 
 1. Start Claude Code with the plugin:
    ```bash
-   claude --plugin-dir ./superengineer-v5-plugin
+   claude --plugin-dir ./superengineer-plugin
    ```
 
 2. Use the new skills:
    - `/code-reviewer` - Analyzes code for quality issues
    - `/expert-developer` - Implements features with best practices
 
-### In Superengineer-v5 UI
+### In Superengineer UI
 
 1. **Quick Action: Review Code**
    - Click Quick Actions button (lightning bolt icon)
@@ -67,10 +67,10 @@ If the new templates aren't showing up in the UI, try these steps:
 ## Technical Details
 
 ### File Locations
-- Agent skills: `superengineer-v5-plugin/skills/`
+- Agent skills: `superengineer-plugin/skills/`
   - `code-reviewer.md`
   - `expert-developer.md`
-- Plugin config: `superengineer-v5-plugin/plugin.json`
+- Plugin config: `superengineer-plugin/plugin.json`
 - Templates: `src/repositories/settings.ts` (DEFAULT_PROMPT_TEMPLATES)
 
 ### CSS Updates
