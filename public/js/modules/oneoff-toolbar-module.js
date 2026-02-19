@@ -152,7 +152,7 @@
       options += '<option value="' + models[i].value + '" class="bg-gray-700 text-white"' + selected + '>' + models[i].label + '</option>';
     }
 
-    return '<div class="flex items-center bg-gray-700 rounded text-xs h-6" title="Select Claude model">' +
+    return '<div class="flex items-center bg-gray-700 rounded text-xs h-6" title="Select AI model">' +
       '<select class="oneoff-model-select bg-gray-700 text-white text-xs px-1.5 h-full rounded cursor-pointer focus:outline-none focus:ring-1 focus:ring-purple-500 appearance-none pr-5" ' +
       'data-oneoff-id="' + oneOffId + '" style="background-image: url(\'data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%239ca3af%22 stroke-width=%222%22%3E%3Cpath stroke-linecap=%22round%22 stroke-linejoin=%22round%22 d=%22M19 9l-7 7-7-7%22/%3E%3C/svg%3E\'); background-repeat: no-repeat; background-position: right 0.25rem center; background-size: 0.75rem;">' +
       options +

@@ -144,7 +144,7 @@
     removeWaitingIndicator(); // Remove any existing one first
     var html = '<div id="waiting-indicator" class="flex items-center gap-2 text-gray-400 text-sm py-2">' +
       '<div class="loading-spinner small"></div>' +
-      '<span>Waiting for Claude response...</span>' +
+      '<span>Waiting for AI response...</span>' +
     '</div>';
     $('#conversation').append(html);
     scrollConversationToBottom();

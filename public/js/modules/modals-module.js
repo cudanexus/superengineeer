@@ -1,6 +1,6 @@
 /**
  * Modals Module
- * Handles Claude files modal and optimizations modal
+ * Handles AI files modal and optimizations modal
  */
 (function(root, factory) {
   if (typeof module === 'object' && module.exports) {
@@ -42,7 +42,7 @@
     findProjectById = deps.findProjectById;
   }
 
-  // ===== Claude Files Modal =====
+  // ===== AI Files Modal =====
 
   function openClaudeFilesModal() {
     var $list = $('#claude-files-list');
@@ -312,13 +312,13 @@
   }
 
   function setupHandlers() {
-    // Claude file selection
+    // AI file selection
     $(document).on('click', '.claude-file-item', function() {
       var path = $(this).data('path');
       selectClaudeFile(path);
     });
 
-    // Claude file editor change - show save button
+    // AI file editor change - show save button
     $('#claude-file-editor').on('input', function() {
       var currentFile = state.claudeFilesState.currentFile;
 
@@ -336,12 +336,12 @@
       updateClaudeFilePreview();
     });
 
-    // Save Claude file
+    // Save AI file
     $('#btn-save-claude-file').on('click', function() {
       saveClaudeFile();
     });
 
-    // Optimize Claude file
+    // Optimize AI file
     $('#btn-optimize-claude-file').on('click', function() {
       optimizeClaudeFile();
     });

@@ -112,7 +112,7 @@
     // Open files state
     openFiles: [], // [{path, name, content, modified, originalContent}]
     activeFilePath: null,
-    // Claude Files state
+    // AI Files state
     claudeFilesState: {
       files: [],
       currentFile: null // { path, name, content, originalContent, size, isGlobal }
@@ -525,7 +525,7 @@
   function doCloseAllModals() {
     $('.modal').addClass('hidden');
 
-    // Reset Claude files modal mobile view
+    // Reset AI files modal mobile view
     FileBrowser.hideMobileClaudeFileEditor();
 
     // Clean up debug modal if it was open
@@ -1947,21 +1947,21 @@
     if (state.sendWithCtrlEnter) {
       if (isMobile) {
         $('#input-hint-text').text('Tap Send to send');
-        $('#input-message').attr('placeholder', 'Type a message to Claude...');
+        $('#input-message').attr('placeholder', 'Type a message to Superengineer...');
         $('#btn-send-message').attr('title', 'Send');
       } else {
         $('#input-hint-text').text('Ctrl+Enter to send, Enter for new line');
-        $('#input-message').attr('placeholder', 'Type a message to Claude... (Ctrl+Enter to send)');
+        $('#input-message').attr('placeholder', 'Type a message to Superengineer... (Ctrl+Enter to send)');
         $('#btn-send-message').attr('title', 'Send (Ctrl+Enter)');
       }
     } else {
       if (isMobile) {
         $('#input-hint-text').text('Tap Send to send');
-        $('#input-message').attr('placeholder', 'Type a message to Claude...');
+        $('#input-message').attr('placeholder', 'Type a message to Superengineer...');
         $('#btn-send-message').attr('title', 'Send');
       } else {
         $('#input-hint-text').text('Enter to send, Shift+Enter for new line');
-        $('#input-message').attr('placeholder', 'Type a message to Claude... (Enter to send, Shift+Enter for new line)');
+        $('#input-message').attr('placeholder', 'Type a message to Superengineer... (Enter to send, Shift+Enter for new line)');
         $('#btn-send-message').attr('title', 'Send (Enter)');
       }
     }
@@ -2498,7 +2498,7 @@
         var fileName = filePath.split(/[\\\/]/).pop();
         FileBrowser.openFile(filePath, fileName);
       } else if (action === 'claude-files') {
-        // Open Claude Files modal
+        // Open AI Files modal
         ModalsModule.openClaudeFilesModal();
       }
     });
@@ -2519,7 +2519,7 @@
       }
     });
 
-    // Save Claude file button - handler is in ModalsModule
+    // Save AI file button - handler is in ModalsModule
 
     // Rename conversation button click
     $(document).on('click', '.btn-rename-conversation', function (e) {
@@ -3062,7 +3062,7 @@
         $('#input-message').val('');
       }
     } else {
-      $('#input-message').attr('placeholder', 'Type a message to Claude...');
+      $('#input-message').attr('placeholder', 'Type a message to Superengineer...');
       $('#form-send-message').removeClass('opacity-50');
 
       // Restore the pending message if it was cleared due to a question
@@ -3723,7 +3723,7 @@
   }
 
   function updateModelSelectorTitle(modelData) {
-    var title = 'Select Claude model for this project';
+    var title = 'Select AI model for this project';
 
     if (modelData.projectModel) {
       title = 'Using: ' + getModelDisplayName(modelData.projectModel) + ' (project override)';

@@ -177,22 +177,22 @@ set PORT=8080 && set HOST=0.0.0.0 && superengineer
 ### Agent Modes
 
 #### Interactive Mode (Default)
-Chat with Claude in real-time. The agent auto-starts when you send your first message.
+Chat with AI in real-time. The agent auto-starts when you send your first message.
 
-- Real-time streaming of Claude's responses
+- Real-time streaming of AI responses
 - See tool usage as it happens (file reads, edits, bash commands)
 - Code diffs with syntax highlighting and inline change highlighting
 - Send follow-up messages naturally
 - Toggle permission mode (Plan/Accept Edits) at runtime
 - Plan mode with approve/reject/request changes options
-- **Plan Mode Auto-Continue**: When Claude calls `EnterPlanMode`, the agent automatically restarts in plan mode and sends "Continue" so work proceeds without manual intervention
+- **Plan Mode Auto-Continue**: When AI calls `EnterPlanMode`, the agent automatically restarts in plan mode and sends "Continue" so work proceeds without manual intervention
 - Per-project model selection (Claude Sonnet 4/Opus 4/Opus 4.5/Haiku)
 
 #### Ralph Loop Mode (Advanced)
 Implements Geoffrey Huntley's "Ralph Wiggum technique" - an iterative worker/reviewer pattern for complex tasks:
 
-- **Worker Phase**: Fresh Claude instance executes the task
-- **Reviewer Phase**: Another Claude instance reviews the work and provides structured feedback
+- **Worker Phase**: Fresh AI instance executes the task
+- **Reviewer Phase**: Another AI instance reviews the work and provides structured feedback
 - **Iteration**: Worker addresses feedback, reviewer re-evaluates
 - **Completion**: Reviewer approves work, max iterations reached, or critical failure
 - **Configuration**: Set max iterations, worker/reviewer models, custom prompts
@@ -230,10 +230,10 @@ Superengineer includes built-in authentication to protect your agent manager:
 | **Shell Terminal** | Full PTY terminal with directory restriction to project folder |
 | **File Browser** | Browse, view, edit, create, delete files and folders. Folder browser includes a "New Folder" button for creating directories inline while browsing |
 | **Syntax Highlighting** | 30+ languages supported via highlight.js |
-| **Tool Visualization** | See Claude's tool usage with icons and arguments |
+| **Tool Visualization** | See AI tool usage with icons and arguments |
 | **Code Diffs** | Side-by-side diff view with word-level inline change highlighting |
 | **Context Monitor** | View token usage and context window utilization |
-| **Task Tracking** | View Claude's current tasks and progress |
+| **Task Tracking** | View AI current tasks and progress |
 | **Project Optimizations** | Check for CLAUDE.md issues and optimization suggestions |
 | **One-Off Agent Tabs** | Interactive sub-tabs with full rendering, per-tab toolbar (Tasks, Search, Permission Mode, Model, Font Size), and tool result previews |
 | **Font Controls** | Adjust text size with +/- buttons |
@@ -267,7 +267,7 @@ Full Git support directly in the UI:
 - **Conversation Stats**: Duration, message count, tool calls, tokens
 - **Resource Monitor**: Running and queued agent counts
 - **Context Usage**: Token usage persisted even when agent is stopped
-- **Session Recovery**: Automatic recovery when Claude sessions are lost
+- **Session Recovery**: Automatic recovery when AI sessions are lost
 
 ### Diff Visualization
 
@@ -327,7 +327,7 @@ Configure the output folder in Settings > General > Inventify Folder.
 ### Additional Features
 
 - **CLAUDE.md Editor**: Edit global and project-specific CLAUDE.md files with preview and AI-powered optimization
-- **One-Off Agent Sub-Tabs**: Background agent tasks appear as interactive sub-tabs in Agent Output with full tool rendering, per-tab toolbar (Tasks with badge, Search with highlighting, Permission Mode, Model selector, Font Size controls), per-tab input matching main tab (rows=3, cancel+send buttons, hint text), and agent lifecycle management. Shared controls (Permission Mode, Model, Font Size) sync across all tabs. Optimization uses direct file editing via Claude's Edit tool
+- **One-Off Agent Sub-Tabs**: Background agent tasks appear as interactive sub-tabs in Agent Output with full tool rendering, per-tab toolbar (Tasks with badge, Search with highlighting, Permission Mode, Model selector, Font Size controls), per-tab input matching main tab (rows=3, cancel+send buttons, hint text), and agent lifecycle management. Shared controls (Permission Mode, Model, Font Size) sync across all tabs. Optimization uses direct file editing via AI Edit tool
 - **Conversation History**: Browse, restore, and rename previous conversations
 - **AskUserQuestion Support**: Interactive UI for Claude's AskUserQuestion tool — renders questions with clickable options, "Other" for custom text, multi-question support, answers sent as tool_result
 - **Session Resumption**: Resume Claude sessions across restarts
