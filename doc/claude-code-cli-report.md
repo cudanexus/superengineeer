@@ -107,7 +107,7 @@ This report compares features found in the Claude Code source code (at `D:\Devel
 
 ## 3. STREAMING PROTOCOL (stdin/stdout)
 
-This is the **most critical undocumented feature** for Claudito's subprocess integration.
+This is the **most critical undocumented feature** for Superengineer's subprocess integration.
 
 ### Required Flags for Streaming Mode
 
@@ -348,7 +348,7 @@ Examples:
 
 ## 8. SPECIAL TOOLS DETECTION
 
-Claudito can detect special tool outcomes for enhanced UI:
+Superengineer can detect special tool outcomes for enhanced UI:
 
 | Tool | Detection | UI Action |
 |------|-----------|-----------|
@@ -399,7 +399,7 @@ These slash commands are available in interactive mode but not fully documented:
 
 ---
 
-## 11. RECOMMENDATIONS FOR CLAUDITO
+## 11. RECOMMENDATIONS FOR SUPERENGINEER
 
 ### Already Implemented (Verified)
 
@@ -414,7 +414,7 @@ Based on `claude-agent.ts`:
 
 ### Features Now Implemented
 
-After this analysis, the following were added to Claudito:
+After this analysis, the following were added to Superengineer:
 
 1. **`--max-turns`** - Limit runaway agents (via `agentLimits.maxTurns` setting)
 2. **`--include-partial-messages`** - Smoother streaming (via `agentStreaming.includePartialMessages`)
@@ -487,4 +487,4 @@ The Claude Code CLI has extensive undocumented capabilities, particularly around
 4. **Hook System**: Powerful validation and context injection
 5. **MCP Integration**: Extensible tool ecosystem
 
-Claudito now leverages many of these features including the new limit and streaming options added as part of this analysis.
+Superengineer now leverages many of these features including the new limit and streaming options added as part of this analysis.

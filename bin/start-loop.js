@@ -6,7 +6,7 @@
  * Press Ctrl+C twice quickly to fully exit.
  *
  * Generates login credentials once at startup and passes them to child processes
- * via CLAUDITO_USERNAME and CLAUDITO_PASSWORD environment variables.
+ * via SUPERENGINEER_USERNAME and SUPERENGINEER_PASSWORD environment variables.
  */
 
 const { spawn } = require('child_process');

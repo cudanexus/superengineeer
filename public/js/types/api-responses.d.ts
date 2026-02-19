@@ -1,11 +1,11 @@
 /**
- * API Response Type Definitions for Claudito Frontend
+ * API Response Type Definitions for Superengineer Frontend
  *
  * This file contains all the response types returned by the backend API endpoints.
  * These types should match the actual data structures returned by the server.
  */
 
-declare namespace Claudito.API {
+declare namespace Superengineer.API {
   // ============================================================
   // System & Health Endpoints
   // ============================================================

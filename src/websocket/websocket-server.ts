@@ -370,7 +370,7 @@ export class DefaultWebSocketServer implements ProjectWebSocketServer {
     client.isAlive = true;
     client.on('pong', () => { client.isAlive = true; });
 
-    this.sendMessage(ws, { type: 'connected', data: 'Connected to Claudito WebSocket' });
+    this.sendMessage(ws, { type: 'connected', data: 'Connected to Superengineer WebSocket' });
 
     ws.on('message', (data) => this.handleMessage(ws, String(data)));
     ws.on('close', () => this.handleDisconnect(ws));

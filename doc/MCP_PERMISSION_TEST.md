@@ -1,6 +1,6 @@
 # MCP Permission System Testing Guide
 
-This document explains how to test the new MCP (Model Context Protocol) permission system in Claudito.
+This document explains how to test the new MCP (Model Context Protocol) permission system in Superengineer.
 
 ## Overview
 

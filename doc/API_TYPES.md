@@ -1,6 +1,6 @@
 # API Types Reference
 
-Complete reference for all API response types in the Claudito frontend type system.
+Complete reference for all API response types in the Superengineer frontend type system.
 
 ## Table of Contents
 
@@ -476,7 +476,7 @@ interface ApiError {
 ```javascript
 // Get all projects
 ApiClient.getProjects()
-  .done(function(/** @type {Claudito.API.Project[]} */ projects) {
+  .done(function(/** @type {Superengineer.API.Project[]} */ projects) {
     projects.forEach(project => {
       console.log(`${project.name} at ${project.path}`);
     });
@@ -484,7 +484,7 @@ ApiClient.getProjects()
 
 // Get project with status
 ApiClient.getProjectDetails(projectId)
-  .done(function(/** @type {Claudito.API.ProjectStatus} */ project) {
+  .done(function(/** @type {Superengineer.API.ProjectStatus} */ project) {
     if (project.permissionOverrides?.enabled) {
       console.log('Custom permissions:', project.permissionOverrides.allowRules);
     }
@@ -496,7 +496,7 @@ ApiClient.getProjectDetails(projectId)
 ```javascript
 // Check agent status
 ApiClient.getAgentStatus(projectId)
-  .done(function(/** @type {Claudito.API.AgentStatus} */ status) {
+  .done(function(/** @type {Superengineer.API.AgentStatus} */ status) {
     if (status.running) {
       console.log(`Agent running in ${status.mode} mode`);
       if (status.waitingForResponse) {
@@ -507,7 +507,7 @@ ApiClient.getAgentStatus(projectId)
 
 // Monitor context usage
 ApiClient.getContextUsage(projectId)
-  .done(function(/** @type {Claudito.API.ContextUsage} */ usage) {
+  .done(function(/** @type {Superengineer.API.ContextUsage} */ usage) {
     console.log(`Using ${usage.percentage}% of context window`);
     console.log(`${usage.used} / ${usage.total} tokens`);
   });
@@ -518,7 +518,7 @@ ApiClient.getContextUsage(projectId)
 ```javascript
 // Get repository status
 ApiClient.getGitStatus(projectId)
-  .done(function(/** @type {Claudito.API.GitStatus} */ status) {
+  .done(function(/** @type {Superengineer.API.GitStatus} */ status) {
     console.log(`Branch: ${status.branch}`);
     console.log(`${status.staged.length} staged files`);
     console.log(`${status.unstaged.length} unstaged changes`);
@@ -540,7 +540,7 @@ const config = {
 };
 
 ApiClient.startRalphLoop(projectId, config)
-  .done(function(/** @type {Claudito.API.RalphLoopState} */ state) {
+  .done(function(/** @type {Superengineer.API.RalphLoopState} */ state) {
     console.log(`Started loop ${state.taskId}`);
     console.log(`Status: ${state.status}`);
   });

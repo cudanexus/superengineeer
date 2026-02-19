@@ -1,5 +1,5 @@
 /**
- * Minimal jQuery type definitions for Claudito
+ * Minimal jQuery type definitions for Superengineer
  * This provides basic typing for jQuery usage in the project
  */
 

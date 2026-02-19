@@ -2,7 +2,7 @@
 
 ## Overview
 
-This guide explains how to integrate the new memory leak fixes into the Claudito frontend application. The fixes address several critical memory issues:
+This guide explains how to integrate the new memory leak fixes into the Superengineer frontend application. The fixes address several critical memory issues:
 
 1. Event handler leaks in file-browser.js
 2. WebSocket reconnection memory accumulation
@@ -203,7 +203,7 @@ console.log(DOMCleanup.getStats());
 Enable debug mode to see memory statistics:
 
 ```javascript
-window.CLAUDITO_DEBUG = true;
+window.SUPERENGINEER_DEBUG = true;
 ```
 
 This will log memory usage every 30 seconds.

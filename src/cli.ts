@@ -8,7 +8,7 @@ const VERSION = process.env.npm_package_version || '0.1.0';
 
 function printHelp(): void {
   console.log(`
-Claudito - Claude Code Autonomous Agent Manager
+Superengineer - Claude Code Autonomous Agent Manager
 
 Usage: superengineer [options]
 
@@ -26,7 +26,7 @@ Environment Variables:
   LOG_LEVEL             Log level (debug/info/warn/error)
   MAX_CONCURRENT_AGENTS Maximum concurrent agents (default: 3)
   DEV_MODE              Enable development mode (true/false)
-  CLAUDITO_DEV_MODE     Enable development mode (1 to enable)
+  SUPERENGINEER_DEV_MODE     Enable development mode (1 to enable)
 
 Examples:
   superengineer                    Start with defaults (localhost:3000)
@@ -141,7 +141,7 @@ async function main(): Promise<void> {
   console.log(`
 ╔═══════════════════════════════════════════════════════════╗
 ║                                                           ║
-║   Claudito - Claude Code Agent Manager                    ║
+║   Superengineer - Claude Code Agent Manager                    ║
 ║                                                           ║
 ║   Server running at: http://${config.host}:${config.port.toString().padEnd(5)}                 ║
 ║                                                           ║
@@ -153,6 +153,6 @@ async function main(): Promise<void> {
 
 main().catch((error: unknown) => {
   const message = error instanceof Error ? error.message : String(error);
-  console.error('Failed to start Claudito:', message);
+  console.error('Failed to start Superengineer:', message);
   process.exit(1);
 });

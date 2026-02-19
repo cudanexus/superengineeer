@@ -157,7 +157,7 @@ timeline
    - Limit diagram size for readability
 
 5. **Theme Considerations**
-   - Diagrams in Claudito use a dark theme
+   - Diagrams in Superengineer use a dark theme
    - Colors are optimized for dark backgrounds
    - Test visibility in both light and dark modes
 

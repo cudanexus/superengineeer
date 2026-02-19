@@ -1,5 +1,5 @@
 /**
- * LocalStorage module for Claudito
+ * LocalStorage module for Superengineer
  * Handles browser persistence with error handling
  */
 

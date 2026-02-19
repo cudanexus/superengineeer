@@ -1,4 +1,4 @@
-# Claudito
+# Superengineer
 
 [![npm version](https://img.shields.io/npm/v/superengineer.svg)](https://www.npmjs.com/package/superengineer)
 [![CI](https://github.com/comfortablynumb/claudito/actions/workflows/ci.yml/badge.svg)](https://github.com/comfortablynumb/claudito/actions/workflows/ci.yml)
@@ -8,11 +8,11 @@
 
 A web-based manager for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) agents. Run and monitor multiple Claude agents across different projects with a modern UI. Features include Ralph Loop iterative development, Mermaid.js diagram rendering, MCP server configuration, and more.
 
-![Claudito Screenshot](doc/images/preview-01.png)
+![Superengineer Screenshot](doc/images/preview-01.png)
 
 ## Security Considerations
 
-> **Important**: Claudito runs Claude Code agents that can execute code and modify files on your system. Take these precautions:
+> **Important**: Superengineer runs Claude Code agents that can execute code and modify files on your system. Take these precautions:
 
 | Scenario | Recommended HOST | Notes |
 |----------|------------------|-------|
@@ -21,9 +21,9 @@ A web-based manager for [Claude Code](https://docs.anthropic.com/en/docs/claude-
 | **All interfaces** | `0.0.0.0` | Accessible from anywhere - use with caution |
 
 **Best Practices:**
-1. **Use authentication**: Claudito requires login by default. Set custom credentials for production:
+1. **Use authentication**: Superengineer requires login by default. Set custom credentials for production:
    ```bash
-   CLAUDITO_USERNAME=myuser CLAUDITO_PASSWORD=mystrongpassword superengineer
+   SUPERENGINEER_USERNAME=myuser SUPERENGINEER_PASSWORD=mystrongpassword superengineer
    ```
 2. **Avoid exposing to the internet**: Use a reverse proxy with HTTPS if needed
 3. **Configure firewall rules**: Only allow trusted IP addresses
@@ -68,7 +68,7 @@ Open your browser at **http://localhost:3000** to access the web UI.
 
 ### Installing and Authenticating Claude Code CLI
 
-Before using Claudito, you must have the Claude Code CLI installed and **logged in**. Claudito works with either:
+Before using Superengineer, you must have the Claude Code CLI installed and **logged in**. Superengineer works with either:
 - **Claude Pro/Max subscription** (recommended for personal use)
 - **Anthropic API key** (for API-based usage)
 
@@ -79,11 +79,11 @@ npm install -g @anthropic-ai/claude-code
 # Verify installation
 claude --version
 
-# Log in to Claude Code (required before using Claudito)
+# Log in to Claude Code (required before using Superengineer)
 claude auth
 ```
 
-> **Important:** Claudito requires an active Claude Code session. Make sure you can run `claude` directly in your terminal before starting Claudito.
+> **Important:** Superengineer requires an active Claude Code session. Make sure you can run `claude` directly in your terminal before starting Superengineer.
 
 For more details, see the [Claude Code documentation](https://docs.anthropic.com/en/docs/claude-code).
 
@@ -168,9 +168,9 @@ set PORT=8080 && set HOST=0.0.0.0 && superengineer
 | `LOG_LEVEL` | `info` | Log level (debug/info/warn/error) |
 | `MAX_CONCURRENT_AGENTS` | `3` | Maximum concurrent agents |
 | `DEV_MODE` | `true` (dev) / `false` (prod) | Enable development features |
-| `CLAUDITO_USERNAME` | (generated) | Override login username |
-| `CLAUDITO_PASSWORD` | (generated) | Override login password |
-| `CLAUDITO_FORCE_SHELL_ENABLED` | `0` | Force-enable shell on all interfaces (security risk) |
+| `SUPERENGINEER_USERNAME` | (generated) | Override login username |
+| `SUPERENGINEER_PASSWORD` | (generated) | Override login password |
+| `SUPERENGINEER_FORCE_SHELL_ENABLED` | `0` | Force-enable shell on all interfaces (security risk) |
 
 ## Features
 
@@ -205,7 +205,7 @@ Access via the Ralph Loop tab when an agent is running.
 ### Project Management
 
 - **Add Projects**: Point to any directory with a codebase
-- **Import from GitHub**: Browse and search your GitHub repos, clone directly into Claudito as a project
+- **Import from GitHub**: Browse and search your GitHub repos, clone directly into Superengineer as a project
 - **GitHub Issues**: Browse project issues with filters, create new issues (with labels, assignees, milestones), "Start Working" sends issue as agent prompt, "Add to Roadmap" creates a task, close issues and add comments
 - **GitHub PRs**: Create PRs with auto-generated title/description from conversation history and diff, browse PRs with state filters, view PR detail with reviews and comments, "Fix PR Feedback" sends review feedback as agent prompt
 - **Multi-Project Support**: Manage multiple projects simultaneously
@@ -214,12 +214,12 @@ Access via the Ralph Loop tab when an agent is running.
 
 ### Authentication
 
-Claudito includes built-in authentication to protect your agent manager:
+Superengineer includes built-in authentication to protect your agent manager:
 
 - **Auto-generated credentials**: On each server start, a unique username and password are generated
 - **QR Code login**: Scan the QR code displayed in the terminal for quick access
 - **Session persistence**: Sessions last 7 days
-- **Custom credentials**: Set `CLAUDITO_USERNAME` and `CLAUDITO_PASSWORD` environment variables for persistent credentials
+- **Custom credentials**: Set `SUPERENGINEER_USERNAME` and `SUPERENGINEER_PASSWORD` environment variables for persistent credentials
 - **Logout**: Click the logout button in the sidebar header
 
 ### User Interface
@@ -288,7 +288,7 @@ A full PTY-based terminal integrated into the UI:
 | **PowerShell/Bash** | Uses PowerShell on Windows, bash on Unix |
 | **Session Persistence** | Shell sessions persist while browsing other tabs |
 
-> **Security Note**: The shell terminal is **automatically disabled** when the server is bound to all interfaces (`0.0.0.0`). This prevents remote shell access. To enable shell on all interfaces, set `CLAUDITO_FORCE_SHELL_ENABLED=1` (not recommended).
+> **Security Note**: The shell terminal is **automatically disabled** when the server is bound to all interfaces (`0.0.0.0`). This prevents remote shell access. To enable shell on all interfaces, set `SUPERENGINEER_FORCE_SHELL_ENABLED=1` (not recommended).
 
 ### Run Configurations
 
@@ -320,7 +320,7 @@ Generate new project ideas and have them automatically built:
 6. Click "Generate!" -- a one-off agent brainstorms **5 unique project ideas**, each with a name, tagline, and description
 7. Browse the 5 idea cards, select one with the radio button, and click "Build this idea"
 8. A one-off agent suggests **5 creative project names** -- select one and click "Start building"
-9. Creates the project directory, writes `doc/plan.md` with a detailed plan, registers in Claudito, starts a Ralph Loop to build it, and automatically navigates to the new project
+9. Creates the project directory, writes `doc/plan.md` with a detailed plan, registers in Superengineer, starts a Ralph Loop to build it, and automatically navigates to the new project
 
 Configure the output folder in Settings > General > Inventify Folder.
 
@@ -361,7 +361,7 @@ Access settings via the gear icon in the UI sidebar.
 
 Control what Claude agents can do without prompting. Access via Settings > Claude Code Permissions.
 
-> **⚠️ Important Limitation**: Claudito currently only supports **Accept Edits** and **Plan** permission modes. The **Default** mode (which prompts for permission on each action) is not yet supported because Claudito cannot currently handle Claude's permission prompts. We're working on adding this functionality in a future release.
+> **⚠️ Important Limitation**: Superengineer currently only supports **Accept Edits** and **Plan** permission modes. The **Default** mode (which prompts for permission on each action) is not yet supported because Superengineer cannot currently handle Claude's permission prompts. We're working on adding this functionality in a future release.
 
 #### Permission Modes
 
@@ -653,7 +653,7 @@ GET    /api/auth/check                     # Check session validity
 GET    /api/settings              # Get settings
 PUT    /api/settings              # Update settings
 GET    /api/settings/models       # Get available Claude models
-POST   /api/settings/wipe-all-data # Wipe all Claudito data (factory reset)
+POST   /api/settings/wipe-all-data # Wipe all Superengineer data (factory reset)
 ```
 
 ### Claude Files
@@ -875,7 +875,7 @@ rm -rf /tmp/superengineer-test
 
 ### Network Binding
 
-By default, Claudito binds to `localhost` which only accepts connections from the local machine. When exposing Claudito to other devices, consider these recommendations:
+By default, Superengineer binds to `localhost` which only accepts connections from the local machine. When exposing Superengineer to other devices, consider these recommendations:
 
 | Scenario | Recommended HOST | Notes |
 |----------|------------------|-------|
@@ -896,12 +896,12 @@ superengineer --host 0.0.0.0
 
 ### Best Practices
 
-1. **Use authentication**: Claudito requires login by default. Set custom credentials via environment variables for production use:
+1. **Use authentication**: Superengineer requires login by default. Set custom credentials via environment variables for production use:
    ```bash
-   CLAUDITO_USERNAME=myuser CLAUDITO_PASSWORD=mystrongpassword superengineer
+   SUPERENGINEER_USERNAME=myuser SUPERENGINEER_PASSWORD=mystrongpassword superengineer
    ```
 
-2. **Avoid exposing to the internet**: Claudito is designed for local/LAN use. If you must expose it, use a reverse proxy with HTTPS.
+2. **Avoid exposing to the internet**: Superengineer is designed for local/LAN use. If you must expose it, use a reverse proxy with HTTPS.
 
 3. **Firewall rules**: When using LAN access, configure your firewall to only allow trusted IP addresses.
 

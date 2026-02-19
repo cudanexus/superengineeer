@@ -44,7 +44,7 @@
    * Get health status of the server
    * @function getHealth
    * @memberof module:ApiClient
-   * @returns {JQueryXHR<Claudito.API.HealthResponse>} Health check response
+   * @returns {JQueryXHR<Superengineer.API.HealthResponse>} Health check response
    * @example
    * const health = await ApiClient.getHealth();
    * console.log(health.status); // 'ok' or 'degraded'
@@ -78,7 +78,7 @@
    * Get agent resource status across all projects
    * @function getAgentResourceStatus
    * @memberof module:ApiClient
-   * @returns {Promise<Claudito.API.ResourceStatus>} Resource usage information
+   * @returns {Promise<Superengineer.API.ResourceStatus>} Resource usage information
    * @example
    * const status = await ApiClient.getAgentResourceStatus();
    * console.log(`Running: ${status.runningCount}/${status.maxConcurrent}`);
@@ -112,7 +112,7 @@
    * Get all projects
    * @function getProjects
    * @memberof module:ApiClient
-   * @returns {Promise<Array<Claudito.API.Project>>} Array of projects
+   * @returns {Promise<Array<Superengineer.API.Project>>} Array of projects
    * @example
    * const projects = await ApiClient.getProjects();
    * projects.forEach(p => console.log(p.name, p.path));
@@ -128,7 +128,7 @@
    * @param {Object} data - Project data
    * @param {string} data.name - Project name
    * @param {string} data.path - Absolute path to project directory
-   * @returns {Promise<Claudito.API.Project>} Created project
+   * @returns {Promise<Superengineer.API.Project>} Created project
    * @throws {Error} If project already exists at path
    * @throws {Error} If path is invalid or not accessible
    * @example
@@ -196,7 +196,7 @@
    * @function getProjectRoadmap
    * @memberof module:ApiClient
    * @param {string} id - Project UUID
-   * @returns {Promise<{content: string, parsed: Claudito.API.Roadmap}>} Roadmap data
+   * @returns {Promise<{content: string, parsed: Superengineer.API.Roadmap}>} Roadmap data
    * @throws {Error} If project not found or roadmap doesn't exist
    */
   ApiClient.getProjectRoadmap = function(id) {
@@ -346,7 +346,7 @@
    * @function getAgentStatus
    * @memberof module:ApiClient
    * @param {string} id - Project UUID
-   * @returns {Promise<Claudito.API.AgentStatus>} Agent status information
+   * @returns {Promise<Superengineer.API.AgentStatus>} Agent status information
    * @example
    * const status = await ApiClient.getAgentStatus(projectId);
    * if (status.running && status.waitingForResponse) {
@@ -599,7 +599,7 @@
    * @memberof module:ApiClient
    * @param {string} projectId - Project UUID
    * @param {string} conversationId - Conversation UUID
-   * @returns {Promise<Claudito.API.Conversation>} Conversation with all messages
+   * @returns {Promise<Superengineer.API.Conversation>} Conversation with all messages
    * @throws {Error} If conversation not found
    * @example
    * const conv = await ApiClient.getConversation(projectId, conversationId);
@@ -762,7 +762,7 @@
    * Get global application settings
    * @function getSettings
    * @memberof module:ApiClient
-   * @returns {Promise<Claudito.API.Settings>} Global settings object
+   * @returns {Promise<Superengineer.API.Settings>} Global settings object
    * @example
    * const settings = await ApiClient.getSettings();
    * console.log(`Max agents: ${settings.maxConcurrentAgents}`);
@@ -776,8 +776,8 @@
    * Update global application settings
    * @function updateSettings
    * @memberof module:ApiClient
-   * @param {Partial<Claudito.API.Settings>} settings - Settings to update
-   * @returns {Promise<Claudito.API.Settings>} Updated settings
+   * @param {Partial<Superengineer.API.Settings>} settings - Settings to update
+   * @returns {Promise<Superengineer.API.Settings>} Updated settings
    * @throws {Error} If validation fails
    * @example
    * // Update multiple settings
@@ -812,7 +812,7 @@
   };
 
   /**
-   * Wipe all Claudito data (factory reset)
+   * Wipe all Superengineer data (factory reset)
    * @function wipeAllData
    * @memberof module:ApiClient
    * @returns {Promise<{projectsWiped: number, globalDataDeleted: boolean, mcpTempDeleted: boolean}>}
@@ -1043,7 +1043,7 @@
    * @function getGitStatus
    * @memberof module:ApiClient
    * @param {string} projectId - Project UUID
-   * @returns {Promise<Claudito.API.GitStatus>} Git status information
+   * @returns {Promise<Superengineer.API.GitStatus>} Git status information
    * @example
    * const status = await ApiClient.getGitStatus(projectId);
    * console.log(`On branch: ${status.branch}`);
@@ -1509,7 +1509,7 @@
    * @param {number} [config.maxTurns=5] - Maximum iterations
    * @param {string} [config.workerModel] - Model for worker agent
    * @param {string} [config.reviewerModel] - Model for reviewer agent
-   * @returns {Promise<Claudito.API.RalphLoopState>} New Ralph Loop state
+   * @returns {Promise<Superengineer.API.RalphLoopState>} New Ralph Loop state
    * @throws {Error} If agent is already running
    * @example
    * const loop = await ApiClient.startRalphLoop(projectId, {
@@ -1588,7 +1588,7 @@
    * @function getRalphLoops
    * @memberof module:ApiClient
    * @param {string} projectId - Project UUID
-   * @returns {Promise<Array<Claudito.API.RalphLoopState>>} Array of Ralph Loop states
+   * @returns {Promise<Array<Superengineer.API.RalphLoopState>>} Array of Ralph Loop states
    * @example
    * const loops = await ApiClient.getRalphLoops(projectId);
    * loops.forEach(loop => {
@@ -1605,7 +1605,7 @@
    * @memberof module:ApiClient
    * @param {string} projectId - Project UUID
    * @param {string} taskId - Task ID of the loop
-   * @returns {Promise<Claudito.API.RalphLoopState>} Ralph Loop state
+   * @returns {Promise<Superengineer.API.RalphLoopState>} Ralph Loop state
    * @throws {Error} If loop not found
    * @example
    * const state = await ApiClient.getRalphLoopState(projectId, taskId);

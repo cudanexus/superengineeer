@@ -1,6 +1,6 @@
 /**
  * @module StateModule
- * @description Centralized application state management for Claudito.
+ * @description Centralized application state management for Superengineer.
  * Provides a single source of truth for all application state.
  */
 (function(root, factory) {
@@ -18,7 +18,7 @@
    * Create the default application state
    * @function createDefaultState
    * @memberof module:StateModule
-   * @returns {Claudito.ApplicationState} Default state object with all initial values
+   * @returns {Superengineer.ApplicationState} Default state object with all initial values
    * @example
    * const initialState = createDefaultState();
    * console.log(initialState.permissionMode); // 'plan'
@@ -176,7 +176,7 @@
    * Create a state manager with change tracking
    * @function createStateManager
    * @memberof module:StateModule
-   * @param {Claudito.ApplicationState} [initialState] - Optional initial state, defaults to createDefaultState()
+   * @param {Superengineer.ApplicationState} [initialState] - Optional initial state, defaults to createDefaultState()
    * @returns {StateManager} State manager interface with get/set/update/subscribe methods
    * @example
    * const stateManager = createStateManager();
@@ -377,7 +377,7 @@
      * @function getState
      * @memberof StateManager
      * @deprecated Use get() method instead for better encapsulation
-     * @returns {Claudito.ApplicationState} The entire state object
+     * @returns {Superengineer.ApplicationState} The entire state object
      * @example
      * const fullState = stateManager.getState();
      * console.log(fullState.projects);

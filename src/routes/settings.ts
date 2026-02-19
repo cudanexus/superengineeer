@@ -85,7 +85,7 @@ export function createSettingsRouter(deps: SettingsRouterDependencies): Router {
     res.json({ models });
   });
 
-  // POST /api/settings/wipe-all-data - Delete all Claudito data (factory reset)
+  // POST /api/settings/wipe-all-data - Delete all Superengineer data (factory reset)
   router.post('/wipe-all-data', asyncHandler(async (_req: Request, res: Response): Promise<void> => {
     const summary = await dataWipeService.wipeAll();
     res.json(summary);

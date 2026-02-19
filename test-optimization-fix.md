@@ -58,7 +58,7 @@ this.emit('optimization:complete', { projectId, result: errorResult, filePath })
 
 ## Testing Instructions
 
-1. Start Claudito server
+1. Start Superengineer server
 2. Open a project with CLAUDE.md file
 3. Click "Claude Files" button
 4. Click "Optimize" button

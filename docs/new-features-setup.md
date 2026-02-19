@@ -18,7 +18,7 @@
 
 If the new templates aren't showing up in the UI, try these steps:
 
-1. **Restart the Claudito server**
+1. **Restart the Superengineer server**
    - Stop the server (Ctrl+C)
    - Run `npm run build` to rebuild
    - Start the server again with `npm start` or `npm run dev`
@@ -49,7 +49,7 @@ If the new templates aren't showing up in the UI, try these steps:
    - `/code-reviewer` - Analyzes code for quality issues
    - `/expert-developer` - Implements features with best practices
 
-### In Claudito UI
+### In Superengineer UI
 
 1. **Quick Action: Review Code**
    - Click Quick Actions button (lightning bolt icon)

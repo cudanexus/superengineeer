@@ -1,5 +1,5 @@
 /**
- * Utility functions for the Claudito frontend
+ * Utility functions for the Superengineer frontend
  * These are pure functions that can be unit tested without DOM dependencies
  */
 

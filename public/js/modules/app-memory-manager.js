@@ -267,7 +267,7 @@
       }
 
       // Log stats for debugging
-      if (window.CLAUDITO_DEBUG) {
+      if (window.SUPERENGINEER_DEBUG) {
         console.log('Memory stats:', {
           used: formatBytes(usedJSHeapSize),
           total: formatBytes(totalJSHeapSize),

@@ -314,7 +314,7 @@ export class ExpressHttpServer implements HttpServer {
     if (!shellEnabled && isBindingToAllInterfaces) {
       console.log('\x1b[33m⚠ Shell terminal is DISABLED\x1b[0m');
       console.log('  Reason: Server is bound to all interfaces (0.0.0.0)');
-      console.log('  To enable: Set CLAUDITO_FORCE_SHELL_ENABLED=1 (security risk)');
+      console.log('  To enable: Set SUPERENGINEER_FORCE_SHELL_ENABLED=1 (security risk)');
       console.log('         or: Bind to a specific host (e.g., --host 127.0.0.1)');
       console.log('');
     } else if (shellEnabled && shellForceEnabled && isBindingToAllInterfaces) {

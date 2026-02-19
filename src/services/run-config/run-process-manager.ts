@@ -137,8 +137,8 @@ export class DefaultRunProcessManager
     const env: Record<string, string> = {
       ...process.env as Record<string, string>,
       ...config.env,
-      CLAUDITO_RUN_CONFIG: config.name,
-      CLAUDITO_PROJECT_ROOT: projectPath,
+      SUPERENGINEER_RUN_CONFIG: config.name,
+      SUPERENGINEER_PROJECT_ROOT: projectPath,
     };
 
     const spawnArgs = this.buildSpawnArgs(config.command, config.args);

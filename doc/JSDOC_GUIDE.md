@@ -1,6 +1,6 @@
 # JSDoc Standards Guide
 
-This guide outlines JSDoc standards and best practices for the Claudito frontend codebase.
+This guide outlines JSDoc standards and best practices for the Superengineer frontend codebase.
 
 ## Table of Contents
 
@@ -48,7 +48,7 @@ function functionName(param1, param2, options) {
 const baseUrl = '';
 
 /**
- * @type {Claudito.ApplicationState}
+ * @type {Superengineer.ApplicationState}
  * @description Current application state
  */
 let state = createDefaultState();
@@ -90,7 +90,7 @@ let state = createDefaultState();
 /**
  * @param {string[]} names - Array of strings
  * @param {Array<number>} scores - Array of numbers (alternate syntax)
- * @param {Claudito.API.Project[]} projects - Array of custom types
+ * @param {Superengineer.API.Project[]} projects - Array of custom types
  */
 ```
 
@@ -125,7 +125,7 @@ let state = createDefaultState();
 /**
  * @returns {Promise<string>} Resolves with result string
  * @returns {Promise<void>} Resolves when complete
- * @returns {Promise<Claudito.API.Project[]>} Resolves with projects
+ * @returns {Promise<Superengineer.API.Project[]>} Resolves with projects
  */
 ```
 
@@ -133,7 +133,7 @@ let state = createDefaultState();
 
 ```javascript
 /**
- * @returns {JQueryXHR<Claudito.API.Project>} jQuery promise
+ * @returns {JQueryXHR<Superengineer.API.Project>} jQuery promise
  * @param {JQuery} $element - jQuery wrapped element
  * @param {JQueryAjaxSettings} settings - Ajax settings
  */
@@ -159,7 +159,7 @@ let state = createDefaultState();
 
 ```javascript
 /**
- * @namespace Claudito.API
+ * @namespace Superengineer.API
  * @description API response type definitions
  */
 ```
@@ -191,13 +191,13 @@ let state = createDefaultState();
  */
 ```
 
-### Using Claudito Types
+### Using Superengineer Types
 
 ```javascript
 /**
- * @param {Claudito.ApplicationState} state - App state
- * @param {Claudito.API.Project} project - Project data
- * @param {Claudito.API.AgentStatus} status - Agent status
+ * @param {Superengineer.ApplicationState} state - App state
+ * @param {Superengineer.API.Project} project - Project data
+ * @param {Superengineer.API.AgentStatus} status - Agent status
  */
 ```
 
@@ -207,7 +207,7 @@ let state = createDefaultState();
 
 ```javascript
 // GOOD - Specific types
-/** @param {Claudito.API.Project[]} projects */
+/** @param {Superengineer.API.Project[]} projects */
 /** @returns {Promise<string>} */
 
 // BAD - Generic types
@@ -284,7 +284,7 @@ function handleClick(event) {
  * Load project data
  * @async
  * @param {string} projectId - Project ID
- * @returns {Promise<Claudito.API.Project>} Project data
+ * @returns {Promise<Superengineer.API.Project>} Project data
  * @throws {Error} If project not found
  */
 async function loadProject(projectId) {
@@ -298,7 +298,7 @@ async function loadProject(projectId) {
 /**
  * Initialize module with dependencies
  * @param {Object} deps - Dependencies
- * @param {Claudito.ApplicationState} deps.state - App state
+ * @param {Superengineer.ApplicationState} deps.state - App state
  * @param {typeof import('./api-client')} deps.api - API client
  * @param {Function} deps.escapeHtml - HTML escape function
  * @returns {void}
@@ -391,7 +391,7 @@ After:
  * @function getProject
  * @memberof module:ApiClient
  * @param {string} id - Project UUID
- * @returns {JQueryXHR<Claudito.API.Project>} Project data
+ * @returns {JQueryXHR<Superengineer.API.Project>} Project data
  * @throws {Error} If project not found (404)
  * @example
  * const project = await ApiClient.getProject('123-456');

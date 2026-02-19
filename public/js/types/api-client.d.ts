@@ -9,10 +9,10 @@ declare module 'api-client' {
   export function getBaseUrl(): string;
 
   // Health & System
-  export function getHealth(): JQuery.Promise<Claudito.API.HealthResponse>;
+  export function getHealth(): JQuery.Promise<Superengineer.API.HealthResponse>;
   export function getDevStatus(): JQuery.Promise<{ devMode: boolean }>;
   export function shutdownServer(): JQuery.Promise<void>;
-  export function getAgentResourceStatus(): JQuery.Promise<Claudito.API.ResourceStatus>;
+  export function getAgentResourceStatus(): JQuery.Promise<Superengineer.API.ResourceStatus>;
   export function getGlobalLogs(limit?: number): JQuery.Promise<Array<{
     timestamp: string;
     level: string;
@@ -21,8 +21,8 @@ declare module 'api-client' {
   }>>;
 
   // Projects
-  export function getProjects(): JQuery.Promise<Array<Claudito.API.Project>>;
-  export function addProject(data: { name: string; path: string }): JQuery.Promise<Claudito.API.Project>;
+  export function getProjects(): JQuery.Promise<Array<Superengineer.API.Project>>;
+  export function addProject(data: { name: string; path: string }): JQuery.Promise<Superengineer.API.Project>;
   export function deleteProject(id: string): JQuery.Promise<void>;
   export function getDebugInfo(id: string): JQuery.Promise<{
     agent: any;
@@ -34,7 +34,7 @@ declare module 'api-client' {
   // Roadmap
   export function getProjectRoadmap(id: string): JQuery.Promise<{
     content: string;
-    parsed: Claudito.API.Roadmap;
+    parsed: Superengineer.API.Roadmap;
   }>;
   export function generateRoadmap(id: string, prompt: string): JQuery.Promise<void>;
   export function modifyRoadmap(id: string, prompt: string): JQuery.Promise<void>;
@@ -55,7 +55,7 @@ declare module 'api-client' {
   // Agent
   export function startAgent(id: string): JQuery.Promise<void>;
   export function stopAgent(id: string): JQuery.Promise<void>;
-  export function getAgentStatus(id: string): JQuery.Promise<Claudito.API.AgentStatus>;
+  export function getAgentStatus(id: string): JQuery.Promise<Superengineer.API.AgentStatus>;
   export function getLoopStatus(id: string): JQuery.Promise<{
     active: boolean;
     currentMilestone?: string;
@@ -88,7 +88,7 @@ declare module 'api-client' {
   export function getConversation(
     projectId: string,
     conversationId: string
-  ): JQuery.Promise<Claudito.API.Conversation>;
+  ): JQuery.Promise<Superengineer.API.Conversation>;
   export function searchConversationHistory(
     projectId: string,
     query: string
@@ -128,8 +128,8 @@ declare module 'api-client' {
   }>;
 
   // Settings
-  export function getSettings(): JQuery.Promise<Claudito.API.Settings>;
-  export function updateSettings(settings: Partial<Claudito.API.Settings>): JQuery.Promise<Claudito.API.Settings>;
+  export function getSettings(): JQuery.Promise<Superengineer.API.Settings>;
+  export function updateSettings(settings: Partial<Superengineer.API.Settings>): JQuery.Promise<Superengineer.API.Settings>;
   export function getAvailableModels(): JQuery.Promise<{
     models: Array<{ id: string; displayName: string }>;
   }>;
@@ -161,7 +161,7 @@ declare module 'api-client' {
   export function deleteFileOrFolder(targetPath: string, isDirectory: boolean): JQuery.Promise<void>;
 
   // Git
-  export function getGitStatus(projectId: string): JQuery.Promise<Claudito.API.GitStatus>;
+  export function getGitStatus(projectId: string): JQuery.Promise<Superengineer.API.GitStatus>;
   export function getGitBranches(projectId: string): JQuery.Promise<{
     current: string;
     local: Array<string>;
@@ -230,15 +230,15 @@ declare module 'api-client' {
     maxTurns?: number;
     workerModel?: string;
     reviewerModel?: string;
-  }): JQuery.Promise<Claudito.API.RalphLoopState>;
+  }): JQuery.Promise<Superengineer.API.RalphLoopState>;
   export function stopRalphLoop(projectId: string, taskId: string): JQuery.Promise<void>;
   export function pauseRalphLoop(projectId: string, taskId: string): JQuery.Promise<void>;
   export function resumeRalphLoop(projectId: string, taskId: string): JQuery.Promise<void>;
-  export function getRalphLoops(projectId: string): JQuery.Promise<Array<Claudito.API.RalphLoopState>>;
+  export function getRalphLoops(projectId: string): JQuery.Promise<Array<Superengineer.API.RalphLoopState>>;
   export function getRalphLoopState(
     projectId: string,
     taskId: string
-  ): JQuery.Promise<Claudito.API.RalphLoopState>;
+  ): JQuery.Promise<Superengineer.API.RalphLoopState>;
   export function deleteRalphLoop(projectId: string, taskId: string): JQuery.Promise<void>;
 
   // Error Logging

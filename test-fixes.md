@@ -3,7 +3,7 @@
 ## 1. Agent Start/Restart Button Fix
 
 ### Test Steps:
-1. Start Claudito: `npm run dev`
+1. Start Superengineer: `npm run dev`
 2. Open http://localhost:3000
 3. Select a project
 4. **Expected**: You should see a green "Start" button when no agent is running
@@ -21,7 +21,7 @@
 ## 2. MCP Server Persistence Fix
 
 ### Test Steps:
-1. Start Claudito: `npm run dev`
+1. Start Superengineer: `npm run dev`
 2. Open http://localhost:3000
 3. Select a project
 4. Click on "MCP Servers" button

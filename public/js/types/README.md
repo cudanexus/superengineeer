@@ -1,6 +1,6 @@
 # Frontend Type System
 
-This directory contains TypeScript type definitions for the Claudito frontend JavaScript codebase.
+This directory contains TypeScript type definitions for the Superengineer frontend JavaScript codebase.
 
 ## Overview
 
@@ -26,7 +26,7 @@ types/
 ## Type Files
 
 ### `index.d.ts`
-- Defines the global `Claudito` namespace
+- Defines the global `Superengineer` namespace
 - Contains the `ApplicationState` interface with all state properties
 - Defines common dependency injection patterns
 
@@ -49,7 +49,7 @@ Add JSDoc type annotations to get type checking:
 ```javascript
 /**
  * @param {string} projectId
- * @returns {Promise<Claudito.API.Project>}
+ * @returns {Promise<Superengineer.API.Project>}
  */
 async function loadProject(projectId) {
   return await ApiClient.getProject(projectId);

@@ -1,7 +1,7 @@
 /**
  * @module WebSocketModule
  * @description Handles WebSocket connection, reconnection, and message routing for real-time communication
- * with the Claudito backend. Provides automatic reconnection with exponential backoff.
+ * with the Superengineer backend. Provides automatic reconnection with exponential backoff.
  */
 (function(root, factory) {
   'use strict';

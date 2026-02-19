@@ -57,19 +57,19 @@ declare module 'state-module' {
      * @deprecated Use get() method instead
      * @returns The entire state object
      */
-    getState(): Claudito.ApplicationState;
+    getState(): Superengineer.ApplicationState;
   }
 
   /**
    * Create the default application state
    * @returns Default state object with all initial values
    */
-  export function createDefaultState(): Claudito.ApplicationState;
+  export function createDefaultState(): Superengineer.ApplicationState;
 
   /**
    * Create a state manager with change tracking
    * @param initialState - Optional initial state, defaults to createDefaultState()
    * @returns State manager interface
    */
-  export function createStateManager(initialState?: Claudito.ApplicationState): StateManager;
+  export function createStateManager(initialState?: Superengineer.ApplicationState): StateManager;
 }

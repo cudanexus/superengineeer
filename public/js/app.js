@@ -1,4 +1,4 @@
-// Claudito Frontend Application
+// Superengineer Frontend Application
 
 (function($) {
   'use strict';
@@ -3809,7 +3809,7 @@
 
   function showShellDisabledNotification() {
     var message = 'Shell is disabled because the server is bound to all interfaces (0.0.0.0). ' +
-      'To enable, set CLAUDITO_FORCE_SHELL_ENABLED=1 or bind to a specific host (e.g., HOST=127.0.0.1).';
+      'To enable, set SUPERENGINEER_FORCE_SHELL_ENABLED=1 or bind to a specific host (e.g., HOST=127.0.0.1).';
     showToast(message, 'warning');
   }
 
@@ -5296,7 +5296,7 @@
     }
 
     if (Notification.permission === 'granted') {
-      new Notification('Claudito - Input Required', {
+      new Notification('Superengineer - Input Required', {
         body: project.name + ' is waiting for your input',
         icon: '/favicon.ico',
         tag: 'waiting-' + project.id
@@ -5304,7 +5304,7 @@
     } else if (Notification.permission !== 'denied') {
       Notification.requestPermission().then(function(permission) {
         if (permission === 'granted') {
-          new Notification('Claudito - Input Required', {
+          new Notification('Superengineer - Input Required', {
             body: project.name + ' is waiting for your input',
             icon: '/favicon.ico',
             tag: 'waiting-' + project.id
