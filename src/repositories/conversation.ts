@@ -143,7 +143,7 @@ export class FileConversationRepository implements ConversationRepository {
     return this.writeQueues.withLock(key, operation);
   }
 
-  // Conversations are now stored in {project-root}/.superengineer-v5/conversations/
+  // Conversations are now stored in {project-root}/.claudito/conversations/
   private getProjectDataDir(projectId: string): string | null {
     const projectPath = this.projectPathResolver.getProjectPath(projectId);
 
@@ -151,7 +151,7 @@ export class FileConversationRepository implements ConversationRepository {
       return null;
     }
 
-    return path.join(projectPath, '.superengineer-v5');
+    return path.join(projectPath, '.claudito');
   }
 
   private getConversationsDir(projectId: string): string | null {

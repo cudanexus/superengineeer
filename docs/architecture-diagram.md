@@ -1,4 +1,4 @@
-# Superengineer-v5 Architecture Diagram
+# Claudito Architecture Diagram
 
 **Note**: When creating Mermaid diagrams, avoid these common syntax errors:
 - Don't use curly braces `{}` in node labels (they define rhombus shapes)
@@ -53,8 +53,8 @@ graph TB
     end
 
     subgraph "File System"
-        GD[Global Data<br/>~/.superengineer-v5/]
-        PD[Project Data<br/>{project}/.superengineer-v5/]
+        GD[Global Data<br/>~/.claudito/]
+        PD[Project Data<br/>{project}/.claudito/]
         PF[Project Files]
     end
 
@@ -267,13 +267,13 @@ sequenceDiagram
 
 ```mermaid
 graph TD
-    subgraph "~/.superengineer-v5/ (Global)"
+    subgraph "~/.claudito/ (Global)"
         GS[settings.json]
         PI[projects/index.json]
         PID[pids.json]
     end
 
-    subgraph "{project}/.superengineer-v5/ (Per Project)"
+    subgraph "{project}/.claudito/ (Per Project)"
         PS[status.json]
         subgraph "conversations/"
             C1["{uuid}.json"]

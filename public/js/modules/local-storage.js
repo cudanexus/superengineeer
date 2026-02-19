@@ -1,5 +1,5 @@
 /**
- * LocalStorage module for Superengineer-v5
+ * LocalStorage module for Claudito
  * Handles browser persistence with error handling
  */
 
@@ -20,11 +20,11 @@
    * Storage keys used by the application
    */
   LocalStorage.KEYS = {
-    FONT_SIZE: 'superengineer-v5-font-size',
-    ACTIVE_TAB: 'superengineer-v5-active-tab',
-    SELECTED_PROJECT: 'superengineer-v5-selected-project',
-    SCROLL_LOCK: 'superengineer-v5-scroll-lock',
-    MILESTONE_EXPANDED: 'superengineer-v5-milestone-expanded'
+    FONT_SIZE: 'claudito-font-size',
+    ACTIVE_TAB: 'claudito-active-tab',
+    SELECTED_PROJECT: 'claudito-selected-project',
+    SCROLL_LOCK: 'claudito-scroll-lock',
+    MILESTONE_EXPANDED: 'claudito-milestone-expanded'
   };
 
   /**
@@ -75,7 +75,7 @@
   };
 
   /**
-   * Clear all superengineer-v5 keys from localStorage
+   * Clear all claudito keys from localStorage
    * @returns {boolean} True if clear succeeded
    */
   LocalStorage.clear = function() {
@@ -96,7 +96,7 @@
    */
   LocalStorage.isAvailable = function() {
     try {
-      var testKey = '__superengineer-v5_test__';
+      var testKey = '__claudito_test__';
       localStorage.setItem(testKey, 'test');
       localStorage.removeItem(testKey);
       return true;

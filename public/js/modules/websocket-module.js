@@ -1,7 +1,7 @@
 /**
  * @module WebSocketModule
  * @description Handles WebSocket connection, reconnection, and message routing for real-time communication
- * with the Superengineer-v5 backend. Provides automatic reconnection with exponential backoff.
+ * with the Claudito backend. Provides automatic reconnection with exponential backoff.
  */
 (function(root, factory) {
   'use strict';
@@ -188,7 +188,7 @@
         notifyStateChange(ConnectionState.CONNECTED);
 
         // Register this client with the server
-        var clientId = sessionStorage.getItem('superengineer-v5-client-id');
+        var clientId = sessionStorage.getItem('claudito-client-id');
         if (clientId) {
           send({
             type: 'register',

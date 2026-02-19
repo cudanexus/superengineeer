@@ -19,7 +19,7 @@ describe('EnvironmentConfigLoader', () => {
       delete process.env['LOG_LEVEL'];
       delete process.env['MAX_CONCURRENT_AGENTS'];
       delete process.env['DEV_MODE'];
-      delete process.env['SUPERENGINEER_V5_DEV_MODE'];
+      delete process.env['CLAUDITO_DEV_MODE'];
 
       const loader = new EnvironmentConfigLoader();
       const config = loader.load();
@@ -141,7 +141,7 @@ describe('EnvironmentConfigLoader', () => {
 
     it('should disable shell when host is 0.0.0.0', () => {
       process.env['HOST'] = '0.0.0.0';
-      delete process.env['SUPERENGINEER_V5_FORCE_SHELL_ENABLED'];
+      delete process.env['CLAUDITO_FORCE_SHELL_ENABLED'];
 
       const loader = new EnvironmentConfigLoader();
       const config = loader.load();
@@ -152,7 +152,7 @@ describe('EnvironmentConfigLoader', () => {
 
     it('should enable shell when host is 127.0.0.1', () => {
       process.env['HOST'] = '127.0.0.1';
-      delete process.env['SUPERENGINEER_V5_FORCE_SHELL_ENABLED'];
+      delete process.env['CLAUDITO_FORCE_SHELL_ENABLED'];
 
       const loader = new EnvironmentConfigLoader();
       const config = loader.load();
@@ -163,7 +163,7 @@ describe('EnvironmentConfigLoader', () => {
 
     it('should enable shell when host is localhost', () => {
       process.env['HOST'] = 'localhost';
-      delete process.env['SUPERENGINEER_V5_FORCE_SHELL_ENABLED'];
+      delete process.env['CLAUDITO_FORCE_SHELL_ENABLED'];
 
       const loader = new EnvironmentConfigLoader();
       const config = loader.load();
@@ -172,9 +172,9 @@ describe('EnvironmentConfigLoader', () => {
       expect(config.shellForceEnabled).toBe(false);
     });
 
-    it('should force enable shell with SUPERENGINEER_V5_FORCE_SHELL_ENABLED=1', () => {
+    it('should force enable shell with CLAUDITO_FORCE_SHELL_ENABLED=1', () => {
       process.env['HOST'] = '0.0.0.0';
-      process.env['SUPERENGINEER_V5_FORCE_SHELL_ENABLED'] = '1';
+      process.env['CLAUDITO_FORCE_SHELL_ENABLED'] = '1';
 
       const loader = new EnvironmentConfigLoader();
       const config = loader.load();
@@ -183,9 +183,9 @@ describe('EnvironmentConfigLoader', () => {
       expect(config.shellForceEnabled).toBe(true);
     });
 
-    it('should not force enable shell with SUPERENGINEER_V5_FORCE_SHELL_ENABLED=0', () => {
+    it('should not force enable shell with CLAUDITO_FORCE_SHELL_ENABLED=0', () => {
       process.env['HOST'] = '0.0.0.0';
-      process.env['SUPERENGINEER_V5_FORCE_SHELL_ENABLED'] = '0';
+      process.env['CLAUDITO_FORCE_SHELL_ENABLED'] = '0';
 
       const loader = new EnvironmentConfigLoader();
       const config = loader.load();

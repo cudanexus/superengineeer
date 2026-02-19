@@ -75,7 +75,7 @@ export class DefaultProjectService implements ProjectService {
       }
     }
 
-    await this.initializeSuperengineerV5Folder(projectPath);
+    await this.initializeClauditoFolder(projectPath);
 
     const data: CreateProjectData = { name: projectName, path: projectPath };
     const project = await this.projectRepository.create(data);
@@ -110,12 +110,12 @@ export class DefaultProjectService implements ProjectService {
     await this.fileSystem.mkdir(projectPath);
   }
 
-  private async initializeSuperengineerV5Folder(projectPath: string): Promise<void> {
-    const superengineerV5Path = path.join(projectPath, '.superengineer-v5');
-    const superengineerV5Exists = await this.fileSystem.exists(superengineerV5Path);
+  private async initializeClauditoFolder(projectPath: string): Promise<void> {
+    const clauditoPath = path.join(projectPath, '.claudito');
+    const clauditoExists = await this.fileSystem.exists(clauditoPath);
 
-    if (!superengineerV5Exists) {
-      await this.fileSystem.mkdir(superengineerV5Path);
+    if (!clauditoExists) {
+      await this.fileSystem.mkdir(clauditoPath);
     }
   }
 

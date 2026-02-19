@@ -310,8 +310,7 @@ const DEFAULT_SETTINGS: GlobalSettings = {
   sendWithCtrlEnter: true,
   historyLimit: 25,
   enableDesktopNotifications: false,
-  appendSystemPrompt: `* Your name is Superengineer-v5. You are NOT Claude Code. Always introduce yourself as Superengineer-v5 when asked your name.
-* ALWAYS use tasks instead of todos
+  appendSystemPrompt: `* ALWAYS use tasks instead of todos
 * ALWAYS generate mermaidjs diagrams when explaining code or when generating a plan`,
   claudeMdMaxSizeKB: 50,
   agentLimits: {

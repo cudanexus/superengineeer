@@ -153,8 +153,8 @@ describe('FileProjectRepository', () => {
       expect(index).toHaveLength(1);
       expect(index[0]).toEqual({ id: '_path_to_project', name: 'Test Project', path: '/path/to/project' });
 
-      // Data is now stored in {project-root}/.superengineer-v5/
-      const statusPath = '/path/to/project/.superengineer-v5/status.json';
+      // Data is now stored in {project-root}/.claudito/
+      const statusPath = '/path/to/project/.claudito/status.json';
       const statusContent = mockFs.files.get(statusPath);
       expect(statusContent).toBeDefined();
       const status = JSON.parse(statusContent!) as ProjectStatus;
@@ -175,14 +175,14 @@ describe('FileProjectRepository', () => {
       ).rejects.toThrow('Project with this path already exists');
     });
 
-    it('should create .superengineer-v5 directory in project path', async () => {
+    it('should create .claudito directory in project path', async () => {
       await repository.create({
         name: 'Test',
         path: '/test/path',
       });
 
-      // Data is now stored in {project-root}/.superengineer-v5/
-      const projectDataDir = '/test/path/.superengineer-v5';
+      // Data is now stored in {project-root}/.claudito/
+      const projectDataDir = '/test/path/.claudito';
       expect(mockFs.dirs.has(projectDataDir)).toBe(true);
     });
   });
@@ -441,10 +441,10 @@ describe('FileProjectRepository', () => {
       expect(projects[0]!.name).toBe('Test 1');
     });
 
-    it('should remove .superengineer-v5 directory in project path', async () => {
+    it('should remove .claudito directory in project path', async () => {
       const created = await repository.create({ name: 'Test', path: '/test' });
-      // Data is stored in {project-root}/.superengineer-v5/
-      const projectDataDir = '/test/.superengineer-v5';
+      // Data is stored in {project-root}/.claudito/
+      const projectDataDir = '/test/.claudito';
 
       // Verify the directory was created
       expect(mockFs.dirs.has(projectDataDir)).toBe(true);
@@ -660,7 +660,7 @@ describe('FileProjectRepository', () => {
     it('should return null when status file is corrupted', async () => {
       const created = await repository.create({ name: 'Test', path: '/test' });
       // Corrupt the status file
-      const statusPath = '/test/.superengineer-v5/status.json';
+      const statusPath = '/test/.claudito/status.json';
       mockFs.files.set(statusPath, 'not valid json');
 
       // Clear cache to force reload

@@ -61,6 +61,9 @@ describe('DefaultInventifyService', () => {
       const prompt = service.buildBrainstormPrompt(
         ['web', 'api'],
         ['games', 'dev-tools'],
+        [],
+        [],
+        '',
       );
 
       expect(prompt).toContain('web, api');
@@ -71,6 +74,9 @@ describe('DefaultInventifyService', () => {
       const prompt = service.buildBrainstormPrompt(
         ['web'],
         ['games'],
+        [],
+        [],
+        '',
       );
 
       expect(prompt).toContain('JSON array');
@@ -78,6 +84,56 @@ describe('DefaultInventifyService', () => {
       expect(prompt).toContain('"name"');
       expect(prompt).toContain('"tagline"');
       expect(prompt).toContain('"description"');
+    });
+
+    it('should include languages when provided', () => {
+      const prompt = service.buildBrainstormPrompt(
+        ['web'],
+        ['games'],
+        ['TypeScript', 'Rust'],
+        [],
+        '',
+      );
+
+      expect(prompt).toContain('**Languages**: TypeScript, Rust');
+    });
+
+    it('should include technologies when provided', () => {
+      const prompt = service.buildBrainstormPrompt(
+        ['web'],
+        ['games'],
+        [],
+        ['React', 'Express'],
+        '',
+      );
+
+      expect(prompt).toContain('**Technologies/Frameworks**: React, Express');
+    });
+
+    it('should include custom prompt when provided', () => {
+      const prompt = service.buildBrainstormPrompt(
+        ['web'],
+        ['games'],
+        [],
+        [],
+        'Focus on real-time features',
+      );
+
+      expect(prompt).toContain('**Additional Instructions**: Focus on real-time features');
+    });
+
+    it('should omit empty optional sections', () => {
+      const prompt = service.buildBrainstormPrompt(
+        ['web'],
+        ['games'],
+        [],
+        [],
+        '',
+      );
+
+      expect(prompt).not.toContain('**Languages**');
+      expect(prompt).not.toContain('**Technologies');
+      expect(prompt).not.toContain('**Additional Instructions**');
     });
   });
 
@@ -238,6 +294,9 @@ PLAN_END`;
       const result = await service.start({
         projectTypes: ['web'],
         themes: ['games'],
+        languages: [],
+        technologies: [],
+        customPrompt: '',
         inventifyFolder: '/test/inventify',
       });
 
@@ -260,6 +319,9 @@ PLAN_END`;
       await service.start({
         projectTypes: ['web'],
         themes: ['games'],
+        languages: [],
+        technologies: [],
+        customPrompt: '',
         inventifyFolder: '/test/inventify',
       });
 
@@ -267,6 +329,9 @@ PLAN_END`;
         service.start({
           projectTypes: ['cli'],
           themes: ['dev-tools'],
+          languages: [],
+          technologies: [],
+          customPrompt: '',
           inventifyFolder: '/test/inventify',
         }),
       ).rejects.toThrow('Inventify is already running');
@@ -282,6 +347,9 @@ PLAN_END`;
         service.start({
           projectTypes: ['web'],
           themes: ['games'],
+          languages: [],
+          technologies: [],
+          customPrompt: '',
           inventifyFolder: '/nonexistent',
         }),
       ).rejects.toThrow('Failed to create placeholder project');
@@ -297,6 +365,9 @@ PLAN_END`;
       await service.start({
         projectTypes: ['web'],
         themes: ['games'],
+        languages: [],
+        technologies: [],
+        customPrompt: '',
         inventifyFolder: '/test/inventify',
       });
 
@@ -379,10 +450,37 @@ PLAN_END`;
     });
   });
 
+  describe('cancel', () => {
+    it('should stop the session agent when active', async () => {
+      await startAndCompleteBrainstorm();
+
+      mockAgentManager.stopOneOffAgent.mockClear();
+      await service.cancel();
+
+      expect(mockAgentManager.stopOneOffAgent).toHaveBeenCalledWith(
+        'oneoff-test-id',
+      );
+    });
+
+    it('should clean up all state', async () => {
+      await startAndCompleteBrainstorm();
+
+      await service.cancel();
+
+      expect(service.isRunning()).toBe(false);
+      expect(service.getIdeas()).toBeNull();
+      expect(service.getNameSuggestions()).toBeNull();
+      expect(service.getBuildResult()).toBeNull();
+    });
+  });
+
   async function startAndCompleteBrainstorm(): Promise<void> {
     await service.start({
       projectTypes: ['web'],
       themes: ['games'],
+      languages: [],
+      technologies: [],
+      customPrompt: '',
       inventifyFolder: '/test/inventify',
     });
 
@@ -395,8 +493,6 @@ PLAN_END`;
     });
     handlers.oneOffWaiting!('oneoff-test-id', true, 1);
 
-    mockAgentManager.startOneOffAgent.mockResolvedValue('oneoff-names-id');
-    mockAgentManager.stopOneOffAgent.mockClear();
     mockAgentManager.on.mockClear();
   }
 
@@ -405,6 +501,9 @@ PLAN_END`;
       await service.start({
         projectTypes: ['web'],
         themes: ['games'],
+        languages: [],
+        technologies: [],
+        customPrompt: '',
         inventifyFolder: '/test/inventify',
       });
 
@@ -419,15 +518,16 @@ PLAN_END`;
 
       expect(service.getIdeas()).toHaveLength(5);
       expect(service.isRunning()).toBe(false);
-      expect(mockAgentManager.stopOneOffAgent).toHaveBeenCalledWith(
-        'oneoff-test-id',
-      );
+      expect(mockAgentManager.stopOneOffAgent).not.toHaveBeenCalled();
     });
 
     it('should ignore waiting events for other oneOffIds', async () => {
       await service.start({
         projectTypes: ['web'],
         themes: ['games'],
+        languages: [],
+        technologies: [],
+        customPrompt: '',
         inventifyFolder: '/test/inventify',
       });
 
@@ -443,6 +543,9 @@ PLAN_END`;
       await service.start({
         projectTypes: ['web'],
         themes: ['games'],
+        languages: [],
+        technologies: [],
+        customPrompt: '',
         inventifyFolder: '/test/inventify',
       });
 
@@ -458,6 +561,9 @@ PLAN_END`;
       await service.start({
         projectTypes: ['web'],
         themes: ['games'],
+        languages: [],
+        technologies: [],
+        customPrompt: '',
         inventifyFolder: '/test/inventify',
       });
 
@@ -486,6 +592,21 @@ PLAN_END`;
   });
 
   describe('name suggestion completion via oneOffWaiting', () => {
+    it('should send input to session agent instead of starting new one', async () => {
+      await startAndCompleteBrainstorm();
+
+      mockAgentManager.sendOneOffInput.mockClear();
+      mockAgentManager.startOneOffAgent.mockClear();
+      const result = await service.suggestNames(0);
+
+      expect(result.oneOffId).toBe('oneoff-test-id');
+      expect(mockAgentManager.sendOneOffInput).toHaveBeenCalledWith(
+        'oneoff-test-id',
+        expect.stringContaining('naming expert'),
+      );
+      expect(mockAgentManager.startOneOffAgent).not.toHaveBeenCalled();
+    });
+
     it('should parse names when agent goes to waiting state', async () => {
       await startAndCompleteBrainstorm();
 
@@ -506,6 +627,7 @@ PLAN_END`;
       expect(suggestions!.names).toHaveLength(5);
       expect(suggestions!.ideaIndex).toBe(0);
       expect(service.isRunning()).toBe(false);
+      expect(mockAgentManager.stopOneOffAgent).not.toHaveBeenCalled();
     });
   });
 
@@ -522,6 +644,17 @@ PLAN_END`;
         expect.stringContaining('my-project'),
       );
       expect(result.newProjectId).toBeDefined();
+    });
+
+    it('should stop the session agent', async () => {
+      await startAndCompleteBrainstorm();
+
+      mockAgentManager.stopOneOffAgent.mockClear();
+      await service.selectIdea(0, 'my-project');
+
+      expect(mockAgentManager.stopOneOffAgent).toHaveBeenCalledWith(
+        'oneoff-test-id',
+      );
     });
 
     it('should not start any agent', async () => {

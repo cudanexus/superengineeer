@@ -6,7 +6,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { AuthService } from '../services/auth-service';
 
-export const COOKIE_NAME = 'superengineer-v5_session';
+export const COOKIE_NAME = 'claudito_session';
 
 export interface AuthMiddlewareDependencies {
   authService: AuthService;

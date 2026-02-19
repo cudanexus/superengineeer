@@ -68,7 +68,7 @@ export function generateTaskId(): string {
 /**
  * File-based Ralph Loop repository
  *
- * Stores data in: {project-root}/.superengineer-v5/ralph/{taskId}/
+ * Stores data in: {project-root}/.claudito/ralph/{taskId}/
  */
 export class FileRalphLoopRepository implements RalphLoopRepository {
   private readonly projectPathResolver: ProjectPathResolver;
@@ -125,7 +125,7 @@ export class FileRalphLoopRepository implements RalphLoopRepository {
       return null;
     }
 
-    return path.join(projectPath, '.superengineer-v5', 'ralph');
+    return path.join(projectPath, '.claudito', 'ralph');
   }
 
   private getTaskDir(projectId: string, taskId: string): string | null {

@@ -319,7 +319,7 @@ export class ReviewerAgent {
     }
 
     // Add plugin directory
-    const pluginPath = path.join(this.projectPath, 'superengineer-v5-plugin');
+    const pluginPath = path.join(this.projectPath, 'claudito-plugin');
     args.push('--plugin-dir', pluginPath);
 
     // Use stream-json for structured output

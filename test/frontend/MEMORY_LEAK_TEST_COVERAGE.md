@@ -2,7 +2,7 @@
 
 ## Overview
 
-Comprehensive test suite for memory leak fixes in Superengineer-v5 frontend application.
+Comprehensive test suite for memory leak fixes in Claudito frontend application.
 
 ## Test Files
 

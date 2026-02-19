@@ -82,7 +82,7 @@ describe('DefaultShellService', () => {
           env: expect.objectContaining({
             TERM: 'xterm-256color',
             COLORTERM: 'truecolor',
-            SUPERENGINEER_V5_PROJECT_ROOT: '/test/path'
+            CLAUDITO_PROJECT_ROOT: '/test/path'
           }),
         })
       );

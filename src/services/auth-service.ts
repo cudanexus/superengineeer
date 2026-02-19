@@ -68,11 +68,11 @@ function generatePassword(length: number = PASSWORD_LENGTH): string {
 
 /**
  * Get credentials from environment variables or generate new ones
- * If SUPERENGINEER_V5_USERNAME and SUPERENGINEER_V5_PASSWORD are set, use those
+ * If CLAUDITO_USERNAME and CLAUDITO_PASSWORD are set, use those
  */
 function getOrGenerateCredentials(): Credentials {
-  const envUsername = process.env.SUPERENGINEER_V5_USERNAME;
-  const envPassword = process.env.SUPERENGINEER_V5_PASSWORD;
+  const envUsername = process.env.CLAUDITO_USERNAME;
+  const envPassword = process.env.CLAUDITO_PASSWORD;
 
   if (envUsername && envPassword) {
     return { username: envUsername, password: envPassword };
@@ -86,7 +86,7 @@ function getOrGenerateCredentials(): Credentials {
 
 /**
  * Default implementation of AuthService
- * Uses SUPERENGINEER_V5_USERNAME/SUPERENGINEER_V5_PASSWORD env vars if set,
+ * Uses CLAUDITO_USERNAME/CLAUDITO_PASSWORD env vars if set,
  * otherwise regenerates credentials on each instantiation (server restart)
  * Sessions stored in memory only
  */

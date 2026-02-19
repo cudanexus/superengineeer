@@ -81,10 +81,10 @@ describe('DefaultProjectService', () => {
         });
       });
 
-      it('should initialize .superengineer-v5 folder', async () => {
+      it('should initialize .claudito folder', async () => {
         mockFs.exists
           .mockResolvedValueOnce(true) // folder exists
-          .mockResolvedValueOnce(false); // .superengineer-v5 does not exist
+          .mockResolvedValueOnce(false); // .claudito does not exist
 
         await service.createProject({
           path: '/test/project',
@@ -92,14 +92,14 @@ describe('DefaultProjectService', () => {
         });
 
         expect(mockFs.mkdir).toHaveBeenCalledWith(
-          path.join('/test/project', '.superengineer-v5')
+          path.join('/test/project', '.claudito')
         );
       });
 
-      it('should not create .superengineer-v5 if it already exists', async () => {
+      it('should not create .claudito if it already exists', async () => {
         mockFs.exists
           .mockResolvedValueOnce(true) // folder exists
-          .mockResolvedValueOnce(true); // .superengineer-v5 exists
+          .mockResolvedValueOnce(true); // .claudito exists
 
         await service.createProject({
           path: '/test/project',
@@ -114,7 +114,7 @@ describe('DefaultProjectService', () => {
       it('should create project folder when it does not exist', async () => {
         mockFs.exists
           .mockResolvedValueOnce(false) // project folder does not exist
-          .mockResolvedValueOnce(false); // .superengineer-v5 does not exist
+          .mockResolvedValueOnce(false); // .claudito does not exist
 
         const options: CreateProjectOptions = {
           path: '/test/new-project',
@@ -127,7 +127,7 @@ describe('DefaultProjectService', () => {
         expect(result.success).toBe(true);
         expect(mockFs.mkdir).toHaveBeenCalledWith('/test/new-project');
         expect(mockFs.mkdir).toHaveBeenCalledWith(
-          path.join('/test/new-project', '.superengineer-v5')
+          path.join('/test/new-project', '.claudito')
         );
       });
 

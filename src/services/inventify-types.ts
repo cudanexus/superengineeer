@@ -1,6 +1,9 @@
 export interface InventifyRequest {
   projectTypes: string[];
   themes: string[];
+  languages: string[];
+  technologies: string[];
+  customPrompt: string;
   inventifyFolder: string;
 }
 

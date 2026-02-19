@@ -287,9 +287,9 @@ describe('CLI Module', () => {
       expect(process.env.DEV_MODE).toBe('true');
     });
 
-    it('should handle SUPERENGINEER_V5_DEV_MODE environment variable', () => {
-      process.env.SUPERENGINEER_V5_DEV_MODE = '1';
-      expect(process.env.SUPERENGINEER_V5_DEV_MODE).toBe('1');
+    it('should handle CLAUDITO_DEV_MODE environment variable', () => {
+      process.env.CLAUDITO_DEV_MODE = '1';
+      expect(process.env.CLAUDITO_DEV_MODE).toBe('1');
     });
   });
 

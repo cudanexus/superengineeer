@@ -1,13 +1,13 @@
 /**
- * Global Type Definitions for Superengineer-v5 Frontend
+ * Global Type Definitions for Claudito Frontend
  *
- * This file contains the core types used throughout the Superengineer-v5 application.
- * All modules can reference these types via the Superengineer-v5 namespace.
+ * This file contains the core types used throughout the Claudito application.
+ * All modules can reference these types via the Claudito namespace.
  */
 
 /// <reference types="jquery" />
 
-declare namespace Superengineer-v5 {
+declare namespace Claudito {
   /**
    * Core application state managed by state-module.js
    */

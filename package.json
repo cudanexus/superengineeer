@@ -1,10 +1,10 @@
 {
   "name": "claudito",
-  "version": "0.14.3",
+  "version": "0.15.0",
   "description": "Claude Code autonomous agent manager - A web UI for managing Claude Code agents",
   "main": "dist/index.js",
   "bin": {
-    "superengineer-v5": "dist/cli.js"
+    "claudito": "dist/cli.js"
   },
   "type": "commonjs",
   "scripts": {
@@ -40,12 +40,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/anthropics/superengineer-v5.git"
+    "url": "git+https://github.com/anthropics/claudito.git"
   },
   "bugs": {
-    "url": "https://github.com/anthropics/superengineer-v5/issues"
+    "url": "https://github.com/anthropics/claudito/issues"
   },
-  "homepage": "https://github.com/anthropics/superengineer-v5#readme",
+  "homepage": "https://github.com/anthropics/claudito#readme",
   "engines": {
     "node": ">=20.0.0"
   },

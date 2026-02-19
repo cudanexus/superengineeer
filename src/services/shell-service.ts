@@ -159,7 +159,7 @@ export class DefaultShellService extends EventEmitter implements ShellService {
         ...process.env,
         TERM: 'xterm-256color',
         COLORTERM: 'truecolor',
-        SUPERENGINEER_V5_PROJECT_ROOT: cwd
+        CLAUDITO_PROJECT_ROOT: cwd
       } as Record<string, string>
     });
 

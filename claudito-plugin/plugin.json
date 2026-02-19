@@ -1,0 +1,26 @@
+{
+  "name": "claudito",
+  "version": "1.0.0",
+  "description": "Claudito plugin with helpful skills for Claude Code",
+  "author": "Claudito Team",
+  "skills": [
+    {
+      "name": "mermaid",
+      "description": "Generate Mermaid.js diagrams with proper syntax and examples",
+      "promptFile": "skills/mermaid.md",
+      "userInvocable": true
+    },
+    {
+      "name": "code-reviewer",
+      "description": "Expert code reviewer that identifies issues impacting maintainability and quality",
+      "promptFile": "skills/code-reviewer.md",
+      "userInvocable": true
+    },
+    {
+      "name": "expert-developer",
+      "description": "Expert developer that writes maintainable, tested code following best practices",
+      "promptFile": "skills/expert-developer.md",
+      "userInvocable": true
+    }
+  ]
+}

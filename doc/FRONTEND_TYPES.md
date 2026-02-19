@@ -2,7 +2,7 @@
 
 ## Overview
 
-Superengineer-v5's frontend uses a TypeScript type system for JavaScript code, providing type safety without requiring a full TypeScript migration. This approach offers IDE support, type checking, and better documentation while maintaining compatibility with existing JavaScript code.
+Claudito's frontend uses a TypeScript type system for JavaScript code, providing type safety without requiring a full TypeScript migration. This approach offers IDE support, type checking, and better documentation while maintaining compatibility with existing JavaScript code.
 
 ## Type System Structure
 
@@ -34,7 +34,7 @@ public/js/
 ```javascript
 /**
  * @param {string} projectId - The project UUID
- * @returns {Promise<Superengineer-v5.API.Project>} The project details
+ * @returns {Promise<Claudito.API.Project>} The project details
  */
 async function loadProject(projectId) {
   return await ApiClient.getProject(projectId);
@@ -46,7 +46,7 @@ async function loadProject(projectId) {
 ```javascript
 /**
  * Process agent status update
- * @param {Superengineer-v5.API.AgentStatus} status - Current agent status
+ * @param {Claudito.API.AgentStatus} status - Current agent status
  */
 function handleAgentStatus(status) {
   if (status.running) {
@@ -61,7 +61,7 @@ function handleAgentStatus(status) {
 ```javascript
 /**
  * Update application state
- * @param {Partial<Superengineer-v5.ApplicationState>} updates
+ * @param {Partial<Claudito.ApplicationState>} updates
  */
 function updateState(updates) {
   // TypeScript knows all valid properties
@@ -78,7 +78,7 @@ function updateState(updates) {
 ```javascript
 // Type annotations provide full IDE support
 ApiClient.getProjects()
-  .done(function(/** @type {Superengineer-v5.API.Project[]} */ projects) {
+  .done(function(/** @type {Claudito.API.Project[]} */ projects) {
     projects.forEach(p => {
       // IDE knows p has: id, name, path, createdAt, updatedAt
     });
@@ -112,7 +112,7 @@ function handleWebSocketMessage(message) {
 /**
  * Initialize module with dependencies
  * @param {Object} deps
- * @param {Superengineer-v5.ApplicationState} deps.state
+ * @param {Claudito.ApplicationState} deps.state
  * @param {typeof import('./api-client')} deps.api
  * @param {Function} deps.escapeHtml
  */
@@ -153,8 +153,8 @@ The `tsconfig.json` is configured for gradual adoption:
 
 ### Core Types
 
-- `Superengineer-v5.ApplicationState` - Complete application state
-- `Superengineer-v5.ModuleDependencies` - Common dependency injection interface
+- `Claudito.ApplicationState` - Complete application state
+- `Claudito.ModuleDependencies` - Common dependency injection interface
 
 ### API Response Types (70+)
 
@@ -189,7 +189,7 @@ projects[0].name; // string
 
 ```javascript
 // GOOD - Specific type
-/** @param {Superengineer-v5.API.AgentStatus} status */
+/** @param {Claudito.API.AgentStatus} status */
 
 // BAD - Generic type
 /** @param {Object} status */
@@ -208,7 +208,7 @@ projects[0].name; // string
 ```javascript
 /**
  * Get current project
- * @returns {Superengineer-v5.API.Project | null} Current project or null
+ * @returns {Claudito.API.Project | null} Current project or null
  */
 function getCurrentProject() {
   const id = state.selectedProjectId;

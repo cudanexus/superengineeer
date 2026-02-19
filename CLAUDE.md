@@ -1,4 +1,4 @@
-# Superengineer-v5 - Project Context
+# Claudito - Project Context
 
 Claude Code intelligent agent manager - TypeScript HTTP server with jQuery + Tailwind.css UI. Features Ralph Loop iterative development pattern and roadmap-based automation.
 
@@ -28,14 +28,14 @@ doc/
 
 ## Data Storage Structure
 
-Global data in `$HOME/.superengineer-v5/`:
+Global data in `$HOME/.claudito/`:
 ```
 projects/
   index.json                      # [{ id, name, path }] - project registry
 settings.json                     # Global settings + agentPromptTemplate
 ```
 
-Project-specific data in `{project-root}/.superengineer-v5/`:
+Project-specific data in `{project-root}/.claudito/`:
 ```
 status.json                       # ProjectStatus object
 conversations/
@@ -77,7 +77,7 @@ All project routes prefixed with `/api/projects/:id`. Standard REST verbs (GET/P
 
 **Run Configurations** (`/:id/run-configs`): GET / (list), GET `/importable` (scan project files), POST / (create), PUT `/:configId` (update), DELETE `/:configId`, POST `/:configId/start`, POST `/:configId/stop`, GET `/:configId/status`
 
-**Inventify** (`/api/projects/inventify`): `POST /start` (body: projectTypes[], themes[]) — brainstorms 5 project ideas, `GET /ideas` — returns pending ideas, `POST /suggest-names` (body: selectedIndex) — suggests 5 project names for selected idea, `GET /name-suggestions` — returns pending name suggestions, `POST /select` (body: selectedIndex, projectName) — picks an idea + name and builds it (creates directory + plan, registers project, starts Ralph Loop), `GET /build-result` — returns `{newProjectId, projectName}` after build completes (polled by frontend)
+**Inventify** (`/api/projects/inventify`): `POST /start` (body: projectTypes[], themes[], languages?[], technologies?[], customPrompt?) — brainstorms 5 project ideas, `GET /ideas` — returns pending ideas, `POST /suggest-names` (body: selectedIndex) — suggests 5 project names for selected idea, `GET /name-suggestions` — returns pending name suggestions, `POST /select` (body: selectedIndex, projectName) — picks an idea + name and builds it (creates directory + plan, registers project, starts Ralph Loop), `GET /build-result` — returns `{newProjectId, projectName}` after build completes (polled by frontend)
 
 ## WebSocket Messages
 
@@ -105,7 +105,7 @@ Implements Geoffrey Huntley's "Ralph Wiggum technique" - an iterative worker/rev
 - `npm start` - Run production build
 - `npm test` - Run tests
 
-**Environment Variables**: `PORT` (3000), `HOST` (0.0.0.0), `NODE_ENV`, `LOG_LEVEL`, `MAX_CONCURRENT_AGENTS` (3), `DEV_MODE`/`SUPERENGINEER_V5_DEV_MODE` (enables experimental features like Git tab)
+**Environment Variables**: `PORT` (3000), `HOST` (0.0.0.0), `NODE_ENV`, `LOG_LEVEL`, `MAX_CONCURRENT_AGENTS` (3), `DEV_MODE`/`CLAUDITO_DEV_MODE` (enables experimental features like Git tab)
 
 ## Permissions & Modes
 
@@ -123,7 +123,7 @@ Sessions use UUID v4 IDs: `--session-id {uuid}` (new) or `--resume {uuid}` (exis
 
 ## Features
 
-**Server**: Graceful shutdown (SIGINT/SIGTERM), PID tracking (`$HOME/.superengineer-v5/pids.json`, orphans killed on startup), conversation statistics (duration, messages, tool calls, tokens), context usage persistence
+**Server**: Graceful shutdown (SIGINT/SIGTERM), PID tracking (`$HOME/.claudito/pids.json`, orphans killed on startup), conversation statistics (duration, messages, tool calls, tokens), context usage persistence
 
 **UI Tabs**: Agent Output (conversation + tool usage) and Project Files (tree view, multi-tab editor, Ctrl+S save, delete files/folders)
 - **One-Off Agent Sub-Tabs**: Full rendering per tab, per-tab input/toolbar (Tasks, Search, Permission Mode, Model, Font Size), direct file editing
@@ -134,7 +134,7 @@ Sessions use UUID v4 IDs: `--session-id {uuid}` (new) or `--resume {uuid}` (exis
 - **GitHub Import**: Browse/search repos via `gh` CLI, clone and register as project with progress streaming
 - **GitHub Issues**: Browse issues with state/label/assignee filters, view detail with comments, create new issues (with labels, assignees, milestones), "Start Working" (generates agent prompt), "Add to Roadmap" (creates task in milestone), close issues, add comments
 - **GitHub PRs**: Create PRs with auto-generated title/description (from conversation + diff), list PRs, view PR detail with reviews/comments, "Fix PR Feedback" (generates agent prompt from review feedback)
-- **Inventify**: Project idea generator — select project types + themes, agent brainstorms 5 ideas, user picks one, then agent creates detailed plan + directory with `doc/plan.md`, registers as Claudito project, auto-starts Ralph Loop to build it
+- **Inventify**: Project idea generator — select project types + themes, optionally languages + technologies + custom instructions, agent brainstorms 5 ideas, user picks one, then agent creates detailed plan + directory with `doc/plan.md`, registers as Claudito project, auto-starts Ralph Loop to build it
 - **Folder Browser**: "New Folder" button to create directories inline while browsing
 - **Other**: Conversation history (view/rename, configurable limit), debug modal, mobile-responsive layout, Settings Danger Zone (wipe all data)
 
@@ -146,4 +146,4 @@ Sessions use UUID v4 IDs: `--session-id {uuid}` (new) or `--resume {uuid}` (exis
 
 ## Mermaid.js Support
 
-Mermaid diagrams in ` ```mermaid ` code blocks render automatically in messages and plan content (dark theme). Use `/mermaid` skill via the bundled plugin (`superengineer-v5-plugin` directory, load with `claude --plugin-dir ./superengineer-v5-plugin`). See `doc/MERMAID_EXAMPLES.md` for syntax reference.
+Mermaid diagrams in ` ```mermaid ` code blocks render automatically in messages and plan content (dark theme). Use `/mermaid` skill via the bundled plugin (`claudito-plugin` directory, load with `claude --plugin-dir ./claudito-plugin`). See `doc/MERMAID_EXAMPLES.md` for syntax reference.
