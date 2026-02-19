@@ -4,13 +4,13 @@
  * Shared controls (permission mode, model, font size) sync across all tabs.
  * Per-tab controls (tasks, search) are scoped to each one-off agent tab.
  */
-(function(root, factory) {
+(function (root, factory) {
   if (typeof module === 'object' && module.exports) {
     module.exports = factory();
   } else {
     root.OneOffToolbarModule = factory();
   }
-}(typeof self !== 'undefined' ? self : this, function() {
+}(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
   var state = null;
@@ -37,13 +37,13 @@
 
   function generateToolbarHtml(oneOffId) {
     var permMode = state.permissionMode || 'plan';
-    var modelValue = state.currentProjectModel || 'claude-opus-4-6';
+    var modelValue = state.currentProjectModel || 'claude-sonnet-4-6';
     var fontSize = state.fontSize || 14;
 
     return '<div class="oneoff-toolbar flex items-center justify-between gap-2 p-2 border-b border-gray-700" data-oneoff-id="' + oneOffId + '">' +
       generateLeftSection(oneOffId) +
       generateRightSection(oneOffId, permMode, modelValue, fontSize) +
-    '</div>';
+      '</div>';
   }
 
   /**
@@ -60,29 +60,29 @@
     return '<div class="flex items-center gap-2">' +
       generateTasksButton(oneOffId) +
       generateSearchButton(oneOffId) +
-    '</div>';
+      '</div>';
   }
 
   function generateTasksButton(oneOffId) {
     return '<button class="oneoff-toolbar-tasks bg-gray-700 hover:bg-gray-600 text-white py-1 px-2 rounded flex items-center gap-1 text-xs transition-colors relative" ' +
       'data-oneoff-id="' + oneOffId + '" title="View tasks for this tab">' +
       '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
-        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>' +
+      '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>' +
       '</svg>' +
       'Tasks' +
       '<span class="oneoff-tasks-badge hidden absolute -top-1 -right-1 bg-purple-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-medium" ' +
-        'data-oneoff-id="' + oneOffId + '">0</span>' +
-    '</button>';
+      'data-oneoff-id="' + oneOffId + '">0</span>' +
+      '</button>';
   }
 
   function generateSearchButton(oneOffId) {
     return '<button class="oneoff-toolbar-search bg-gray-700 hover:bg-gray-600 text-white py-1 px-2 rounded flex items-center gap-1 text-xs transition-colors" ' +
       'data-oneoff-id="' + oneOffId + '" title="Search in this tab">' +
       '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
-        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>' +
+      '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>' +
       '</svg>' +
       'Search' +
-    '</button>';
+      '</button>';
   }
 
   function generateRightSection(oneOffId, permMode, modelValue, fontSize) {
@@ -92,27 +92,27 @@
       generateModelSelector(oneOffId, modelValue) +
       '<div class="border-r border-gray-600 h-4"></div>' +
       generateFontSizeControls(oneOffId, fontSize) +
-    '</div>';
+      '</div>';
   }
 
   function generateSearchControls(oneOffId) {
     return '<div class="oneoff-search-controls flex items-center gap-1 border-r border-gray-600 pr-2 hidden" data-oneoff-id="' + oneOffId + '">' +
       '<input type="text" class="oneoff-search-input bg-gray-700 text-white text-xs px-2 py-1 rounded w-32 border border-gray-600 focus:border-purple-500 focus:outline-none" ' +
-        'placeholder="Search..." data-oneoff-id="' + oneOffId + '">' +
+      'placeholder="Search..." data-oneoff-id="' + oneOffId + '">' +
       '<span class="oneoff-search-counter text-xs text-gray-400 w-16 text-center" data-oneoff-id="' + oneOffId + '"></span>' +
       '<button class="oneoff-search-prev bg-gray-700 hover:bg-gray-600 text-white w-6 h-6 rounded flex items-center justify-center text-xs transition-colors disabled:opacity-50" ' +
-        'data-oneoff-id="' + oneOffId + '" title="Previous match">' +
-        '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/></svg>' +
+      'data-oneoff-id="' + oneOffId + '" title="Previous match">' +
+      '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/></svg>' +
       '</button>' +
       '<button class="oneoff-search-next bg-gray-700 hover:bg-gray-600 text-white w-6 h-6 rounded flex items-center justify-center text-xs transition-colors disabled:opacity-50" ' +
-        'data-oneoff-id="' + oneOffId + '" title="Next match">' +
-        '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>' +
+      'data-oneoff-id="' + oneOffId + '" title="Next match">' +
+      '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>' +
       '</button>' +
       '<button class="oneoff-search-close bg-gray-700 hover:bg-gray-600 text-gray-400 hover:text-white w-6 h-6 rounded flex items-center justify-center text-xs transition-colors" ' +
-        'data-oneoff-id="' + oneOffId + '" title="Close search">' +
-        '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>' +
+      'data-oneoff-id="' + oneOffId + '" title="Close search">' +
+      '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>' +
       '</button>' +
-    '</div>';
+      '</div>';
   }
 
   function generatePermissionSelector(oneOffId, permMode) {
@@ -121,24 +121,25 @@
 
     return '<div class="flex items-center bg-gray-700 rounded overflow-hidden text-xs h-6">' +
       '<button class="oneoff-perm-btn h-full px-2 transition-colors perm-btn' + acceptActive + ' flex items-center justify-center gap-1" ' +
-        'data-oneoff-id="' + oneOffId + '" data-mode="acceptEdits" title="Accept Edits">' +
-        '<svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
-          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>' +
-        '</svg>' +
-        '<span class="hidden md:inline">Accept Edits</span>' +
+      'data-oneoff-id="' + oneOffId + '" data-mode="acceptEdits" title="Accept Edits">' +
+      '<svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+      '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>' +
+      '</svg>' +
+      '<span class="hidden md:inline">Accept Edits</span>' +
       '</button>' +
       '<button class="oneoff-perm-btn h-full px-2 transition-colors perm-btn' + planActive + ' flex items-center justify-center gap-1" ' +
-        'data-oneoff-id="' + oneOffId + '" data-mode="plan" title="Plan Mode">' +
-        '<svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
-          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>' +
-        '</svg>' +
-        '<span class="hidden md:inline">Plan</span>' +
+      'data-oneoff-id="' + oneOffId + '" data-mode="plan" title="Plan Mode">' +
+      '<svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+      '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>' +
+      '</svg>' +
+      '<span class="hidden md:inline">Plan</span>' +
       '</button>' +
-    '</div>';
+      '</div>';
   }
 
   function generateModelSelector(oneOffId, modelValue) {
     var models = [
+      { value: 'claude-sonnet-4-6', label: 'Sonnet 4.6' },
       { value: 'claude-opus-4-6', label: 'Opus 4.6' },
       { value: 'claude-sonnet-4-5-20250929', label: 'Sonnet 4.5' },
       { value: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5' }
@@ -153,24 +154,24 @@
 
     return '<div class="flex items-center bg-gray-700 rounded text-xs h-6" title="Select Claude model">' +
       '<select class="oneoff-model-select bg-gray-700 text-white text-xs px-1.5 h-full rounded cursor-pointer focus:outline-none focus:ring-1 focus:ring-purple-500 appearance-none pr-5" ' +
-        'data-oneoff-id="' + oneOffId + '" style="background-image: url(\'data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%239ca3af%22 stroke-width=%222%22%3E%3Cpath stroke-linecap=%22round%22 stroke-linejoin=%22round%22 d=%22M19 9l-7 7-7-7%22/%3E%3C/svg%3E\'); background-repeat: no-repeat; background-position: right 0.25rem center; background-size: 0.75rem;">' +
-        options +
+      'data-oneoff-id="' + oneOffId + '" style="background-image: url(\'data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%239ca3af%22 stroke-width=%222%22%3E%3Cpath stroke-linecap=%22round%22 stroke-linejoin=%22round%22 d=%22M19 9l-7 7-7-7%22/%3E%3C/svg%3E\'); background-repeat: no-repeat; background-position: right 0.25rem center; background-size: 0.75rem;">' +
+      options +
       '</select>' +
-    '</div>';
+      '</div>';
   }
 
   function generateFontSizeControls(oneOffId, fontSize) {
     return '<div class="flex items-center gap-1">' +
       '<button class="oneoff-font-decrease bg-gray-700 hover:bg-gray-600 text-white w-6 h-6 rounded flex items-center justify-center text-xs transition-colors" ' +
-        'data-oneoff-id="' + oneOffId + '" title="Decrease font size">' +
-        '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/></svg>' +
+      'data-oneoff-id="' + oneOffId + '" title="Decrease font size">' +
+      '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/></svg>' +
       '</button>' +
       '<span class="oneoff-font-size-display text-xs text-gray-400 w-8 text-center" data-oneoff-id="' + oneOffId + '">' + fontSize + 'px</span>' +
       '<button class="oneoff-font-increase bg-gray-700 hover:bg-gray-600 text-white w-6 h-6 rounded flex items-center justify-center text-xs transition-colors" ' +
-        'data-oneoff-id="' + oneOffId + '" title="Increase font size">' +
-        '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>' +
+      'data-oneoff-id="' + oneOffId + '" title="Increase font size">' +
+      '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>' +
       '</button>' +
-    '</div>';
+      '</div>';
   }
 
   // ============================================================
@@ -184,7 +185,7 @@
 
     if (!tabs) return null;
 
-    return tabs.find(function(t) { return t.oneOffId === oneOffId; }) || null;
+    return tabs.find(function (t) { return t.oneOffId === oneOffId; }) || null;
   }
 
   function updateTabTodos(oneOffId, input) {
@@ -222,8 +223,8 @@
       return;
     }
 
-    var inProgress = todos.filter(function(t) { return t.status === 'in_progress'; }).length;
-    var pending = todos.filter(function(t) { return t.status === 'pending'; }).length;
+    var inProgress = todos.filter(function (t) { return t.status === 'in_progress'; }).length;
+    var pending = todos.filter(function (t) { return t.status === 'pending'; }).length;
     var active = inProgress + pending;
 
     if (active > 0) {
@@ -332,7 +333,7 @@
       container,
       NodeFilter.SHOW_TEXT,
       {
-        acceptNode: function(node) {
+        acceptNode: function (node) {
           if (!node.textContent.trim()) return NodeFilter.FILTER_REJECT;
 
           var parent = node.parentElement;
@@ -353,7 +354,7 @@
       textNodes.push(node);
     }
 
-    textNodes.reverse().forEach(function(textNode) {
+    textNodes.reverse().forEach(function (textNode) {
       var text = textNode.textContent;
       var match;
       var lastIndex = 0;
@@ -381,7 +382,7 @@
       if (fragments.length > 0 && lastIndex > 0) {
         var parent = textNode.parentNode;
 
-        fragments.forEach(function(fragment) {
+        fragments.forEach(function (fragment) {
           parent.insertBefore(fragment, textNode);
         });
 
@@ -394,7 +395,7 @@
 
   function clearTabSearchHighlights(oneOffId) {
     var $container = $('.oneoff-tab-conv[data-oneoff-id="' + oneOffId + '"]');
-    $container.find('.search-highlight').each(function() {
+    $container.find('.search-highlight').each(function () {
       var $span = $(this);
       var textNode = document.createTextNode($span.text());
       $span.replaceWith(textNode);
@@ -494,7 +495,7 @@
   }
 
   function syncModel(modelValue) {
-    $('.oneoff-model-select').val(modelValue || 'claude-opus-4-6');
+    $('.oneoff-model-select').val(modelValue || 'claude-sonnet-4-6');
   }
 
   function syncFontSize(size) {
@@ -507,7 +508,7 @@
 
   function setupHandlers() {
     // Tasks button
-    $(document).on('click', '.oneoff-toolbar-tasks', function() {
+    $(document).on('click', '.oneoff-toolbar-tasks', function () {
       var oneOffId = $(this).data('oneoff-id');
 
       if (oneOffId) {
@@ -516,7 +517,7 @@
     });
 
     // Search button (open)
-    $(document).on('click', '.oneoff-toolbar-search', function() {
+    $(document).on('click', '.oneoff-toolbar-search', function () {
       var oneOffId = $(this).data('oneoff-id');
 
       if (oneOffId) {
@@ -525,7 +526,7 @@
     });
 
     // Search close
-    $(document).on('click', '.oneoff-search-close', function() {
+    $(document).on('click', '.oneoff-search-close', function () {
       var oneOffId = $(this).data('oneoff-id');
 
       if (oneOffId) {
@@ -536,12 +537,12 @@
     // Search input
     var searchDebounce = null;
 
-    $(document).on('input', '.oneoff-search-input', function() {
+    $(document).on('input', '.oneoff-search-input', function () {
       var oneOffId = $(this).data('oneoff-id');
       var query = $(this).val();
 
       clearTimeout(searchDebounce);
-      searchDebounce = setTimeout(function() {
+      searchDebounce = setTimeout(function () {
         if (oneOffId) {
           performTabSearch(oneOffId, query);
         }
@@ -549,7 +550,7 @@
     });
 
     // Search prev/next
-    $(document).on('click', '.oneoff-search-prev', function() {
+    $(document).on('click', '.oneoff-search-prev', function () {
       var oneOffId = $(this).data('oneoff-id');
 
       if (oneOffId) {
@@ -557,7 +558,7 @@
       }
     });
 
-    $(document).on('click', '.oneoff-search-next', function() {
+    $(document).on('click', '.oneoff-search-next', function () {
       var oneOffId = $(this).data('oneoff-id');
 
       if (oneOffId) {
@@ -566,7 +567,7 @@
     });
 
     // Permission mode buttons
-    $(document).on('click', '.oneoff-perm-btn', function() {
+    $(document).on('click', '.oneoff-perm-btn', function () {
       var mode = $(this).data('mode');
 
       if (mode && PermissionModeModule) {
@@ -575,7 +576,7 @@
     });
 
     // Model selector
-    $(document).on('change', '.oneoff-model-select', function() {
+    $(document).on('change', '.oneoff-model-select', function () {
       var model = $(this).val() || null;
 
       if (state.handleProjectModelChange) {
@@ -584,7 +585,7 @@
     });
 
     // Font size decrease
-    $(document).on('click', '.oneoff-font-decrease', function() {
+    $(document).on('click', '.oneoff-font-decrease', function () {
       if (state.fontSize > 10) {
         state.fontSize -= 2;
 
@@ -595,7 +596,7 @@
     });
 
     // Font size increase
-    $(document).on('click', '.oneoff-font-increase', function() {
+    $(document).on('click', '.oneoff-font-increase', function () {
       if (state.fontSize < 24) {
         state.fontSize += 2;
 
@@ -606,7 +607,7 @@
     });
 
     // Search keyboard shortcuts within search input
-    $(document).on('keydown', '.oneoff-search-input', function(e) {
+    $(document).on('keydown', '.oneoff-search-input', function (e) {
       var oneOffId = $(this).data('oneoff-id');
 
       if (e.key === 'Enter') {

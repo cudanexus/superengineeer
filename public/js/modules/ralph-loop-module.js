@@ -3,13 +3,13 @@
  * Handles Ralph Loop UI rendering, controls, and real-time updates
  * Based on Geoffrey Huntley's "Ralph Wiggum technique" - iterative worker/reviewer pattern
  */
-(function(root, factory) {
+(function (root, factory) {
   if (typeof module === 'object' && module.exports) {
     module.exports = factory();
   } else {
     root.RalphLoopModule = factory();
   }
-}(typeof self !== 'undefined' ? self : this, function() {
+}(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
   // Dependencies injected via init()
@@ -59,54 +59,55 @@
     return '<div class="ralph-loop-config p-3 bg-gray-800 rounded mb-3">' +
       '<h3 class="text-sm font-medium text-gray-200 mb-2">Start New Ralph Loop</h3>' +
       '<div class="space-y-2">' +
-        '<div>' +
-          '<label class="block text-xs text-gray-400 mb-1">Task Source</label>' +
-          '<div class="flex gap-2 mb-2">' +
-            '<button type="button" id="ralph-source-custom" class="flex-1 py-1 px-2 bg-purple-600 text-white rounded text-xs transition-colors hover:bg-purple-500 source-btn active">Custom</button>' +
-            '<button type="button" id="ralph-source-roadmap" class="flex-1 py-1 px-2 bg-gray-700 text-gray-200 rounded text-xs transition-colors hover:bg-gray-600 source-btn">From Roadmap</button>' +
-          '</div>' +
-        '</div>' +
-        '<div id="ralph-roadmap-selector" class="hidden">' +
-          '<label class="block text-xs text-gray-400 mb-1">Selected Roadmap Tasks</label>' +
-          '<div class="space-y-2">' +
-            '<div id="ralph-selected-tasks" class="min-h-[2rem] p-2 bg-gray-700 text-gray-300 rounded text-sm border-dashed border border-gray-600">' +
-              '<span class="text-gray-500">No tasks selected</span>' +
-            '</div>' +
-            '<button type="button" id="btn-select-roadmap-tasks" class="w-full py-2 px-3 bg-blue-600 hover:bg-blue-500 text-white rounded text-sm transition-colors" ' + disabled + '>' +
-              'Select from Roadmap' +
-            '</button>' +
-          '</div>' +
-        '</div>' +
-        '<div id="ralph-custom-description">' +
-          '<label class="block text-xs text-gray-400 mb-1">Task Description</label>' +
-          '<textarea id="ralph-task-description" class="w-full p-2 bg-gray-700 text-gray-200 rounded text-sm resize-none" ' +
-            'rows="3" placeholder="Describe the task for the worker agent..." ' + disabled + '></textarea>' +
-        '</div>' +
-        '<div class="grid grid-cols-2 gap-2">' +
-          '<div>' +
-            '<label class="block text-xs text-gray-400 mb-1">Max Turns</label>' +
-            '<input type="number" id="ralph-max-turns" class="w-full p-2 bg-gray-700 text-gray-200 rounded text-sm" ' +
-              'value="5" min="1" max="20" ' + disabled + ' />' +
-          '</div>' +
-          '<div>' +
-            '<label class="block text-xs text-gray-400 mb-1">Worker Model</label>' +
-            '<select id="ralph-worker-model" class="w-full p-2 bg-gray-700 text-gray-200 rounded text-sm" ' + disabled + '>' +
-              '<option value="claude-opus-4-6" selected>Claude Opus 4.6</option>' +
-              '<option value="claude-sonnet-4-5-20250929">Claude Sonnet 4.5</option>' +
-              '<option value="claude-haiku-4-5-20251001">Claude Haiku 4.5</option>' +
-            '</select>' +
-          '</div>' +
-        '</div>' +
-        '<div>' +
-          '<label class="block text-xs text-gray-400 mb-1">Reviewer Model</label>' +
-          '<select id="ralph-reviewer-model" class="w-full p-2 bg-gray-700 text-gray-200 rounded text-sm" ' + disabled + '>' +
-            '<option value="claude-opus-4-6" selected>Claude Opus 4.6</option>' +
-            '<option value="claude-sonnet-4-5-20250929">Claude Sonnet 4.5</option>' +
-            '<option value="claude-haiku-4-5-20251001">Claude Haiku 4.5</option>' +
-          '</select>' +
-        '</div>' +
+      '<div>' +
+      '<label class="block text-xs text-gray-400 mb-1">Task Source</label>' +
+      '<div class="flex gap-2 mb-2">' +
+      '<button type="button" id="ralph-source-custom" class="flex-1 py-1 px-2 bg-purple-600 text-white rounded text-xs transition-colors hover:bg-purple-500 source-btn active">Custom</button>' +
+      '<button type="button" id="ralph-source-roadmap" class="flex-1 py-1 px-2 bg-gray-700 text-gray-200 rounded text-xs transition-colors hover:bg-gray-600 source-btn">From Roadmap</button>' +
       '</div>' +
-    '</div>';
+      '</div>' +
+      '<div id="ralph-roadmap-selector" class="hidden">' +
+      '<label class="block text-xs text-gray-400 mb-1">Selected Roadmap Tasks</label>' +
+      '<div class="space-y-2">' +
+      '<div id="ralph-selected-tasks" class="min-h-[2rem] p-2 bg-gray-700 text-gray-300 rounded text-sm border-dashed border border-gray-600">' +
+      '<span class="text-gray-500">No tasks selected</span>' +
+      '</div>' +
+      '<button type="button" id="btn-select-roadmap-tasks" class="w-full py-2 px-3 bg-blue-600 hover:bg-blue-500 text-white rounded text-sm transition-colors" ' + disabled + '>' +
+      'Select from Roadmap' +
+      '</button>' +
+      '</div>' +
+      '</div>' +
+      '<div id="ralph-custom-description">' +
+      '<label class="block text-xs text-gray-400 mb-1">Task Description</label>' +
+      '<textarea id="ralph-task-description" class="w-full p-2 bg-gray-700 text-gray-200 rounded text-sm resize-none" ' +
+      'rows="3" placeholder="Describe the task for the worker agent..." ' + disabled + '></textarea>' +
+      '</div>' +
+      '<div class="grid grid-cols-2 gap-2">' +
+      '<div>' +
+      '<label class="block text-xs text-gray-400 mb-1">Max Turns</label>' +
+      '<input type="number" id="ralph-max-turns" class="w-full p-2 bg-gray-700 text-gray-200 rounded text-sm" ' +
+      'value="5" min="1" max="20" ' + disabled + ' />' +
+      '</div>' +
+      '<div>' +
+      '<label class="block text-xs text-gray-400 mb-1">Worker Model</label>' +
+      '<select id="ralph-worker-model" class="w-full p-2 bg-gray-700 text-gray-200 rounded text-sm" ' + disabled + '>' +
+      '<option value="claude-sonnet-4-6" selected>Claude Sonnet 4.6</option>' +
+      '<option value="claude-opus-4-6">Claude Opus 4.6</option>' +
+      '<option value="claude-sonnet-4-5-20250929">Claude Sonnet 4.5</option>' +
+      '<option value="claude-haiku-4-5-20251001">Claude Haiku 4.5</option>' +
+      '</select>' +
+      '</div>' +
+      '</div>' +
+      '<div>' +
+      '<label class="block text-xs text-gray-400 mb-1">Reviewer Model</label>' +
+      '<select id="ralph-reviewer-model" class="w-full p-2 bg-gray-700 text-gray-200 rounded text-sm" ' + disabled + '>' +
+      '<option value="claude-opus-4-6" selected>Claude Opus 4.6</option>' +
+      '<option value="claude-sonnet-4-5-20250929">Claude Sonnet 4.5</option>' +
+      '<option value="claude-haiku-4-5-20251001">Claude Haiku 4.5</option>' +
+      '</select>' +
+      '</div>' +
+      '</div>' +
+      '</div>';
   }
 
   function renderControls() {
@@ -118,33 +119,33 @@
 
     return '<div class="ralph-loop-controls flex gap-2 mb-3">' +
       '<button id="ralph-loop-start-btn" class="px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white rounded text-sm ' +
-        (canStart ? '' : 'opacity-50 cursor-not-allowed') + '" ' + (canStart ? '' : 'disabled') + '>' +
-        '<svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
-          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>' +
-          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>' +
-        '</svg>Start' +
+      (canStart ? '' : 'opacity-50 cursor-not-allowed') + '" ' + (canStart ? '' : 'disabled') + '>' +
+      '<svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+      '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>' +
+      '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>' +
+      '</svg>Start' +
       '</button>' +
       '<button id="ralph-loop-pause-btn" class="px-3 py-1.5 bg-yellow-600 hover:bg-yellow-500 text-white rounded text-sm ' +
-        (canPause ? '' : 'opacity-50 cursor-not-allowed hidden') + '" ' + (canPause ? '' : 'disabled') + '>' +
-        '<svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
-          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/>' +
-        '</svg>Pause' +
+      (canPause ? '' : 'opacity-50 cursor-not-allowed hidden') + '" ' + (canPause ? '' : 'disabled') + '>' +
+      '<svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+      '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/>' +
+      '</svg>Pause' +
       '</button>' +
       '<button id="ralph-loop-resume-btn" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-sm ' +
-        (canResume ? '' : 'opacity-50 cursor-not-allowed hidden') + '" ' + (canResume ? '' : 'disabled') + '>' +
-        '<svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
-          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>' +
-          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>' +
-        '</svg>Resume' +
+      (canResume ? '' : 'opacity-50 cursor-not-allowed hidden') + '" ' + (canResume ? '' : 'disabled') + '>' +
+      '<svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+      '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>' +
+      '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>' +
+      '</svg>Resume' +
       '</button>' +
       '<button id="ralph-loop-stop-btn" class="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded text-sm ' +
-        (canStop ? '' : 'opacity-50 cursor-not-allowed hidden') + '" ' + (canStop ? '' : 'disabled') + '>' +
-        '<svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
-          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>' +
-          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/>' +
-        '</svg>Stop' +
+      (canStop ? '' : 'opacity-50 cursor-not-allowed hidden') + '" ' + (canStop ? '' : 'disabled') + '>' +
+      '<svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+      '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>' +
+      '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/>' +
+      '</svg>Stop' +
       '</button>' +
-    '</div>';
+      '</div>';
   }
 
   function renderProgress() {
@@ -161,14 +162,14 @@
 
     return '<div id="ralph-loop-progress" class="p-3 bg-gray-800 rounded mb-3">' +
       '<div class="flex justify-between text-sm mb-1">' +
-        '<span class="text-gray-300">Iteration ' + iteration + ' / ' + maxTurns + '</span>' +
-        '<span class="' + statusColor + '">' + phaseText + '</span>' +
+      '<span class="text-gray-300">Iteration ' + iteration + ' / ' + maxTurns + '</span>' +
+      '<span class="' + statusColor + '">' + phaseText + '</span>' +
       '</div>' +
       '<div class="w-full bg-gray-700 rounded-full h-2">' +
-        '<div class="bg-purple-500 h-2 rounded-full transition-all duration-300" style="width: ' + progress + '%"></div>' +
+      '<div class="bg-purple-500 h-2 rounded-full transition-all duration-300" style="width: ' + progress + '%"></div>' +
       '</div>' +
       (currentLoop.finalStatus ? renderFinalStatus(currentLoop.finalStatus) : '') +
-    '</div>';
+      '</div>';
   }
 
   function renderFinalStatus(finalStatus) {
@@ -201,20 +202,20 @@
     return '<div class="ralph-loop-output mb-3">' +
       '<h3 class="text-sm font-medium text-gray-200 mb-2">Output</h3>' +
       '<div id="ralph-output-container" class="p-3 bg-gray-900 rounded font-mono text-xs h-48 overflow-y-auto">' +
-        (hasOutput ? outputBuffer.map(function(line) {
-          return '<div class="' + line.cssClass + '">' + escapeHtml(line.text) + '</div>';
-        }).join('') : '<span class="text-gray-500">No output yet...</span>') +
+      (hasOutput ? outputBuffer.map(function (line) {
+        return '<div class="' + line.cssClass + '">' + escapeHtml(line.text) + '</div>';
+      }).join('') : '<span class="text-gray-500">No output yet...</span>') +
       '</div>' +
-    '</div>';
+      '</div>';
   }
 
   function renderHistory() {
     return '<div class="ralph-loop-history">' +
       '<h3 class="text-sm font-medium text-gray-200 mb-2">History</h3>' +
       '<div id="ralph-history-container" class="space-y-2 max-h-64 overflow-y-auto">' +
-        '<span class="text-gray-500 text-sm">Loading...</span>' +
+      '<span class="text-gray-500 text-sm">Loading...</span>' +
       '</div>' +
-    '</div>';
+      '</div>';
   }
 
   function renderHistoryList(loops) {
@@ -222,7 +223,7 @@
       return '<span class="text-gray-500 text-sm">No Ralph Loop history</span>';
     }
 
-    return loops.map(function(loop) {
+    return loops.map(function (loop) {
       var statusColor = getStatusColor(loop.status);
       var finalText = loop.finalStatus ? ' - ' + loop.finalStatus : '';
       var taskPreview = loop.config.taskDescription.substring(0, 50) +
@@ -230,27 +231,27 @@
 
       return '<div class="p-2 bg-gray-800 rounded text-sm group">' +
         '<div class="flex justify-between items-start">' +
-          '<div class="flex-1 min-w-0">' +
-            '<div class="text-gray-300 truncate" title="' + escapeHtml(loop.config.taskDescription) + '">' +
-              escapeHtml(taskPreview) +
-            '</div>' +
-            '<div class="text-xs text-gray-500">' +
-              'Iterations: ' + loop.currentIteration + '/' + loop.config.maxTurns +
-              ' | ' + formatDate(loop.createdAt) +
-            '</div>' +
-          '</div>' +
-          '<div class="flex items-center gap-2">' +
-            '<span class="' + statusColor + ' text-xs">' + loop.status + finalText + '</span>' +
-            '<button class="ralph-loop-delete-btn opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 p-1 transition-opacity" ' +
-              'data-task-id="' + escapeHtml(loop.taskId) + '" title="Delete">' +
-              '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
-                '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" ' +
-                  'd="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>' +
-              '</svg>' +
-            '</button>' +
-          '</div>' +
+        '<div class="flex-1 min-w-0">' +
+        '<div class="text-gray-300 truncate" title="' + escapeHtml(loop.config.taskDescription) + '">' +
+        escapeHtml(taskPreview) +
         '</div>' +
-      '</div>';
+        '<div class="text-xs text-gray-500">' +
+        'Iterations: ' + loop.currentIteration + '/' + loop.config.maxTurns +
+        ' | ' + formatDate(loop.createdAt) +
+        '</div>' +
+        '</div>' +
+        '<div class="flex items-center gap-2">' +
+        '<span class="' + statusColor + ' text-xs">' + loop.status + finalText + '</span>' +
+        '<button class="ralph-loop-delete-btn opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 p-1 transition-opacity" ' +
+        'data-task-id="' + escapeHtml(loop.taskId) + '" title="Delete">' +
+        '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" ' +
+        'd="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>' +
+        '</svg>' +
+        '</button>' +
+        '</div>' +
+        '</div>' +
+        '</div>';
     }).join('');
   }
 
@@ -358,14 +359,14 @@
     };
 
     api.startRalphLoop(state.selectedProjectId, config)
-      .done(function(loopState) {
+      .done(function (loopState) {
         currentLoop = loopState;
         clearOutput();
         addOutput('Ralph Loop started: ' + config.taskDescription, 'text-green-400');
         render();
         showToast('Ralph Loop started', 'success');
       })
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         var message = xhr.responseJSON ? xhr.responseJSON.error : 'Failed to start Ralph Loop';
         showToast(message, 'error');
       });
@@ -377,13 +378,13 @@
     }
 
     api.stopRalphLoop(state.selectedProjectId, currentLoop.taskId)
-      .done(function() {
+      .done(function () {
         addOutput('Ralph Loop stopped', 'text-yellow-400');
         currentLoop.status = 'idle';
         render();
         showToast('Ralph Loop stopped', 'info');
       })
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         var message = xhr.responseJSON ? xhr.responseJSON.error : 'Failed to stop Ralph Loop';
         showToast(message, 'error');
       });
@@ -395,13 +396,13 @@
     }
 
     api.pauseRalphLoop(state.selectedProjectId, currentLoop.taskId)
-      .done(function() {
+      .done(function () {
         addOutput('Ralph Loop paused', 'text-yellow-400');
         currentLoop.status = 'paused';
         render();
         showToast('Ralph Loop paused', 'info');
       })
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         var message = xhr.responseJSON ? xhr.responseJSON.error : 'Failed to pause Ralph Loop';
         showToast(message, 'error');
       });
@@ -413,13 +414,13 @@
     }
 
     api.resumeRalphLoop(state.selectedProjectId, currentLoop.taskId)
-      .done(function() {
+      .done(function () {
         addOutput('Ralph Loop resumed', 'text-green-400');
         currentLoop.status = 'worker_running';
         render();
         showToast('Ralph Loop resumed', 'success');
       })
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         var message = xhr.responseJSON ? xhr.responseJSON.error : 'Failed to resume Ralph Loop';
         showToast(message, 'error');
       });
@@ -431,7 +432,7 @@
     }
 
     api.getRalphLoops(state.selectedProjectId)
-      .done(function(loops) {
+      .done(function (loops) {
         var $container = $('#ralph-history-container');
 
         if ($container.length) {
@@ -442,7 +443,7 @@
         // This prevents state confusion when multiple instances are open
         // Users must explicitly interact with loops in each tab
       })
-      .fail(function() {
+      .fail(function () {
         var $container = $('#ralph-history-container');
 
         if ($container.length) {
@@ -461,7 +462,7 @@
     }
 
     api.deleteRalphLoop(state.selectedProjectId, taskId)
-      .done(function() {
+      .done(function () {
         if (currentLoop && currentLoop.taskId === taskId) {
           currentLoop = null;
           clearOutput();
@@ -470,7 +471,7 @@
         loadHistory();
         showToast('Ralph Loop deleted', 'info');
       })
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         var message = xhr.responseJSON ? xhr.responseJSON.error : 'Failed to delete Ralph Loop';
         showToast(message, 'error');
       });
@@ -633,11 +634,11 @@
     }
 
     api.getProjectRoadmap(state.selectedProjectId)
-      .done(function(data) {
+      .done(function (data) {
         roadmapData = data;
         populateRoadmapTasks(data.parsed);
       })
-      .fail(function() {
+      .fail(function () {
         showToast('Failed to load roadmap', 'error');
         // Switch back to custom mode
         $('#ralph-source-custom').click();
@@ -654,11 +655,11 @@
       return;
     }
 
-    parsed.phases.forEach(function(phase, phaseIndex) {
+    parsed.phases.forEach(function (phase, phaseIndex) {
       if (phase.milestones && phase.milestones.length > 0) {
-        phase.milestones.forEach(function(milestone, milestoneIndex) {
+        phase.milestones.forEach(function (milestone, milestoneIndex) {
           if (milestone.tasks && milestone.tasks.length > 0) {
-            milestone.tasks.forEach(function(task, taskIndex) {
+            milestone.tasks.forEach(function (task, taskIndex) {
               // Only show incomplete tasks
               if (!task.completed) {
                 var optionText = phase.title + ' › ' + milestone.title + ' › ' + task.title;
@@ -679,30 +680,30 @@
   }
 
   function setupEventListeners() {
-    $(document).on('click', '#ralph-loop-start-btn', function() {
+    $(document).on('click', '#ralph-loop-start-btn', function () {
       startLoop();
     });
 
-    $(document).on('click', '#ralph-loop-stop-btn', function() {
+    $(document).on('click', '#ralph-loop-stop-btn', function () {
       stopLoop();
     });
 
-    $(document).on('click', '#ralph-loop-pause-btn', function() {
+    $(document).on('click', '#ralph-loop-pause-btn', function () {
       pauseLoop();
     });
 
-    $(document).on('click', '#ralph-loop-resume-btn', function() {
+    $(document).on('click', '#ralph-loop-resume-btn', function () {
       resumeLoop();
     });
 
-    $(document).on('click', '.ralph-loop-delete-btn', function() {
+    $(document).on('click', '.ralph-loop-delete-btn', function () {
       var taskId = $(this).data('task-id');
       deleteLoop(taskId);
     });
 
 
     // Task source selection
-    $(document).on('click', '.source-btn', function() {
+    $(document).on('click', '.source-btn', function () {
       $('.source-btn')
         .removeClass('active bg-purple-600 text-white hover:bg-purple-500')
         .addClass('bg-gray-700 text-gray-200 hover:bg-gray-600');
@@ -727,24 +728,24 @@
     });
 
     // Roadmap task selection (legacy - keep for compatibility)
-    $(document).on('change', '#ralph-roadmap-task', function() {
+    $(document).on('change', '#ralph-roadmap-task', function () {
       var selectedOption = $(this).find(':selected');
       var taskDescription = selectedOption.data('description') || selectedOption.text();
       $('#ralph-task-description').val(taskDescription);
     });
 
     // Open roadmap selection modal
-    $(document).on('click', '#btn-select-roadmap-tasks', function() {
+    $(document).on('click', '#btn-select-roadmap-tasks', function () {
       openRalphRoadmapModal();
     });
 
     // Clear roadmap selection
-    $(document).on('click', '#btn-clear-ralph-selection', function() {
+    $(document).on('click', '#btn-clear-ralph-selection', function () {
       clearRalphRoadmapSelection();
     });
 
     // Use selected roadmap items
-    $(document).on('click', '#btn-use-ralph-roadmap-selection', function() {
+    $(document).on('click', '#btn-use-ralph-roadmap-selection', function () {
       useRalphRoadmapSelection();
     });
   }
@@ -794,7 +795,7 @@
       $('#ralph-roadmap-content').html('<div class="text-center text-gray-500 py-8">Loading roadmap...</div>');
 
       api.getProjectRoadmap(state.selectedProjectId)
-        .done(function(data) {
+        .done(function (data) {
           roadmapData = data;
           if (data.parsed && data.parsed.phases && data.parsed.phases.length > 0) {
             renderRalphRoadmapContent(data.parsed);
@@ -802,7 +803,7 @@
             $('#ralph-roadmap-content').html('<div class="text-center text-gray-500 py-8">No roadmap available. Please create a roadmap first.</div>');
           }
         })
-        .fail(function() {
+        .fail(function () {
           $('#ralph-roadmap-content').html('<div class="text-center text-red-500 py-8">Failed to load roadmap. Please try again.</div>');
           showToast('Failed to load roadmap', 'error');
         });
@@ -820,29 +821,29 @@
     if (!parsed.phases || parsed.phases.length === 0) {
       content += '<div class="text-center text-gray-500 py-8">No roadmap phases available</div>';
     } else {
-      parsed.phases.forEach(function(phase, phaseIndex) {
+      parsed.phases.forEach(function (phase, phaseIndex) {
         content += '<div class="roadmap-phase mb-6">' +
           '<div class="flex items-center gap-2 mb-3">' +
-            '<input type="checkbox" id="phase-' + phaseIndex + '" class="phase-checkbox" data-phase="' + phaseIndex + '">' +
-            '<h3 class="font-semibold text-blue-300">' + escapeHtml(phase.title) + '</h3>' +
+          '<input type="checkbox" id="phase-' + phaseIndex + '" class="phase-checkbox" data-phase="' + phaseIndex + '">' +
+          '<h3 class="font-semibold text-blue-300">' + escapeHtml(phase.title) + '</h3>' +
           '</div>' +
           '<div class="ml-6">';
 
         if (phase.milestones && phase.milestones.length > 0) {
-          phase.milestones.forEach(function(milestone, milestoneIndex) {
+          phase.milestones.forEach(function (milestone, milestoneIndex) {
             content += '<div class="roadmap-milestone mb-4">' +
               '<div class="flex items-center gap-2 mb-2">' +
-                '<input type="checkbox" id="milestone-' + phaseIndex + '-' + milestoneIndex + '" class="milestone-checkbox" data-phase="' + phaseIndex + '" data-milestone="' + milestoneIndex + '">' +
-                '<h4 class="font-medium text-green-300">' + escapeHtml(milestone.title) + '</h4>' +
+              '<input type="checkbox" id="milestone-' + phaseIndex + '-' + milestoneIndex + '" class="milestone-checkbox" data-phase="' + phaseIndex + '" data-milestone="' + milestoneIndex + '">' +
+              '<h4 class="font-medium text-green-300">' + escapeHtml(milestone.title) + '</h4>' +
               '</div>';
 
             if (milestone.tasks && milestone.tasks.length > 0) {
               content += '<div class="ml-6 space-y-1">';
-              milestone.tasks.forEach(function(task, taskIndex) {
+              milestone.tasks.forEach(function (task, taskIndex) {
                 content += '<div class="flex items-start gap-2">' +
                   '<input type="checkbox" id="task-' + phaseIndex + '-' + milestoneIndex + '-' + taskIndex + '" class="task-checkbox mt-0.5" data-phase="' + phaseIndex + '" data-milestone="' + milestoneIndex + '" data-task="' + taskIndex + '">' +
                   '<span class="text-gray-300 text-xs leading-relaxed">' + escapeHtml(task) + '</span>' +
-                '</div>';
+                  '</div>';
               });
               content += '</div>';
             }
@@ -864,7 +865,7 @@
 
   function setupRalphCheckboxHandlers() {
     // Phase checkbox - select/deselect all milestones and tasks in phase
-    $(document).off('change.ralph-roadmap').on('change.ralph-roadmap', '.phase-checkbox', function() {
+    $(document).off('change.ralph-roadmap').on('change.ralph-roadmap', '.phase-checkbox', function () {
       var phaseIndex = $(this).data('phase');
       var isChecked = $(this).prop('checked');
 
@@ -873,7 +874,7 @@
     });
 
     // Milestone checkbox - select/deselect all tasks in milestone
-    $(document).off('change.ralph-roadmap').on('change.ralph-roadmap', '.milestone-checkbox', function() {
+    $(document).off('change.ralph-roadmap').on('change.ralph-roadmap', '.milestone-checkbox', function () {
       var phaseIndex = $(this).data('phase');
       var milestoneIndex = $(this).data('milestone');
       var isChecked = $(this).prop('checked');
@@ -884,7 +885,7 @@
     });
 
     // Task checkbox - update parent checkboxes
-    $(document).off('change.ralph-roadmap').on('change.ralph-roadmap', '.task-checkbox', function() {
+    $(document).off('change.ralph-roadmap').on('change.ralph-roadmap', '.task-checkbox', function () {
       var phaseIndex = $(this).data('phase');
       var milestoneIndex = $(this).data('milestone');
       updateParentCheckboxes(phaseIndex, milestoneIndex);
@@ -940,13 +941,13 @@
     var selectedTasks = [];
 
     // Collect all checked items and build task descriptions
-    $('.phase-checkbox:checked').each(function() {
+    $('.phase-checkbox:checked').each(function () {
       var phaseIndex = $(this).data('phase');
       var phase = roadmapData.parsed.phases[phaseIndex];
       selectedTasks.push('Complete all tasks in phase: ' + phase.title);
     });
 
-    $('.milestone-checkbox:checked').each(function() {
+    $('.milestone-checkbox:checked').each(function () {
       var phaseIndex = $(this).data('phase');
       var milestoneIndex = $(this).data('milestone');
       var phase = roadmapData.parsed.phases[phaseIndex];
@@ -958,7 +959,7 @@
       }
     });
 
-    $('.task-checkbox:checked').each(function() {
+    $('.task-checkbox:checked').each(function () {
       var phaseIndex = $(this).data('phase');
       var milestoneIndex = $(this).data('milestone');
       var taskIndex = $(this).data('task');
@@ -982,7 +983,7 @@
     $('#ralph-task-description').val(taskDescription);
 
     // Update selected tasks display
-    var displayHtml = selectedTasks.map(function(task, index) {
+    var displayHtml = selectedTasks.map(function (task, index) {
       return '<div class="text-xs p-1 bg-gray-600 rounded">' + (index + 1) + '. ' + escapeHtml(task.substring(0, 100)) + (task.length > 100 ? '...' : '') + '</div>';
     }).join('');
 
@@ -1005,14 +1006,14 @@
     onProjectChanged: onProjectChanged,
     clearOutput: clearOutput,
     // Expose for testing
-    _getState: function() {
+    _getState: function () {
       return {
         currentLoop: currentLoop,
         outputBuffer: outputBuffer,
         isTabActive: isTabActive
       };
     },
-    _setCurrentLoop: function(loop) {
+    _setCurrentLoop: function (loop) {
       currentLoop = loop;
     },
     setCurrentLoop: setCurrentLoop

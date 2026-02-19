@@ -1,6 +1,6 @@
 // Superengineer Frontend Application
 
-(function($) {
+(function ($) {
   'use strict';
 
   // ============================================================
@@ -212,13 +212,13 @@
   }
 
   // Set up global error handlers
-  window.onerror = function(message, source, line, column, error) {
+  window.onerror = function (message, source, line, column, error) {
     logFrontendError(message, source, line, column, error);
     // Return false to allow default error handling
     return false;
   };
 
-  window.onunhandledrejection = function(event) {
+  window.onunhandledrejection = function (event) {
     var reason = event.reason;
     var message = reason instanceof Error ? reason.message : String(reason);
     var stack = reason instanceof Error ? reason.stack : null;
@@ -268,8 +268,8 @@
     var $toast = $('<div class="toast ' + type + '">' + escapeHtml(message) + '</div>');
     $('#toast-container').append($toast);
 
-    setTimeout(function() {
-      $toast.fadeOut(200, function() { $(this).remove(); });
+    setTimeout(function () {
+      $toast.fadeOut(200, function () { $(this).remove(); });
     }, 3000);
   }
 
@@ -307,7 +307,7 @@
     var svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
     var url = URL.createObjectURL(svgBlob);
 
-    img.onload = function() {
+    img.onload = function () {
       // White background
       ctx.fillStyle = '#FFFFFF';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -316,7 +316,7 @@
       ctx.drawImage(img, 0, 0);
 
       // Convert to PNG and download
-      canvas.toBlob(function(blob) {
+      canvas.toBlob(function (blob) {
         var link = document.createElement('a');
         link.download = 'mermaid-diagram-' + (diagramId || Date.now()) + '.png';
         link.href = URL.createObjectURL(blob);
@@ -330,7 +330,7 @@
       }, 'image/png');
     };
 
-    img.onerror = function() {
+    img.onerror = function () {
       showToast('Failed to save diagram', 'error');
       URL.revokeObjectURL(url);
     };
@@ -355,7 +355,7 @@
     window.open(url, '_blank');
 
     // Cleanup URL after a delay
-    setTimeout(function() {
+    setTimeout(function () {
       URL.revokeObjectURL(url);
     }, 1000);
   }
@@ -373,12 +373,12 @@
     var confirmText = options.confirmText || 'Confirm';
     var confirmClass = options.danger ? 'bg-red-600 hover:bg-red-700' : 'bg-purple-600 hover:bg-purple-700';
 
-    return new Promise(function(resolve) {
+    return new Promise(function (resolve) {
       $('#confirm-modal-title').text(title);
       $('#confirm-modal-message').text(message);
       $('#confirm-modal-ok').text(confirmText).removeClass('bg-red-600 hover:bg-red-700 bg-purple-600 hover:bg-purple-700').addClass(confirmClass);
 
-      var cleanup = function() {
+      var cleanup = function () {
         $('#confirm-modal-ok').off('click.confirm');
         $('#confirm-modal-cancel').off('click.confirm');
         $('#modal-confirm .modal-close').off('click.confirm');
@@ -386,12 +386,12 @@
         $('#modal-confirm').addClass('hidden');
       };
 
-      $('#confirm-modal-ok').on('click.confirm', function() {
+      $('#confirm-modal-ok').on('click.confirm', function () {
         cleanup();
         resolve(true);
       });
 
-      $('#confirm-modal-cancel, #modal-confirm .modal-close, #modal-confirm .modal-backdrop').on('click.confirm', function() {
+      $('#confirm-modal-cancel, #modal-confirm .modal-close, #modal-confirm .modal-backdrop').on('click.confirm', function () {
         cleanup();
         resolve(false);
       });
@@ -407,27 +407,27 @@
     var defaultValue = options.defaultValue || '';
     var submitText = options.submitText || 'OK';
 
-    return new Promise(function(resolve) {
+    return new Promise(function (resolve) {
       $('#prompt-modal-title').text(title);
       $('#prompt-modal-label').text(label);
       $('#prompt-modal-input').val(defaultValue).attr('placeholder', placeholder);
       $('#prompt-modal-ok').text(submitText);
 
-      var cleanup = function() {
+      var cleanup = function () {
         $('#form-prompt').off('submit.prompt');
         $('#modal-prompt .modal-close').off('click.prompt');
         $('#modal-prompt .modal-backdrop').off('click.prompt');
         $('#modal-prompt').addClass('hidden');
       };
 
-      $('#form-prompt').on('submit.prompt', function(e) {
+      $('#form-prompt').on('submit.prompt', function (e) {
         e.preventDefault();
         var value = $('#prompt-modal-input').val().trim();
         cleanup();
         resolve(value || null);
       });
 
-      $('#modal-prompt .modal-close, #modal-prompt .modal-backdrop').on('click.prompt', function() {
+      $('#modal-prompt .modal-close, #modal-prompt .modal-backdrop').on('click.prompt', function () {
         cleanup();
         resolve(null);
       });
@@ -445,10 +445,10 @@
     }
 
     // Show confirmation dialog
-    return new Promise(function(resolve) {
+    return new Promise(function (resolve) {
       $('#modal-unsaved-changes').removeClass('hidden');
 
-      var cleanup = function() {
+      var cleanup = function () {
         $('#btn-unsaved-save').off('click.unsaved');
         $('#btn-unsaved-discard').off('click.unsaved');
         $('#btn-unsaved-cancel').off('click.unsaved');
@@ -456,14 +456,14 @@
       };
 
       // Save & Close - save settings then close
-      $('#btn-unsaved-save').on('click.unsaved', function() {
+      $('#btn-unsaved-save').on('click.unsaved', function () {
         cleanup();
         handleSaveSettings($('#form-settings'));
         resolve(true);
       });
 
       // Discard - reset state and close
-      $('#btn-unsaved-discard').on('click.unsaved', function() {
+      $('#btn-unsaved-discard').on('click.unsaved', function () {
         cleanup();
         state.hasUnsavedMcpChanges = false;
         $('#mcp-unsaved-warning').addClass('hidden');
@@ -475,7 +475,7 @@
       });
 
       // Cancel - stay in modal
-      $('#btn-unsaved-cancel').on('click.unsaved', function() {
+      $('#btn-unsaved-cancel').on('click.unsaved', function () {
         cleanup();
         resolve(false);
       });
@@ -511,7 +511,7 @@
   function closeAllModals() {
     // Check if settings modal is open and has unsaved MCP changes
     if (!$('#modal-settings').hasClass('hidden') && state.hasUnsavedMcpChanges) {
-      checkUnsavedMcpChanges().then(function(shouldClose) {
+      checkUnsavedMcpChanges().then(function (shouldClose) {
         if (shouldClose) {
           doCloseAllModals();
         }
@@ -604,16 +604,16 @@
 
     return '<div class="project-card' + waitingClass + '" data-id="' + project.id + '">' +
       '<div class="flex justify-between items-start">' +
-        '<div class="project-card-name flex-1 truncate">' + escapeHtml(project.name) + '</div>' +
-        quickActions +
+      '<div class="project-card-name flex-1 truncate">' + escapeHtml(project.name) + '</div>' +
+      quickActions +
       '</div>' +
       '<div class="project-card-path">' + escapeHtml(project.path) + '</div>' +
       '<div class="project-card-status">' +
-        '<span class="status-badge ' + statusClass + '">' + statusText + '</span>' +
-        waitingIndicator +
-        (statusClass === 'running' && !isWaiting ? '<span class="running-indicator"></span>' : '') +
+      '<span class="status-badge ' + statusClass + '">' + statusText + '</span>' +
+      waitingIndicator +
+      (statusClass === 'running' && !isWaiting ? '<span class="running-indicator"></span>' : '') +
       '</div>' +
-    '</div>';
+      '</div>';
   }
 
   function renderQuickActions(project) {
@@ -641,7 +641,7 @@
 
   // Project list rendering
   function sortProjects(projects) {
-    return projects.slice().sort(function(a, b) {
+    return projects.slice().sort(function (a, b) {
       var aRunning = a.status === 'running' || a.status === 'queued';
       var bRunning = b.status === 'running' || b.status === 'queued';
 
@@ -674,7 +674,7 @@
     var filteredProjects = state.projects;
 
     if (searchQuery) {
-      filteredProjects = state.projects.filter(function(project) {
+      filteredProjects = state.projects.filter(function (project) {
         return project.name.toLowerCase().includes(searchQuery);
       });
     }
@@ -686,22 +686,22 @@
     }
 
     // Separate running/queued from stopped projects
-    var activeProjects = filteredProjects.filter(function(p) {
+    var activeProjects = filteredProjects.filter(function (p) {
       return p.status === 'running' || p.status === 'queued';
-    }).sort(function(a, b) {
+    }).sort(function (a, b) {
       return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
     });
 
-    var stoppedProjects = filteredProjects.filter(function(p) {
+    var stoppedProjects = filteredProjects.filter(function (p) {
       return p.status !== 'running' && p.status !== 'queued';
-    }).sort(function(a, b) {
+    }).sort(function (a, b) {
       return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
     });
 
     // Render active projects
     if (activeProjects.length > 0) {
       $list.append('<div class="text-xs text-gray-500 uppercase tracking-wider px-2 py-1">Active</div>');
-      activeProjects.forEach(function(project) {
+      activeProjects.forEach(function (project) {
         $list.append(renderProjectCard(project));
       });
     }
@@ -712,7 +712,7 @@
         $list.append('<div class="border-t border-gray-700 my-2"></div>');
       }
       $list.append('<div class="text-xs text-gray-500 uppercase tracking-wider px-2 py-1">Stopped</div>');
-      stoppedProjects.forEach(function(project) {
+      stoppedProjects.forEach(function (project) {
         $list.append(renderProjectCard(project));
       });
     }
@@ -735,8 +735,8 @@
   }
 
   function updateRunningCount() {
-    var count = state.projects.filter(function(p) { return p.status === 'running'; }).length;
-    var queuedCount = state.projects.filter(function(p) { return p.status === 'queued'; }).length;
+    var count = state.projects.filter(function (p) { return p.status === 'running'; }).length;
+    var queuedCount = state.projects.filter(function (p) { return p.status === 'queued'; }).length;
 
     $('#running-count').text(count);
     $('#max-concurrent').text(state.resourceStatus.maxConcurrent);
@@ -788,18 +788,18 @@
     if (state.projects.length === 0) {
       $overview.html(
         '<div class="flex flex-col items-center justify-center h-full text-center">' +
-          '<svg class="w-16 h-16 text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
-            '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>' +
-          '</svg>' +
-          '<h2 class="text-xl font-semibold text-gray-400 mb-2">No Projects Yet</h2>' +
-          '<p class="text-sm text-gray-500 mb-4">Create your first project to get started</p>' +
-          '<button id="btn-add-project-overview" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm">' +
-            'Add Project' +
-          '</button>' +
+        '<svg class="w-16 h-16 text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>' +
+        '</svg>' +
+        '<h2 class="text-xl font-semibold text-gray-400 mb-2">No Projects Yet</h2>' +
+        '<p class="text-sm text-gray-500 mb-4">Create your first project to get started</p>' +
+        '<button id="btn-add-project-overview" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm">' +
+        'Add Project' +
+        '</button>' +
         '</div>'
       );
 
-      $('#btn-add-project-overview').on('click', function() {
+      $('#btn-add-project-overview').on('click', function () {
         $('#modal-add-project').removeClass('hidden');
       });
       return;
@@ -808,12 +808,12 @@
     var html = '<div class="mb-6">' +
       '<h2 class="text-xl font-semibold text-white mb-1">Projects</h2>' +
       '<p class="text-sm text-gray-400">Select a project to start working</p>' +
-    '</div>';
+      '</div>';
 
     html += '<div class="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">';
 
     var sortedProjects = sortProjects(state.projects);
-    sortedProjects.forEach(function(project) {
+    sortedProjects.forEach(function (project) {
       html += renderProjectOverviewCard(project);
     });
 
@@ -822,13 +822,13 @@
     $overview.html(html);
 
     // Attach click handlers for overview cards
-    $overview.find('.project-overview-card').on('click', function(e) {
+    $overview.find('.project-overview-card').on('click', function (e) {
       if ($(e.target).closest('.overview-action').length) return;
       var projectId = $(this).data('id');
       selectProject(projectId);
     });
 
-    $overview.find('.overview-action[data-action="delete"]').on('click', function(e) {
+    $overview.find('.overview-action[data-action="delete"]').on('click', function (e) {
       e.stopPropagation();
       var projectId = $(this).data('id');
       state.pendingDeleteId = projectId;
@@ -837,7 +837,7 @@
       $('#modal-delete-project').removeClass('hidden');
     });
 
-    $overview.find('.overview-action[data-action="start"]').on('click', function(e) {
+    $overview.find('.overview-action[data-action="start"]').on('click', function (e) {
       e.stopPropagation();
       var projectId = $(this).data('id');
       selectProject(projectId);
@@ -861,38 +861,38 @@
     if (statusClass === 'stopped') {
       actionButton = '<button class="overview-action text-gray-400 hover:text-green-400 p-1" data-action="start" data-id="' + project.id + '" title="Open Project">' +
         '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
-          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>' +
-          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>' +
+        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>' +
+        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>' +
         '</svg>' +
-      '</button>';
+        '</button>';
     }
 
     var deleteButton = '<button class="overview-action text-gray-400 hover:text-red-400 p-1" data-action="delete" data-id="' + project.id + '" title="Delete Project">' +
       '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
-        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>' +
+      '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>' +
       '</svg>' +
-    '</button>';
+      '</button>';
 
     return '<div class="project-overview-card bg-gray-800 rounded-lg p-4 cursor-pointer hover:bg-gray-750 transition-colors border border-gray-700 hover:border-gray-600' + waitingClass + '" data-id="' + project.id + '">' +
       '<div class="flex justify-between items-start mb-2">' +
-        '<h3 class="font-semibold text-white truncate flex-1">' + escapeHtml(project.name) + '</h3>' +
-        '<div class="flex items-center gap-1 ml-2">' +
-          actionButton +
-          deleteButton +
-        '</div>' +
+      '<h3 class="font-semibold text-white truncate flex-1">' + escapeHtml(project.name) + '</h3>' +
+      '<div class="flex items-center gap-1 ml-2">' +
+      actionButton +
+      deleteButton +
+      '</div>' +
       '</div>' +
       '<div class="text-xs text-gray-400 truncate mb-3" title="' + escapeHtml(project.path) + '">' +
-        '<svg class="w-3 h-3 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
-          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>' +
-        '</svg>' +
-        escapeHtml(project.path) +
+      '<svg class="w-3 h-3 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+      '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>' +
+      '</svg>' +
+      escapeHtml(project.path) +
       '</div>' +
       '<div class="flex items-center">' +
-        '<span class="status-badge ' + statusClass + '">' + statusText + '</span>' +
-        waitingIndicator +
-        runningIndicator +
+      '<span class="status-badge ' + statusClass + '">' + statusText + '</span>' +
+      waitingIndicator +
+      runningIndicator +
       '</div>' +
-    '</div>';
+      '</div>';
   }
 
   function updateProjectStatus(project) {
@@ -900,8 +900,8 @@
     var $badge = $('#project-status');
 
     $badge.removeClass('stopped running error queued')
-          .addClass(statusClass)
-          .text(capitalizeFirst(statusClass));
+      .addClass(statusClass)
+      .text(capitalizeFirst(statusClass));
 
     if (statusClass === 'running') {
     } else if (statusClass === 'queued') {
@@ -921,7 +921,7 @@
     $conv.empty();
 
     // Filter messages based on debug mode and type
-    var filteredMessages = messages.filter(function(msg) {
+    var filteredMessages = messages.filter(function (msg) {
       // Skip debug messages unless debug panel is open
       if (isDebugMessage(msg) && !state.debugPanelOpen) {
         return false;
@@ -943,7 +943,7 @@
     // Reset timestamp context for time differences
     MessageRenderer.resetRenderingContext();
 
-    filteredMessages.forEach(function(msg) {
+    filteredMessages.forEach(function (msg) {
       $conv.append(MessageRenderer.renderMessage(msg));
     });
 
@@ -998,7 +998,7 @@
       var msg = messages[i];
 
       if (msg.type === 'plan_mode' && msg.planModeInfo &&
-          msg.planModeInfo.action === 'exit') {
+        msg.planModeInfo.action === 'exit') {
         return 'plan_mode';
       }
 
@@ -1006,14 +1006,14 @@
       if (msg.type === 'permission') return 'permission';
 
       if (msg.type === 'tool_use' && msg.toolInfo &&
-          msg.toolInfo.name === 'AskUserQuestion' &&
-          msg.toolInfo.status !== 'completed') {
+        msg.toolInfo.name === 'AskUserQuestion' &&
+        msg.toolInfo.status !== 'completed') {
         return 'askuser';
       }
 
       // If we hit a user/assistant/result message, no pending prompt
       if (msg.type === 'user' || msg.type === 'result' ||
-          msg.type === 'assistant') {
+        msg.type === 'assistant') {
         return null;
       }
     }
@@ -1075,7 +1075,7 @@
 
       // Track Write and Edit tool calls to plan files (for ExitPlanMode)
       if ((toolInfo.name === 'Write' || toolInfo.name === 'Edit') &&
-          toolInfo.input && toolInfo.input.file_path) {
+        toolInfo.input && toolInfo.input.file_path) {
         var filePath = toolInfo.input.file_path;
 
         if (filePath.includes('plans') && filePath.endsWith('.md')) {
@@ -1142,7 +1142,7 @@
 
       // Defer ExitPlanMode message when questions are still pending
       if (message.type === 'plan_mode' && message.planModeInfo && message.planModeInfo.action === 'exit' &&
-          state.activePromptType === 'askuser') {
+        state.activePromptType === 'askuser') {
         state.deferredPlanMessage = message;
         return;
       }
@@ -1194,7 +1194,7 @@
     $container.html('<div class="text-gray-400 text-sm"><span class="loading-dots">Loading plan</span></div>');
 
     api.readFile(state.currentPlanFile)
-      .done(function(data) {
+      .done(function (data) {
         var content = data.content || '';
 
         if (!content.trim()) {
@@ -1206,11 +1206,11 @@
         var renderedHtml = renderMarkdownContent(content);
         $container.html(
           '<div class="plan-content bg-gray-800/50 rounded p-3 border border-gray-700 max-h-96 overflow-y-auto">' +
-            '<div class="prose prose-invert prose-sm max-w-none">' + renderedHtml + '</div>' +
+          '<div class="prose prose-invert prose-sm max-w-none">' + renderedHtml + '</div>' +
           '</div>'
         );
       })
-      .fail(function() {
+      .fail(function () {
         $container.html('<div class="text-red-400 text-sm">Failed to load plan file</div>');
       });
   }
@@ -1283,85 +1283,85 @@
 
   function setupModalHandlers() {
     // WebSocket reconnect on failed status
-    $('#ws-connection-status').on('click', function() {
+    $('#ws-connection-status').on('click', function () {
       if ($(this).hasClass('ws-failed')) {
         manualReconnect();
       }
     });
 
     // Mobile menu toggle
-    $('#btn-mobile-menu').on('click', function() {
+    $('#btn-mobile-menu').on('click', function () {
       $('#sidebar').addClass('open');
       $('#mobile-menu-overlay').addClass('active');
     });
 
-    $('#mobile-menu-overlay').on('click', function() {
+    $('#mobile-menu-overlay').on('click', function () {
       $('#sidebar').removeClass('open');
       $('#mobile-menu-overlay').removeClass('active');
     });
 
     // Close mobile menu when a project is selected
-    $(document).on('click', '.project-card', function() {
+    $(document).on('click', '.project-card', function () {
       if ($(window).width() <= 768) {
         $('#sidebar').removeClass('open');
         $('#mobile-menu-overlay').removeClass('active');
       }
     });
 
-    $('#btn-add-project').on('click', function() {
+    $('#btn-add-project').on('click', function () {
       openModal('modal-add-project');
     });
 
-    $('#btn-import-github').on('click', function() {
+    $('#btn-import-github').on('click', function () {
       openGitHubReposBrowser();
     });
 
-    $('#btn-github-list').on('click', function() {
+    $('#btn-github-list').on('click', function () {
       loadGitHubReposList();
     });
 
-    $('#btn-github-search').on('click', function() {
+    $('#btn-github-search').on('click', function () {
       searchGitHubRepos();
     });
 
-    $('#github-repo-search').on('keydown', function(e) {
+    $('#github-repo-search').on('keydown', function (e) {
       if (e.key === 'Enter') {
         e.preventDefault();
         searchGitHubRepos();
       }
     });
 
-    $('#btn-github-clone-selected').on('click', function() {
+    $('#btn-github-clone-selected').on('click', function () {
       openGitHubCloneDialog();
     });
 
-    $('#btn-github-browse-target').on('click', function() {
-      state.folderBrowserCallback = function(selectedPath) {
+    $('#btn-github-browse-target').on('click', function () {
+      state.folderBrowserCallback = function (selectedPath) {
         $('#github-clone-target').val(selectedPath);
       };
       FolderBrowserModule.open();
     });
 
-    $('#btn-github-do-clone').on('click', function() {
+    $('#btn-github-do-clone').on('click', function () {
       doGitHubClone();
     });
 
     // Project search input handler
-    $('#project-search').on('input', function() {
+    $('#project-search').on('input', function () {
       state.projectSearchQuery = $(this).val();
       renderProjectList();
     });
 
-    $('#btn-settings').on('click', function() {
+    $('#btn-settings').on('click', function () {
       loadAndShowSettings();
     });
 
-    $('#btn-logout').on('click', function() {
+    $('#btn-logout').on('click', function () {
       api.logout();
     });
 
     // Settings tab switching
-    $(document).on('click', '.settings-tab', function() {
+    $(document).on('click', '.settings-tab', function () {
       var tabName = $(this).data('tab');
 
       // Update tab buttons
@@ -1374,31 +1374,31 @@
     });
 
     // Wipe All Data - open confirmation modal
-    $('#btn-wipe-all-data').on('click', function() {
+    $('#btn-wipe-all-data').on('click', function () {
       $('#modal-confirm-wipe-all').removeClass('hidden');
     });
 
     // Wipe All Data - confirm
-    $('#btn-confirm-wipe-all').on('click', function() {
+    $('#btn-confirm-wipe-all').on('click', function () {
       var $btn = $(this);
       $btn.prop('disabled', true).text('Wiping...');
 
       api.wipeAllData()
-        .done(function(result) {
+        .done(function (result) {
           closeAllModals();
           showToast('All data wiped (' + result.projectsWiped + ' projects)', 'success');
           loadProjects();
         })
-        .fail(function(xhr) {
+        .fail(function (xhr) {
           showErrorToast(xhr, 'Failed to wipe data');
         })
-        .always(function() {
+        .always(function () {
           $btn.prop('disabled', false).text('Wipe All Data');
         });
     });
 
     // Ralph Loop Config tab switching
-    $(document).on('click', '.ralph-config-tab', function() {
+    $(document).on('click', '.ralph-config-tab', function () {
       var tabName = $(this).data('tab');
 
       // Update tab buttons
@@ -1411,29 +1411,29 @@
     });
 
     // Permission skip checkbox toggles other permission fields
-    $('#input-skip-permissions').on('change', function() {
+    $('#input-skip-permissions').on('change', function () {
       updatePermissionFieldsState();
     });
 
     // Permission presets
-    $(document).on('click', '.permission-preset', function() {
+    $(document).on('click', '.permission-preset', function () {
       var presetName = $(this).data('preset');
       applyPermissionPreset(presetName);
     });
 
-    $('#btn-view-roadmap').on('click', function() {
+    $('#btn-view-roadmap').on('click', function () {
       loadAndShowRoadmap();
     });
 
-    $('#btn-toggle-debug').on('click', function() {
+    $('#btn-toggle-debug').on('click', function () {
       DebugModal.open();
     });
 
-    $('#btn-ralph-loop').on('click', function() {
+    $('#btn-ralph-loop').on('click', function () {
       openRalphLoopConfigModal();
     });
 
-    $('#btn-agent-mode').on('click', function() {
+    $('#btn-agent-mode').on('click', function () {
       if (state.isRalphLoopRunning) {
         showToast('Please stop the Ralph Loop before switching to Agent mode', 'warning');
         return;
@@ -1442,28 +1442,28 @@
       $('#btn-agent-mode').addClass('hidden');
     });
 
-    $('#btn-start-ralph-loop').on('click', function() {
+    $('#btn-start-ralph-loop').on('click', function () {
       startRalphLoopFromModal();
     });
 
     // Pause button handler is dynamically set in updateRalphLoopPauseButton()
 
-    $('#btn-ralph-loop-stop').on('click', function() {
+    $('#btn-ralph-loop-stop').on('click', function () {
       stopRalphLoop();
     });
 
 
-    $('#btn-create-roadmap').on('click', function() {
+    $('#btn-create-roadmap').on('click', function () {
       closeModal('modal-roadmap');
       openModal('modal-create-roadmap');
     });
 
-    $('#btn-close-roadmap-progress').on('click', function() {
+    $('#btn-close-roadmap-progress').on('click', function () {
       closeModal('modal-roadmap-progress');
       loadAndShowRoadmap();
     });
 
-    $('.modal-close').on('click', function() {
+    $('.modal-close').on('click', function () {
       var $modal = $(this).closest('.modal');
 
       if ($modal.attr('id') === 'modal-roadmap-progress' && state.roadmapGenerating) {
@@ -1471,7 +1471,7 @@
       }
 
       if ($modal.attr('id') === 'modal-settings' && state.hasUnsavedMcpChanges) {
-        checkUnsavedMcpChanges().then(function(shouldClose) {
+        checkUnsavedMcpChanges().then(function (shouldClose) {
           if (shouldClose) {
             closeAllModals();
           }
@@ -1481,7 +1481,7 @@
       }
     });
 
-    $('.modal-backdrop').on('click', function() {
+    $('.modal-backdrop').on('click', function () {
       var $modal = $(this).parent('.modal');
 
       if ($modal.attr('id') === 'modal-roadmap-progress' && state.roadmapGenerating) {
@@ -1489,7 +1489,7 @@
       }
 
       if ($modal.attr('id') === 'modal-settings' && state.hasUnsavedMcpChanges) {
-        checkUnsavedMcpChanges().then(function(shouldClose) {
+        checkUnsavedMcpChanges().then(function (shouldClose) {
           if (shouldClose) {
             closeAllModals();
           }
@@ -1500,7 +1500,7 @@
     });
 
     // Tool message click handler - open detail modal
-    $(document).on('click', '.conversation-message.tool-use', function(e) {
+    $(document).on('click', '.conversation-message.tool-use', function (e) {
       // Don't open modal if clicking on ask-user-option buttons
       if ($(e.target).closest('.ask-user-option').length > 0) {
         return;
@@ -1515,14 +1515,14 @@
     });
 
     // Mermaid diagram interactions
-    $(document).on('click', '.mermaid-copy', function(e) {
+    $(document).on('click', '.mermaid-copy', function (e) {
       e.stopPropagation();
       var $wrapper = $(this).closest('.mermaid-wrapper');
       var svg = $wrapper.find('svg')[0];
       copyMermaidDiagram(svg);
     });
 
-    $(document).on('click', '.mermaid-save', function(e) {
+    $(document).on('click', '.mermaid-save', function (e) {
       e.stopPropagation();
       var $wrapper = $(this).closest('.mermaid-wrapper');
       var svg = $wrapper.find('svg')[0];
@@ -1530,7 +1530,7 @@
       saveMermaidAsImage(svg, diagramId);
     });
 
-    $(document).on('click', '.mermaid-open', function(e) {
+    $(document).on('click', '.mermaid-open', function (e) {
       e.stopPropagation();
       var $wrapper = $(this).closest('.mermaid-wrapper');
       var svg = $wrapper.find('svg')[0];
@@ -1538,7 +1538,7 @@
     });
 
     // Delete task button in roadmap
-    $(document).on('click', '.btn-delete-task', function(e) {
+    $(document).on('click', '.btn-delete-task', function (e) {
       e.preventDefault();
       e.stopPropagation();
       var $btn = $(this);
@@ -1552,12 +1552,12 @@
       openModal('modal-confirm-delete-task');
     });
 
-    $('#btn-confirm-delete-task').on('click', function() {
+    $('#btn-confirm-delete-task').on('click', function () {
       confirmDeleteTask();
     });
 
     // Delete milestone button in roadmap
-    $(document).on('click', '.btn-delete-milestone', function(e) {
+    $(document).on('click', '.btn-delete-milestone', function (e) {
       e.preventDefault();
       e.stopPropagation();
       var $btn = $(this);
@@ -1570,12 +1570,12 @@
       openModal('modal-confirm-delete-milestone');
     });
 
-    $('#btn-confirm-delete-milestone').on('click', function() {
+    $('#btn-confirm-delete-milestone').on('click', function () {
       confirmDeleteMilestone();
     });
 
     // Delete phase button in roadmap
-    $(document).on('click', '.btn-delete-phase', function(e) {
+    $(document).on('click', '.btn-delete-phase', function (e) {
       e.preventDefault();
       e.stopPropagation();
       var $btn = $(this);
@@ -1587,12 +1587,12 @@
       openModal('modal-confirm-delete-phase');
     });
 
-    $('#btn-confirm-delete-phase').on('click', function() {
+    $('#btn-confirm-delete-phase').on('click', function () {
       confirmDeletePhase();
     });
 
     // Roadmap selection handlers
-    $(document).on('change', '.roadmap-select-milestone', function() {
+    $(document).on('change', '.roadmap-select-milestone', function () {
       var $checkbox = $(this);
       var milestoneId = $checkbox.data('milestone-id');
       var isChecked = $checkbox.is(':checked');
@@ -1602,27 +1602,27 @@
       updateRoadmapSelectionUI();
     });
 
-    $(document).on('change', '.roadmap-select-task', function() {
+    $(document).on('change', '.roadmap-select-task', function () {
       updateRoadmapSelectionUI();
     });
 
-    $('#btn-clear-roadmap-selection').on('click', function() {
+    $('#btn-clear-roadmap-selection').on('click', function () {
       clearRoadmapSelection();
     });
 
-    $('#btn-run-selected-tasks').on('click', function() {
+    $('#btn-run-selected-tasks').on('click', function () {
       runSelectedRoadmapTasks();
     });
 
     // Font size controls for agent output
-    $('#btn-font-decrease').on('click', function() {
+    $('#btn-font-decrease').on('click', function () {
       if (state.fontSize > 10) {
         state.fontSize -= 2;
         updateFontSize();
       }
     });
 
-    $('#btn-font-increase').on('click', function() {
+    $('#btn-font-increase').on('click', function () {
       if (state.fontSize < 24) {
         state.fontSize += 2;
         updateFontSize();
@@ -1630,14 +1630,14 @@
     });
 
     // Scroll lock toggle for agent output
-    $('#btn-toggle-scroll-lock').on('click', function() {
+    $('#btn-toggle-scroll-lock').on('click', function () {
       state.agentOutputScrollLock = !state.agentOutputScrollLock;
       saveToLocalStorage(LOCAL_STORAGE_KEYS.SCROLL_LOCK, state.agentOutputScrollLock);
       updateScrollLockButton();
     });
 
     // Detect manual scroll in agent output
-    $('#conversation-container').on('scroll', function() {
+    $('#conversation-container').on('scroll', function () {
       var $container = $(this);
       var scrollTop = $container.scrollTop();
       var scrollHeight = $container[0].scrollHeight;
@@ -1661,22 +1661,22 @@
     });
 
     // Floating scroll button click handlers
-    $('#btn-scroll-top').on('click', function() {
+    $('#btn-scroll-top').on('click', function () {
       $('#conversation-container').animate({ scrollTop: 0 }, 200);
     });
 
-    $('#btn-scroll-bottom').on('click', function() {
+    $('#btn-scroll-bottom').on('click', function () {
       var $container = $('#conversation-container');
       $container.animate({ scrollTop: $container[0].scrollHeight }, 200);
       $(this).find('.new-msg-badge').remove();
     });
 
-    $(document).on('keydown', function(e) {
+    $(document).on('keydown', function (e) {
       if (e.key === 'Escape') {
         if (state.search.isOpen) {
           SearchModule.close();
         } else if (!$('#modal-settings').hasClass('hidden') && state.hasUnsavedMcpChanges) {
-          checkUnsavedMcpChanges().then(function(shouldClose) {
+          checkUnsavedMcpChanges().then(function (shouldClose) {
             if (shouldClose) {
               closeAllModals();
             }
@@ -1692,7 +1692,7 @@
 
   function loadAndShowSettings() {
     api.getSettings()
-      .done(function(settings) {
+      .done(function (settings) {
         var perms = settings.claudePermissions || {};
 
         $('#input-max-concurrent').val(settings.maxConcurrentAgents);
@@ -1725,7 +1725,7 @@
         openModal('modal-settings');
         loadGitHubStatus();
       })
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         showErrorToast(xhr, 'Failed to load settings');
       });
   }
@@ -1735,10 +1735,10 @@
     $indicator.text('Checking...');
 
     $.get('/api/integrations/github/status')
-      .done(function(status) {
+      .done(function (status) {
         $indicator.html(renderGitHubStatus(status));
       })
-      .fail(function() {
+      .fail(function () {
         $indicator.html(
           '<span class="inline-block w-2 h-2 rounded-full bg-gray-500 mr-1.5 align-middle"></span>' +
           '<span class="align-middle">Unable to check GitHub CLI status</span>'
@@ -1767,14 +1767,14 @@
     var $ghButton = $('#btn-github-menu');
 
     api.getGitHubStatus()
-      .done(function(status) {
+      .done(function (status) {
         if (status.installed && status.authenticated) {
           $ghButton.removeClass('hidden');
         } else {
           $ghButton.addClass('hidden');
         }
       })
-      .fail(function() {
+      .fail(function () {
         $ghButton.addClass('hidden');
       });
   }
@@ -1795,8 +1795,8 @@
 
   function parseRulesFromTextarea(value) {
     return value.split('\n')
-      .map(function(line) { return line.trim(); })
-      .filter(function(line) { return line.length > 0; });
+      .map(function (line) { return line.trim(); })
+      .filter(function (line) { return line.length > 0; });
   }
 
   var permissionPresets = {
@@ -1915,7 +1915,7 @@
     }
 
     api.updateSettings(settings)
-      .done(function(updated) {
+      .done(function (updated) {
         state.resourceStatus.maxConcurrent = updated.maxConcurrentAgents;
         state.sendWithCtrlEnter = updated.sendWithCtrlEnter !== false;
         state.historyLimit = updated.historyLimit || 25;
@@ -1936,7 +1936,7 @@
         closeAllModals();
         showToast('Settings saved', 'success');
       })
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         showErrorToast(xhr, 'Failed to save settings');
       });
   }
@@ -2007,7 +2007,7 @@
   }
 
   function setupProjectHandlers() {
-    $('#project-list').on('click', '.project-card', function(e) {
+    $('#project-list').on('click', '.project-card', function (e) {
       if ($(e.target).closest('.quick-action').length) {
         return; // Don't select when clicking quick action
       }
@@ -2015,7 +2015,7 @@
       selectProject(projectId);
     });
 
-    $('#project-list').on('click', '.quick-action', function(e) {
+    $('#project-list').on('click', '.quick-action', function (e) {
       e.stopPropagation();
       var $btn = $(this);
       var action = $btn.data('action');
@@ -2062,13 +2062,13 @@
       case 'start':
         state.agentStarting = true;
         api.startAgent(projectId)
-          .done(function() {
+          .done(function () {
             showToast('Agent starting...', 'info');
           })
-          .fail(function(xhr) {
+          .fail(function (xhr) {
             showErrorToast(xhr, 'Failed to start agent');
           })
-          .always(function() {
+          .always(function () {
             state.agentStarting = false;
             setQuickActionLoading(projectId, false);
             // Only hide loading if still viewing the same project
@@ -2079,13 +2079,13 @@
         break;
       case 'stop':
         api.stopAgent(projectId)
-          .done(function() {
+          .done(function () {
             showToast('Agent stopping...', 'info');
           })
-          .fail(function(xhr) {
+          .fail(function (xhr) {
             showErrorToast(xhr, 'Failed to stop agent');
           })
-          .always(function() {
+          .always(function () {
             setQuickActionLoading(projectId, false);
             // Only hide loading if still viewing the same project
             if (state.selectedProjectId === projectId) {
@@ -2095,14 +2095,14 @@
         break;
       case 'cancel':
         api.removeFromQueue(projectId)
-          .done(function() {
+          .done(function () {
             updateProjectStatusById(projectId, 'stopped');
             showToast('Removed from queue', 'success');
           })
-          .fail(function(xhr) {
+          .fail(function (xhr) {
             showErrorToast(xhr, 'Failed to remove from queue');
           })
-          .always(function() {
+          .always(function () {
             setQuickActionLoading(projectId, false);
             // Only hide loading if still viewing the same project
             if (state.selectedProjectId === projectId) {
@@ -2129,8 +2129,8 @@
     if (!projectId) return;
 
     api.deleteProject(projectId)
-      .done(function() {
-        state.projects = state.projects.filter(function(p) { return p.id !== projectId; });
+      .done(function () {
+        state.projects = state.projects.filter(function (p) { return p.id !== projectId; });
 
         if (state.selectedProjectId === projectId) {
           state.selectedProjectId = null;
@@ -2143,7 +2143,7 @@
         showToast('Project deleted', 'success');
         state.pendingDeleteId = null;
       })
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         showErrorToast(xhr, 'Failed to delete project');
       });
   }
@@ -2154,13 +2154,13 @@
     if (!task || !state.selectedProjectId) return;
 
     api.deleteRoadmapTask(state.selectedProjectId, task.phaseId, task.milestoneId, task.taskIndex)
-      .done(function(data) {
+      .done(function (data) {
         closeModal('modal-confirm-delete-task');
         RoadmapModule.render(data);
         showToast('Task deleted', 'success');
         state.pendingDeleteTask = null;
       })
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         showErrorToast(xhr, 'Failed to delete task');
       });
   }
@@ -2171,13 +2171,13 @@
     if (!milestone || !state.selectedProjectId) return;
 
     api.deleteRoadmapMilestone(state.selectedProjectId, milestone.phaseId, milestone.milestoneId)
-      .done(function(data) {
+      .done(function (data) {
         closeModal('modal-confirm-delete-milestone');
         RoadmapModule.render(data);
         showToast('Milestone deleted', 'success');
         state.pendingDeleteMilestone = null;
       })
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         showErrorToast(xhr, 'Failed to delete milestone');
       });
   }
@@ -2188,13 +2188,13 @@
     if (!phase || !state.selectedProjectId) return;
 
     api.deleteRoadmapPhase(state.selectedProjectId, phase.phaseId)
-      .done(function(data) {
+      .done(function (data) {
         closeModal('modal-confirm-delete-phase');
         RoadmapModule.render(data);
         showToast('Phase deleted', 'success');
         state.pendingDeletePhase = null;
       })
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         showErrorToast(xhr, 'Failed to delete phase');
       });
   }
@@ -2269,11 +2269,11 @@
   }
 
   function setupAgentHandlers() {
-    $('#btn-start-agent').on('click', function() {
+    $('#btn-start-agent').on('click', function () {
       startSelectedAgent();
     });
 
-    $('#btn-stop-agent').on('click', function() {
+    $('#btn-stop-agent').on('click', function () {
       if (state.isRalphLoopRunning) {
         stopRalphLoop();
       } else {
@@ -2281,7 +2281,7 @@
       }
     });
 
-    $('#btn-restart-agent').on('click', function() {
+    $('#btn-restart-agent').on('click', function () {
       if (state.isRalphLoopRunning) {
         stopRalphLoop();
       } else {
@@ -2293,15 +2293,15 @@
     // Permission mode handlers are in PermissionModeModule.setupHandlers()
 
     // Model selector handler
-    $('#project-model-select').on('change', function() {
+    $('#project-model-select').on('change', function () {
       handleProjectModelChange($(this).val() || null);
     });
 
     // Cancel button handler
-    $('#btn-cancel-agent').on('click', function() {
+    $('#btn-cancel-agent').on('click', function () {
       // If a one-off tab is active, stop the one-off agent instead
       if (state.activeOneOffTabId && state.selectedProjectId) {
-        api.stopOneOffAgent(state.selectedProjectId, state.activeOneOffTabId).fail(function() {
+        api.stopOneOffAgent(state.selectedProjectId, state.activeOneOffTabId).fail(function () {
           showToast('Failed to stop agent', 'error');
         });
         return;
@@ -2312,69 +2312,69 @@
 
 
     // Message form handler
-    $('#form-send-message').on('submit', function(e) {
+    $('#form-send-message').on('submit', function (e) {
       e.preventDefault();
       sendMessage();
     });
 
     // New conversation button - show confirmation dialog
-    $('#btn-new-conversation').on('click', function() {
+    $('#btn-new-conversation').on('click', function () {
       showNewConversationConfirmation();
     });
 
     // Confirm new conversation
-    $('#btn-confirm-new-conversation').on('click', function() {
+    $('#btn-confirm-new-conversation').on('click', function () {
       closeModal('modal-confirm-new-conversation');
       startNewConversation();
     });
 
     // Optimizations dropdown
-    $('#btn-optimizations-menu').on('click', function(e) {
+    $('#btn-optimizations-menu').on('click', function (e) {
       e.stopPropagation();
       toggleToolbarDropdown('optimizations-dropdown', $(this));
     });
 
-    $('#btn-claude-files').on('click', function() {
+    $('#btn-claude-files').on('click', function () {
       closeAllToolbarDropdowns();
       ModalsModule.openClaudeFilesModal();
     });
 
-    $('#btn-optimizations').on('click', function() {
+    $('#btn-optimizations').on('click', function () {
       closeAllToolbarDropdowns();
       TaskDisplayModule.openOptimizationsModal();
     });
 
     // GitHub dropdown
-    $('#btn-github-menu').on('click', function(e) {
+    $('#btn-github-menu').on('click', function (e) {
       e.stopPropagation();
       toggleToolbarDropdown('github-dropdown', $(this));
     });
 
-    $('#btn-view-issues, #btn-create-pr, #btn-view-prs').on('click', function() {
+    $('#btn-view-issues, #btn-create-pr, #btn-view-prs').on('click', function () {
       closeAllToolbarDropdowns();
     });
 
     // Quick Actions button
-    $('#btn-quick-actions').on('click', function(e) {
+    $('#btn-quick-actions').on('click', function (e) {
       e.stopPropagation();
       QuickActionsModule.toggleQuickActions();
     });
 
     // Quick Actions dropdown handlers
-    $(document).on('click', '.quick-action-item', function() {
+    $(document).on('click', '.quick-action-item', function () {
       var templateId = $(this).data('template-id');
       QuickActionsModule.handleQuickActionClick(templateId);
     });
 
-    $('#btn-close-quick-actions').on('click', function() {
+    $('#btn-close-quick-actions').on('click', function () {
       QuickActionsModule.closeQuickActions();
     });
 
     // Click outside to close quick actions
-    $(document).on('click', function(e) {
+    $(document).on('click', function (e) {
       if (state.quickActionsOpen &&
-          !$(e.target).closest('#quick-actions-dropdown').length &&
-          !$(e.target).closest('#btn-quick-actions').length) {
+        !$(e.target).closest('#quick-actions-dropdown').length &&
+        !$(e.target).closest('#btn-quick-actions').length) {
         QuickActionsModule.closeQuickActions();
       }
 
@@ -2384,7 +2384,7 @@
     });
 
     // Search button
-    $('#btn-search').on('click', function() {
+    $('#btn-search').on('click', function () {
       if (state.search.isOpen) {
         SearchModule.close();
       } else {
@@ -2393,7 +2393,7 @@
     });
 
     // MCP Servers button
-    $('#btn-project-mcp').on('click', function() {
+    $('#btn-project-mcp').on('click', function () {
       if (state.selectedProjectId) {
         var project = findProjectById(state.selectedProjectId);
         if (project) {
@@ -2402,17 +2402,17 @@
       }
     });
 
-    $('#btn-toggle-chrome').on('click', function() {
+    $('#btn-toggle-chrome').on('click', function () {
       state.chromeEnabled = !state.chromeEnabled;
       updateChromeToggleButton();
 
       api.updateSettings({ chromeEnabled: state.chromeEnabled })
-        .done(function(updated) {
+        .done(function (updated) {
           state.settings = updated;
           var label = state.chromeEnabled ? 'Chrome enabled' : 'Chrome disabled';
           showToast(label + '. Restart the agent for changes to take effect.', 'info');
         })
-        .fail(function(xhr) {
+        .fail(function (xhr) {
           state.chromeEnabled = !state.chromeEnabled;
           updateChromeToggleButton();
           showErrorToast(xhr, 'Failed to update Chrome setting');
@@ -2420,7 +2420,7 @@
     });
 
     // Optimization action buttons (dynamically created, so use delegation)
-    $(document).on('click', '.optimization-action', function() {
+    $(document).on('click', '.optimization-action', function () {
       var action = $(this).data('action');
       var filePath = $(this).data('path');
 
@@ -2440,7 +2440,7 @@
         }
 
         api.writeFile(filePath, template)
-          .done(function() {
+          .done(function () {
             showToast(fileName + ' created', 'success');
 
             // Refresh file browser if project files tab is active
@@ -2455,7 +2455,7 @@
             // Open the file in editor
             FileBrowser.openFile(filePath, fileName);
           })
-          .fail(function(xhr) {
+          .fail(function (xhr) {
             // Check if parent directory doesn't exist
             if (xhr.status === 500 || xhr.status === 404) {
               // Try to create parent directory first
@@ -2463,10 +2463,10 @@
 
               if (parentPath && parentPath !== filePath) {
                 api.createFolder(parentPath)
-                  .done(function() {
+                  .done(function () {
                     // Retry file creation
                     api.writeFile(filePath, template)
-                      .done(function() {
+                      .done(function () {
                         showToast(fileName + ' created', 'success');
 
                         if (state.activeTab === 'project-files') {
@@ -2479,11 +2479,11 @@
 
                         FileBrowser.openFile(filePath, fileName);
                       })
-                      .fail(function() {
+                      .fail(function () {
                         showToast('Failed to create ' + fileName, 'error');
                       });
                   })
-                  .fail(function() {
+                  .fail(function () {
                     showToast('Failed to create ' + fileName, 'error');
                   });
               } else {
@@ -2504,12 +2504,12 @@
     });
 
     // Queued messages indicator (dynamically created, so use delegation)
-    $(document).on('click', '#queued-messages-indicator', function() {
+    $(document).on('click', '#queued-messages-indicator', function () {
       openQueuedMessagesModal();
     });
 
     // Remove queued message button (dynamically created, so use delegation)
-    $(document).on('click', '.btn-remove-queued-message', function(e) {
+    $(document).on('click', '.btn-remove-queued-message', function (e) {
       e.stopPropagation();
       var $item = $(this).closest('[data-queue-index]');
       var index = parseInt($item.data('queue-index'), 10);
@@ -2522,7 +2522,7 @@
     // Save Claude file button - handler is in ModalsModule
 
     // Rename conversation button click
-    $(document).on('click', '.btn-rename-conversation', function(e) {
+    $(document).on('click', '.btn-rename-conversation', function (e) {
       e.stopPropagation();
       var conversationId = $(this).data('conversation-id');
       var currentLabel = $(this).data('current-label');
@@ -2530,12 +2530,12 @@
     });
 
     // Confirm rename conversation
-    $('#btn-confirm-rename').on('click', function() {
+    $('#btn-confirm-rename').on('click', function () {
       confirmRenameConversation();
     });
 
     // Enter key in rename input
-    $('#input-conversation-label').on('keydown', function(e) {
+    $('#input-conversation-label').on('keydown', function (e) {
       if (e.key === 'Enter') {
         e.preventDefault();
         confirmRenameConversation();
@@ -2543,7 +2543,7 @@
     });
 
     // Message input - configurable send key
-    $('#input-message').on('keydown', function(e) {
+    $('#input-message').on('keydown', function (e) {
       if (e.key === 'Enter') {
         if (state.sendWithCtrlEnter) {
           // Ctrl+Enter to send mode
@@ -2563,13 +2563,13 @@
     });
 
     // Image upload link handler (using event delegation since link is dynamically created)
-    $(document).on('click', '#btn-attach-image', function(e) {
+    $(document).on('click', '#btn-attach-image', function (e) {
       e.preventDefault();
       $('#image-upload-input').click();
     });
 
     // Image file input change handler
-    $('#image-upload-input').on('change', function(e) {
+    $('#image-upload-input').on('change', function (e) {
       var files = e.target.files;
 
       for (var i = 0; i < files.length; i++) {
@@ -2583,7 +2583,7 @@
     });
 
     // Permission button click handler
-    $(document).on('click', '.permission-btn', function() {
+    $(document).on('click', '.permission-btn', function () {
       var $btn = $(this);
       var response = $btn.data('response');
 
@@ -2593,7 +2593,7 @@
       // Clear prompt blocking
       state.justAnsweredQuestion = true;
       setPromptBlockingState(null);
-      setTimeout(function() {
+      setTimeout(function () {
         state.justAnsweredQuestion = false;
       }, 100);
 
@@ -2603,7 +2603,7 @@
     });
 
     // Question option click handler
-    $(document).on('click', '.question-option', function() {
+    $(document).on('click', '.question-option', function () {
       var $btn = $(this);
       var optionIndex = $btn.data('option-index');
       var optionLabel = $btn.data('option-label');
@@ -2615,7 +2615,7 @@
         // Clear any pending message for "Other" option
         state.pendingMessageBeforeQuestion = null;
         $('#input-message').focus();
-        setTimeout(function() {
+        setTimeout(function () {
           state.justAnsweredQuestion = false;
         }, 100);
         return;
@@ -2628,7 +2628,7 @@
       state.justAnsweredQuestion = true;
       setPromptBlockingState(null);
       // Reset the flag after a short delay to allow restoring messages later
-      setTimeout(function() {
+      setTimeout(function () {
         state.justAnsweredQuestion = false;
       }, 100);
 
@@ -2638,7 +2638,7 @@
     });
 
     // Plan mode approve button handler
-    $(document).on('click', '.plan-approve-btn', function() {
+    $(document).on('click', '.plan-approve-btn', function () {
       var $btn = $(this);
       var $actions = $btn.closest('.plan-mode-actions');
       $actions.find('button').prop('disabled', true).addClass('opacity-50 cursor-not-allowed');
@@ -2651,7 +2651,7 @@
     });
 
     // Plan mode reject button handler
-    $(document).on('click', '.plan-reject-btn', function() {
+    $(document).on('click', '.plan-reject-btn', function () {
       var $btn = $(this);
       var $actions = $btn.closest('.plan-mode-actions');
       $actions.find('button').prop('disabled', true).addClass('opacity-50 cursor-not-allowed');
@@ -2663,7 +2663,7 @@
     });
 
     // Plan mode request changes button handler
-    $(document).on('click', '.plan-request-changes-btn', function() {
+    $(document).on('click', '.plan-request-changes-btn', function () {
       var $btn = $(this);
       var $actions = $btn.closest('.plan-mode-actions');
       // Disable all buttons in this plan mode action set
@@ -2679,7 +2679,7 @@
     });
 
     // AskUserQuestion option button handler
-    $(document).on('click', '.ask-user-option', function(e) {
+    $(document).on('click', '.ask-user-option', function (e) {
       e.preventDefault();
       e.stopPropagation(); // Prevent tool modal from opening
 
@@ -2700,7 +2700,7 @@
     });
 
     // Submit answers button handler
-    $(document).on('click', '.ask-user-submit', function(e) {
+    $(document).on('click', '.ask-user-submit', function (e) {
       e.preventDefault();
       e.stopPropagation();
 
@@ -2716,7 +2716,7 @@
     showPrompt('Custom Answer', 'Enter your response:', {
       placeholder: 'Type your answer...',
       submitText: 'Submit'
-    }).then(function(customText) {
+    }).then(function (customText) {
       if (!customText) return;
 
       // Update the Other button label to show the custom text
@@ -2819,7 +2819,7 @@
     var summary = summaryParts.join(', ');
 
     // Disable ALL question UIs with this toolId (handles duplicate renders)
-    $('.ask-user-question[data-tool-id="' + toolId + '"]').each(function() {
+    $('.ask-user-question[data-tool-id="' + toolId + '"]').each(function () {
       $(this).find('.ask-user-option')
         .prop('disabled', true)
         .addClass('opacity-50 cursor-not-allowed');
@@ -2831,7 +2831,7 @@
     // Send as tool_result via the answer endpoint
     if (state.selectedProjectId) {
       api.answerAgentQuestion(state.selectedProjectId, toolId, answers)
-        .fail(function(xhr) {
+        .fail(function (xhr) {
           showErrorToast(xhr, 'Failed to send answer');
         });
     }
@@ -2860,7 +2860,7 @@
       appendMessage(state.selectedProjectId, planMsg);
     }
 
-    setTimeout(function() {
+    setTimeout(function () {
       state.justAnsweredQuestion = false;
     }, 100);
   }
@@ -2869,7 +2869,7 @@
     if (!state.selectedProjectId) return;
 
     api.sendAgentMessage(state.selectedProjectId, response)
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         console.error('Failed to send plan mode response:', xhr);
         showToast('Failed to send response', 'error');
       });
@@ -2919,7 +2919,7 @@
       $.ajax({
         url: '/api/projects/' + projectId + '/conversation/clear',
         method: 'POST'
-      }).always(function() {
+      }).always(function () {
         // Clear local state regardless of server response
         state.currentConversationId = null;
         state.currentConversationStats = null;
@@ -2935,7 +2935,7 @@
     if (wasRunning) {
       showContentLoading('Clearing context...');
       api.stopAgent(projectId)
-        .always(function() {
+        .always(function () {
           updateProjectStatusById(projectId, 'stopped');
           stopAgentStatusPolling();
           clearAndRestart();
@@ -2951,7 +2951,7 @@
     $('#input-conversation-label').val(currentLabel || '');
     openModal('modal-rename-conversation');
     // Focus input after modal opens
-    setTimeout(function() {
+    setTimeout(function () {
       $('#input-conversation-label').focus().select();
     }, 100);
   }
@@ -2967,13 +2967,13 @@
     }
 
     api.renameConversation(state.selectedProjectId, state.pendingRenameConversationId, newLabel)
-      .done(function() {
+      .done(function () {
         closeModal('modal-rename-conversation');
         ConversationHistoryModule.loadList();
         showToast('Conversation renamed', 'success');
         state.pendingRenameConversationId = null;
       })
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         showErrorToast(xhr, 'Failed to rename conversation');
       });
   }
@@ -2993,7 +2993,7 @@
     if (!project || project.status !== 'running') return;
 
     api.sendAgentMessage(state.selectedProjectId, response)
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         showErrorToast(xhr, 'Failed to send permission response');
       });
   }
@@ -3031,7 +3031,7 @@
     });
 
     api.sendAgentMessage(state.selectedProjectId, response)
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         showErrorToast(xhr, 'Failed to send response');
       });
   }
@@ -3222,7 +3222,7 @@
     };
 
     if (images.length > 0) {
-      userMessage.images = images.map(function(img) {
+      userMessage.images = images.map(function (img) {
         return { dataUrl: img.dataUrl, mimeType: img.mimeType };
       });
     }
@@ -3235,15 +3235,15 @@
     updateCancelButton();
 
     api.sendAgentMessage(state.selectedProjectId, message, images)
-      .done(function() {
+      .done(function () {
         $input.val('').trigger('input');
         ImageAttachmentModule.clearAll();
       })
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         showErrorToast(xhr, 'Failed to send message');
         ImageAttachmentModule.removeWaitingIndicator();
       })
-      .always(function() {
+      .always(function () {
         state.messageSending = false;
         $input.prop('disabled', false);
         $('#btn-send-message').prop('disabled', false);
@@ -3285,7 +3285,7 @@
     showContentLoading(sessionId ? 'Resuming session...' : 'Starting agent...');
 
     api.startInteractiveAgent(projectId, message, images, sessionId, state.permissionMode)
-      .done(function(response) {
+      .done(function (response) {
         state.currentAgentMode = 'interactive';
         updateProjectStatusById(projectId, 'running');
         startAgentStatusPolling(projectId);
@@ -3306,7 +3306,7 @@
         };
 
         if (images.length > 0) {
-          userMessage.images = images.map(function(img) {
+          userMessage.images = images.map(function (img) {
             return { dataUrl: img.dataUrl, mimeType: img.mimeType };
           });
         }
@@ -3321,10 +3321,10 @@
         updateInputArea();
         updateCancelButton();
       })
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         showErrorToast(xhr, 'Failed to start agent');
       })
-      .always(function() {
+      .always(function () {
         state.agentStarting = false;
         // Only hide loading and re-enable inputs if still viewing the same project
         if (state.selectedProjectId === projectId) {
@@ -3342,7 +3342,7 @@
   function setupTextareaKeyHandlers() {
     // Prevent Enter from submitting forms in textareas
     // Allow Ctrl+Enter (or Cmd+Enter on Mac) to submit
-    $(document).on('keydown', 'textarea', function(e) {
+    $(document).on('keydown', 'textarea', function (e) {
       if (e.key === 'Enter') {
         if (e.ctrlKey || e.metaKey) {
           // Ctrl+Enter or Cmd+Enter: submit the form
@@ -3372,8 +3372,8 @@
     $textarea.on('input', updateCharCount);
 
     // Reset character count when form is reset
-    $('#form-edit-roadmap').on('reset', function() {
-      setTimeout(function() {
+    $('#form-edit-roadmap').on('reset', function () {
+      setTimeout(function () {
         updateCharCount();
       }, 0);
     });
@@ -3400,16 +3400,16 @@
     }
 
     // Apply auto-resize to all textareas with the class
-    $(document).on('input', '.textarea-auto-resize', function() {
+    $(document).on('input', '.textarea-auto-resize', function () {
       autoResize(this);
     });
 
     // Reset height when form is reset
-    $(document).on('reset', 'form', function() {
+    $(document).on('reset', 'form', function () {
       var $form = $(this);
 
-      setTimeout(function() {
-        $form.find('.textarea-auto-resize').each(function() {
+      setTimeout(function () {
+        $form.find('.textarea-auto-resize').each(function () {
           this.style.height = 'auto';
           $(this).removeClass('expanded');
         });
@@ -3417,41 +3417,41 @@
     });
 
     // Initialize existing auto-resize textareas
-    $('.textarea-auto-resize').each(function() {
+    $('.textarea-auto-resize').each(function () {
       autoResize(this);
     });
   }
 
   function setupFormHandlers() {
-    $('#form-add-project').on('submit', function(e) {
+    $('#form-add-project').on('submit', function (e) {
       e.preventDefault();
       handleAddProject($(this));
     });
 
-    $('#form-create-roadmap').on('submit', function(e) {
+    $('#form-create-roadmap').on('submit', function (e) {
       e.preventDefault();
       handleCreateRoadmap($(this));
     });
 
-    $('#form-edit-roadmap').on('submit', function(e) {
+    $('#form-edit-roadmap').on('submit', function (e) {
       e.preventDefault();
       handleEditRoadmap($(this));
     });
 
-    $('#form-roadmap-response').on('submit', function(e) {
+    $('#form-roadmap-response').on('submit', function (e) {
       e.preventDefault();
       handleRoadmapResponse($(this));
     });
 
-    $('#form-settings').on('submit', function(e) {
+    $('#form-settings').on('submit', function (e) {
       e.preventDefault();
       handleSaveSettings($(this));
     });
 
     // Cancel button handler for settings modal
-    $('#btn-cancel-settings').on('click', function() {
+    $('#btn-cancel-settings').on('click', function () {
       if (state.hasUnsavedMcpChanges) {
-        checkUnsavedMcpChanges().then(function(shouldClose) {
+        checkUnsavedMcpChanges().then(function (shouldClose) {
           if (shouldClose) {
             closeAllModals();
           }
@@ -3466,7 +3466,7 @@
     setupAutoResizeTextareas();
 
     // MCP servers changed handler
-    $(document).on('mcp-servers-changed', function() {
+    $(document).on('mcp-servers-changed', function () {
       state.hasUnsavedMcpChanges = true;
       $('#mcp-unsaved-warning').removeClass('hidden');
       $('#modal-settings .modal-header').addClass('has-unsaved');
@@ -3474,7 +3474,7 @@
     });
 
     // MCP enabled checkbox handler
-    $('#input-mcp-enabled').on('change', function() {
+    $('#input-mcp-enabled').on('change', function () {
       state.hasUnsavedMcpChanges = true;
       $('#mcp-unsaved-warning').removeClass('hidden');
       $('#modal-settings .modal-header').addClass('has-unsaved');
@@ -3483,7 +3483,7 @@
 
     // Folder browser button handlers are in FolderBrowserModule.setupHandlers()
 
-    $('#btn-confirm-delete').on('click', function() {
+    $('#btn-confirm-delete').on('click', function () {
       confirmDeleteProject();
     });
   }
@@ -3584,7 +3584,7 @@
     // Note: WebSocket now sends status immediately on subscribe,
     // but we keep this API call as a fallback for initial load
     api.getAgentStatus(projectId)
-      .done(function(data) {
+      .done(function (data) {
         var project = findProjectById(projectId);
 
         // Capture session ID if present
@@ -3637,7 +3637,7 @@
         updateCancelButton();
         PermissionModeModule.updatePendingIndicator();
       })
-      .fail(function() {
+      .fail(function () {
         updateStartStopButtons();
         updateInputArea();
         showAgentRunningIndicator(false);
@@ -3650,7 +3650,7 @@
 
     // Also get current conversation from project
     $.get('/api/projects/' + projectId)
-      .done(function(project) {
+      .done(function (project) {
         state.currentConversationId = project.currentConversationId || null;
         // Stats will be updated when loadConversationHistory completes
       });
@@ -3663,12 +3663,12 @@
     if (!projectId) return;
 
     api.getRalphLoops(projectId)
-      .done(function(loops) {
+      .done(function (loops) {
         // Find active loop (worker_running, reviewer_running, or paused)
-        var activeLoop = loops.find(function(loop) {
+        var activeLoop = loops.find(function (loop) {
           return loop.status === 'worker_running' ||
-                 loop.status === 'reviewer_running' ||
-                 loop.status === 'paused';
+            loop.status === 'reviewer_running' ||
+            loop.status === 'paused';
         });
 
         if (activeLoop) {
@@ -3694,7 +3694,7 @@
           updateRalphLoopControls(null);
         }
       })
-      .fail(function() {
+      .fail(function () {
         // On error, ensure UI is clear
         state.currentRalphLoopId = null;
         state.ralphLoopCurrentIteration = null;
@@ -3705,19 +3705,19 @@
 
   function loadProjectModel(projectId) {
     api.getProjectModel(projectId)
-      .done(function(data) {
+      .done(function (data) {
         // data = { projectModel, effectiveModel, globalDefault }
         // If no project override, default to Opus
-        var modelValue = data.projectModel || 'claude-opus-4-6';
+        var modelValue = data.projectModel || 'claude-sonnet-4-6';
         $('#project-model-select').val(modelValue);
         state.currentProjectModel = data.projectModel;
         state.effectiveModel = data.effectiveModel;
         state.globalDefaultModel = data.globalDefault;
         updateModelSelectorTitle(data);
       })
-      .fail(function() {
+      .fail(function () {
         // On failure, default to Opus
-        $('#project-model-select').val('claude-opus-4-6');
+        $('#project-model-select').val('claude-sonnet-4-6');
         state.currentProjectModel = null;
       });
   }
@@ -3736,6 +3736,7 @@
 
   function getModelDisplayName(modelId) {
     var displayNames = {
+      'claude-sonnet-4-6': 'Sonnet 4.6',
       'claude-opus-4-6': 'Opus 4.6',
       'claude-sonnet-4-5-20250929': 'Sonnet 4.5',
       'claude-haiku-4-5-20251001': 'Haiku 4.5'
@@ -3750,7 +3751,7 @@
     if (!projectId) return;
 
     api.setProjectModel(projectId, model)
-      .done(function(response) {
+      .done(function (response) {
         state.currentProjectModel = model;
         state.effectiveModel = response.effectiveModel || model || state.globalDefaultModel;
 
@@ -3776,9 +3777,9 @@
           showToast('Agent will use the new model after restart', 'info');
         }
       })
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         // Revert the selector to the previous value or Opus if no override
-        $('#project-model-select').val(state.currentProjectModel || 'claude-opus-4-6');
+        $('#project-model-select').val(state.currentProjectModel || 'claude-sonnet-4-6');
         showErrorToast(xhr, 'Failed to change model');
       });
   }
@@ -3798,10 +3799,10 @@
 
   function checkShellEnabled(projectId) {
     api.isShellEnabled(projectId)
-      .done(function(data) {
+      .done(function (data) {
         state.shellEnabled = data.enabled;
       })
-      .fail(function() {
+      .fail(function () {
         // If we can't check, assume enabled (fallback)
         state.shellEnabled = true;
       });
@@ -3815,7 +3816,7 @@
 
   function loadConversationHistory(projectId) {
     $.get('/api/projects/' + projectId + '/conversation')
-      .done(function(data) {
+      .done(function (data) {
         state.conversations[projectId] = data.messages || [];
         state.currentConversationStats = data.stats || null;
         state.currentConversationMetadata = data.metadata || null;
@@ -3828,7 +3829,7 @@
   }
 
   function findProjectById(id) {
-    return state.projects.find(function(p) { return p.id === id; });
+    return state.projects.find(function (p) { return p.id === id; });
   }
 
   function handleAddProject($form) {
@@ -3839,7 +3840,7 @@
     };
 
     api.addProject(formData)
-      .done(function(project) {
+      .done(function (project) {
         state.projects.push(project);
         renderProjectList();
         closeAllModals();
@@ -3847,7 +3848,7 @@
         showToast('Project added successfully', 'success');
         selectProject(project.id);
       })
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         showErrorToast(xhr, 'Failed to add project');
       });
   }
@@ -3858,7 +3859,7 @@
 
   function openGitHubReposBrowser() {
     api.getGitHubStatus()
-      .done(function(status) {
+      .done(function (status) {
         if (!status.installed) {
           showToast('GitHub CLI is not installed. Install from https://cli.github.com', 'error');
           return;
@@ -3876,7 +3877,7 @@
         $('#btn-github-clone-selected').prop('disabled', true);
         openModal('modal-github-repos');
       })
-      .fail(function() {
+      .fail(function () {
         showToast('Failed to check GitHub CLI status', 'error');
       });
   }
@@ -3895,10 +3896,10 @@
     $('#github-repos-list').html('<div class="text-center text-gray-400 text-sm py-8">Loading...</div>');
 
     api.getGitHubRepos(params)
-      .done(function(repos) {
+      .done(function (repos) {
         renderGitHubReposList(repos);
       })
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         showErrorToast(xhr, 'Failed to load repos');
         $('#github-repos-list').html('<div class="text-center text-red-400 text-sm py-8">Failed to load repositories</div>');
       });
@@ -3920,10 +3921,10 @@
     $('#github-repos-list').html('<div class="text-center text-gray-400 text-sm py-8">Searching...</div>');
 
     api.searchGitHubRepos(params)
-      .done(function(repos) {
+      .done(function (repos) {
         renderGitHubReposList(repos);
       })
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         showErrorToast(xhr, 'Failed to search repos');
         $('#github-repos-list').html('<div class="text-center text-red-400 text-sm py-8">Search failed</div>');
       });
@@ -3935,11 +3936,11 @@
       return;
     }
 
-    repos.sort(function(a, b) {
+    repos.sort(function (a, b) {
       return a.fullName.toLowerCase().localeCompare(b.fullName.toLowerCase());
     });
 
-    var html = repos.map(function(repo) {
+    var html = repos.map(function (repo) {
       var langBadge = repo.language
         ? '<span class="text-xs bg-gray-700 px-1.5 py-0.5 rounded">' + escapeHtml(repo.language) + '</span>'
         : '';
@@ -3949,24 +3950,24 @@
 
       return '<div class="github-repo-item p-2 rounded cursor-pointer hover:bg-gray-700 border border-transparent transition-colors" data-repo="' + escapeHtml(repo.fullName) + '">' +
         '<div class="flex items-center justify-between">' +
-          '<div class="flex items-center gap-2 min-w-0">' +
-            '<span class="text-sm font-medium text-white truncate">' + escapeHtml(repo.fullName) + '</span>' +
-            visBadge +
-            langBadge +
-          '</div>' +
-          '<span class="text-xs text-gray-500 flex-shrink-0">' + repo.stargazerCount + ' stars</span>' +
+        '<div class="flex items-center gap-2 min-w-0">' +
+        '<span class="text-sm font-medium text-white truncate">' + escapeHtml(repo.fullName) + '</span>' +
+        visBadge +
+        langBadge +
+        '</div>' +
+        '<span class="text-xs text-gray-500 flex-shrink-0">' + repo.stargazerCount + ' stars</span>' +
         '</div>' +
         (repo.description
           ? '<p class="text-xs text-gray-400 mt-1 truncate">' + escapeHtml(repo.description) + '</p>'
           : '') +
-      '</div>';
+        '</div>';
     }).join('');
 
     $('#github-repos-list').html(html);
     state.selectedGitHubRepo = null;
     $('#btn-github-clone-selected').prop('disabled', true);
 
-    $('#github-repos-list').off('click', '.github-repo-item').on('click', '.github-repo-item', function() {
+    $('#github-repos-list').off('click', '.github-repo-item').on('click', '.github-repo-item', function () {
       $('.github-repo-item').removeClass('border-purple-500 bg-gray-700').addClass('border-transparent');
       $(this).addClass('border-purple-500 bg-gray-700').removeClass('border-transparent');
       state.selectedGitHubRepo = $(this).data('repo');
@@ -4007,7 +4008,7 @@
     $('#github-clone-progress').removeClass('hidden').html('Cloning...');
 
     api.cloneGitHubRepo(data)
-      .done(function(result) {
+      .done(function (result) {
         if (result.success && result.project) {
           state.projects.push(result.project);
           renderProjectList();
@@ -4019,7 +4020,7 @@
           $('#btn-github-do-clone').prop('disabled', false);
         }
       })
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         var msg = 'Clone failed';
 
         try {
@@ -4036,7 +4037,7 @@
     if (!state.selectedProjectId) return;
 
     api.getProjectRoadmap(state.selectedProjectId)
-      .done(function(data) {
+      .done(function (data) {
         if (!data || !data.parsed) {
           openModal('modal-create-roadmap');
         } else {
@@ -4044,7 +4045,7 @@
           openModal('modal-roadmap');
         }
       })
-      .fail(function() {
+      .fail(function () {
         openModal('modal-create-roadmap');
       });
   }
@@ -4062,12 +4063,12 @@
     $form[0].reset();
 
     api.generateRoadmap(state.selectedProjectId, prompt)
-      .done(function(result) {
+      .done(function (result) {
         if (result.success) {
           showToast('Roadmap generated successfully', 'success');
         }
       })
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         state.roadmapGenerating = false;
         $('#roadmap-progress-spinner').addClass('hidden');
         $('#roadmap-progress-footer').removeClass('hidden');
@@ -4088,14 +4089,14 @@
     $form[0].reset();
 
     api.modifyRoadmap(state.selectedProjectId, prompt)
-      .done(function(result) {
+      .done(function (result) {
         state.roadmapGenerating = false;
         $('#roadmap-progress-spinner').addClass('hidden');
         $('#roadmap-question-input').addClass('hidden');
         $('#roadmap-progress-footer').removeClass('hidden');
         showToast('Roadmap modified successfully', 'success');
       })
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         state.roadmapGenerating = false;
         $('#roadmap-progress-spinner').addClass('hidden');
         $('#roadmap-question-input').addClass('hidden');
@@ -4115,7 +4116,7 @@
     $('#roadmap-question-input').addClass('hidden');
 
     api.sendRoadmapResponse(state.selectedProjectId, response)
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         showErrorToast(xhr, 'Failed to send response');
         $('#roadmap-question-input').removeClass('hidden');
       });
@@ -4143,7 +4144,7 @@
     }
 
     startPromise
-      .done(function() {
+      .done(function () {
         state.currentAgentMode = mode;
         updateProjectStatusById(projectId, 'running');
         startAgentStatusPolling(projectId);
@@ -4156,10 +4157,10 @@
         showToast('Agent started in ' + mode + ' mode', 'success');
         updateInputArea();
       })
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         showErrorToast(xhr, 'Failed to start agent');
-        })
-      .always(function() {
+      })
+      .always(function () {
         state.agentStarting = false;
         setQuickActionLoading(projectId, false);
         // Only hide loading and re-enable button if still viewing the same project
@@ -4180,7 +4181,7 @@
     $('#btn-restart-agent').prop('disabled', true);
 
     api.stopAgent(projectId)
-      .done(function() {
+      .done(function () {
         updateProjectStatusById(projectId, 'stopped');
         stopAgentStatusPolling();
         appendMessage(projectId, {
@@ -4189,10 +4190,10 @@
         });
         showToast('Agent stopped', 'success');
       })
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         showErrorToast(xhr, 'Failed to stop agent');
       })
-      .always(function() {
+      .always(function () {
         setQuickActionLoading(projectId, false);
         // Only hide loading and re-enable button if still viewing the same project
         if (state.selectedProjectId === projectId) {
@@ -4217,7 +4218,7 @@
     // Helper function to start agent with delay
     function startAgentWithDelay() {
       api.startInteractiveAgent(projectId, '', [], sessionId, permissionMode)
-        .done(function(response) {
+        .done(function (response) {
           state.currentAgentMode = 'interactive';
           updateProjectStatusById(projectId, 'running');
           startAgentStatusPolling(projectId);
@@ -4234,11 +4235,11 @@
 
           showToast('Agent restarted', 'success');
         })
-        .fail(function(xhr) {
+        .fail(function (xhr) {
           showErrorToast(xhr, 'Failed to restart agent');
           updateProjectStatusById(projectId, 'stopped');
         })
-        .always(function() {
+        .always(function () {
           $('#btn-stop-agent').prop('disabled', false);
           $('#btn-restart-agent').prop('disabled', false);
         });
@@ -4251,11 +4252,11 @@
     } else {
       // Stop first, then start
       api.stopAgent(projectId)
-        .done(function() {
+        .done(function () {
           updateProjectStatusById(projectId, 'stopped');
           setTimeout(startAgentWithDelay, 1000);
         })
-        .fail(function(xhr) {
+        .fail(function (xhr) {
           showErrorToast(xhr, 'Failed to stop agent for restart');
           $('#btn-restart-agent').prop('disabled', false);
         });
@@ -4278,7 +4279,7 @@
     $('#btn-cancel-agent').prop('disabled', true);
 
     api.stopAgent(projectId)
-      .done(function() {
+      .done(function () {
         updateProjectStatusById(projectId, 'stopped');
         stopAgentStatusPolling();
         appendMessage(projectId, {
@@ -4288,10 +4289,10 @@
         showToast('Operation cancelled', 'info');
         updateCancelButton();
       })
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         showErrorToast(xhr, 'Failed to cancel operation');
       })
-      .always(function() {
+      .always(function () {
         $('#btn-cancel-agent').prop('disabled', false);
       });
   }
@@ -4312,7 +4313,7 @@
   // Agent status polling - reduced to 10 seconds as fallback (WebSocket is primary)
   function startAgentStatusPolling(projectId) {
     stopAgentStatusPolling();
-    state.agentStatusInterval = setInterval(function() {
+    state.agentStatusInterval = setInterval(function () {
       checkAgentStatus(projectId);
     }, 10000);
   }
@@ -4326,7 +4327,7 @@
 
   function checkAgentStatus(projectId) {
     api.getAgentStatus(projectId)
-      .done(function(response) {
+      .done(function (response) {
         var project = findProjectById(projectId);
         var actualStatus = response.status || 'stopped';
 
@@ -4385,7 +4386,7 @@
           updateInputArea();
         }
       })
-      .fail(function() {
+      .fail(function () {
         // On error, assume agent stopped
         stopAgentStatusPolling();
       });
@@ -4401,10 +4402,10 @@
         // Create indicator if it doesn't exist
         var html = '<button id="queued-messages-indicator" class="flex items-center gap-1 text-xs text-yellow-400 bg-yellow-900/30 hover:bg-yellow-900/50 px-2 py-0.5 rounded cursor-pointer transition-colors" title="Click to view queued messages">' +
           '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
-            '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>' +
+          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>' +
           '</svg>' +
           '<span class="queued-text">' + count + ' queued ' + messageText + '</span>' +
-        '</button>';
+          '</button>';
         $('#agent-status-label').after(html);
       } else {
         $indicator.find('.queued-text').text(count + ' queued ' + messageText);
@@ -4420,7 +4421,7 @@
     }
 
     api.getQueuedMessages(state.selectedProjectId)
-      .done(function(data) {
+      .done(function (data) {
         var messages = data.messages || [];
         var $content = $('#queued-messages-modal-content');
 
@@ -4433,18 +4434,18 @@
             var msg = messages[i];
             html += '<div class="bg-gray-900 rounded p-3" data-queue-index="' + i + '">' +
               '<div class="flex items-center justify-between mb-2">' +
-                '<div class="flex items-center gap-2">' +
-                  '<span class="text-xs font-medium text-yellow-400">#' + (i + 1) + '</span>' +
-                  '<span class="text-xs text-gray-500">Waiting to be sent</span>' +
-                '</div>' +
-                '<button class="btn-remove-queued-message text-gray-500 hover:text-red-400 p-1 rounded hover:bg-gray-800 transition-colors" title="Remove from queue">' +
-                  '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
-                    '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>' +
-                  '</svg>' +
-                '</button>' +
+              '<div class="flex items-center gap-2">' +
+              '<span class="text-xs font-medium text-yellow-400">#' + (i + 1) + '</span>' +
+              '<span class="text-xs text-gray-500">Waiting to be sent</span>' +
+              '</div>' +
+              '<button class="btn-remove-queued-message text-gray-500 hover:text-red-400 p-1 rounded hover:bg-gray-800 transition-colors" title="Remove from queue">' +
+              '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+              '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>' +
+              '</svg>' +
+              '</button>' +
               '</div>' +
               '<div class="text-sm text-gray-200 whitespace-pre-wrap break-words">' + escapeHtml(msg) + '</div>' +
-            '</div>';
+              '</div>';
           }
 
           html += '</div>';
@@ -4453,7 +4454,7 @@
 
         openModal('modal-queued-messages');
       })
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         showErrorToast(xhr, 'Failed to load queued messages');
       });
   }
@@ -4466,9 +4467,9 @@
 
     // Load current Ralph Loop status if any
     api.getRalphLoops(state.selectedProjectId)
-      .done(function(loops) {
+      .done(function (loops) {
         // Check if there's an active loop
-        var activeLoop = loops.find(function(loop) {
+        var activeLoop = loops.find(function (loop) {
           return loop.status === 'worker_running' || loop.status === 'reviewer_running' || loop.status === 'paused';
         });
 
@@ -4506,7 +4507,7 @@
         // Open the modal
         openModal('modal-ralph-loop-config');
       })
-      .fail(function() {
+      .fail(function () {
         // If we can't check status, open anyway
         // Reset form with default values from settings
         $('#ralph-config-task-description').val('');
@@ -4570,7 +4571,7 @@
 
     // Start the Ralph Loop
     api.startRalphLoop(state.selectedProjectId, config)
-      .done(function(loopState) {
+      .done(function (loopState) {
         showToast('Ralph Loop started', 'success');
 
         // Track the current Ralph Loop
@@ -4594,7 +4595,7 @@
           timestamp: new Date().toISOString()
         });
       })
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         var message = xhr.responseJSON ? xhr.responseJSON.error : 'Failed to start Ralph Loop';
         showErrorToast(xhr, message);
       });
@@ -4705,12 +4706,12 @@
 
         // Clear the conversation history after completion
         // Delay clearing to ensure the completion message is shown first
-        setTimeout(function() {
+        setTimeout(function () {
           var projectId = state.selectedProjectId;
           $.ajax({
             url: '/api/projects/' + projectId + '/conversation/clear',
             method: 'POST'
-          }).done(function() {
+          }).done(function () {
             // Clear local state
             state.currentConversationId = null;
             state.currentConversationStats = null;
@@ -4719,7 +4720,7 @@
             renderConversation(projectId);
             ConversationHistoryModule.updateStats();
             showToast('Ralph Loop completed - history cleared', 'info');
-          }).fail(function() {
+          }).fail(function () {
             // Even if server fails, clear local state
             state.conversations[projectId] = [];
             renderConversation(projectId);
@@ -4791,10 +4792,10 @@
 
     // Add iteration info if available
     if (state.ralphLoopCurrentIteration !== null && state.ralphLoopCurrentIteration !== undefined &&
-        state.ralphLoopMaxTurns !== null && state.ralphLoopMaxTurns !== undefined) {
+      state.ralphLoopMaxTurns !== null && state.ralphLoopMaxTurns !== undefined) {
       var remainingTurns = state.ralphLoopMaxTurns - state.ralphLoopCurrentIteration;
       return baseText + ' (Iteration ' + state.ralphLoopCurrentIteration + '/' + state.ralphLoopMaxTurns +
-             ', ' + remainingTurns + ' left)';
+        ', ' + remainingTurns + ' left)';
     }
 
     return baseText;
@@ -4806,20 +4807,20 @@
     if (status === 'paused') {
       $pauseBtn
         .html('<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
-              '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>' +
-              '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>' +
-              '</svg>Resume')
+          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>' +
+          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>' +
+          '</svg>Resume')
         .off('click')
-        .on('click', function() {
+        .on('click', function () {
           resumeRalphLoop();
         });
     } else {
       $pauseBtn
         .html('<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
-              '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/>' +
-              '</svg>Pause')
+          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/>' +
+          '</svg>Pause')
         .off('click')
-        .on('click', function() {
+        .on('click', function () {
           pauseRalphLoop();
         });
     }
@@ -4831,11 +4832,11 @@
     }
 
     api.pauseRalphLoop(state.selectedProjectId, state.currentRalphLoopId)
-      .done(function() {
+      .done(function () {
         showToast('Ralph Loop paused', 'info');
         updateRalphLoopControls('paused');
       })
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         showErrorToast(xhr, 'Failed to pause Ralph Loop');
       });
   }
@@ -4848,7 +4849,7 @@
     var projectId = state.selectedProjectId;
 
     api.stopRalphLoop(projectId, state.currentRalphLoopId)
-      .done(function() {
+      .done(function () {
         showToast('Ralph Loop stopped', 'info');
         state.currentRalphLoopId = null;
         updateRalphLoopControls(null);
@@ -4859,7 +4860,7 @@
         $.ajax({
           url: '/api/projects/' + projectId + '/conversation/clear',
           method: 'POST'
-        }).done(function() {
+        }).done(function () {
           // Clear local state
           state.currentConversationId = null;
           state.currentConversationStats = null;
@@ -4868,14 +4869,14 @@
           renderConversation(projectId);
           ConversationHistoryModule.updateStats();
           showToast('Ralph Loop history cleared', 'info');
-        }).fail(function() {
+        }).fail(function () {
           // Even if server fails, clear local state
           state.conversations[projectId] = [];
           renderConversation(projectId);
           ConversationHistoryModule.updateStats();
         });
       })
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         showErrorToast(xhr, 'Failed to stop Ralph Loop');
       });
   }
@@ -4935,11 +4936,11 @@
     }
 
     api.resumeRalphLoop(state.selectedProjectId, state.currentRalphLoopId)
-      .done(function() {
+      .done(function () {
         showToast('Ralph Loop resumed', 'success');
         updateRalphLoopControls('worker_running');
       })
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         showErrorToast(xhr, 'Failed to resume Ralph Loop');
       });
   }
@@ -4950,7 +4951,7 @@
     }
 
     api.removeQueuedMessage(state.selectedProjectId, index)
-      .done(function() {
+      .done(function () {
         showToast('Message removed from queue', 'success');
         state.queuedMessageCount = Math.max(0, state.queuedMessageCount - 1);
         updateQueuedMessagesDisplay();
@@ -4958,7 +4959,7 @@
         // Refresh the modal content
         openQueuedMessagesModal();
       })
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         showErrorToast(xhr, 'Failed to remove message from queue');
       });
   }
@@ -4980,7 +4981,7 @@
   // Load initial data
   function loadProjects() {
     api.getProjects()
-      .done(function(projects) {
+      .done(function (projects) {
         state.projects = projects || [];
         renderProjectList();
 
@@ -4999,7 +5000,7 @@
           selectProject(savedProjectId);
         }
       })
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         showErrorToast(xhr, 'Failed to load projects');
       });
   }
@@ -5023,7 +5024,7 @@
       return;
     }
 
-    state.websocket.onopen = function() {
+    state.websocket.onopen = function () {
       console.log('WebSocket connected');
       state.wsConnected = true; // Track connection state
       state.wsReconnect.attempts = 0;
@@ -5035,19 +5036,19 @@
       }
     };
 
-    state.websocket.onmessage = function(event) {
+    state.websocket.onmessage = function (event) {
       var message = JSON.parse(event.data);
       handleWebSocketMessage(message);
     };
 
-    state.websocket.onclose = function(event) {
+    state.websocket.onclose = function (event) {
       console.log('WebSocket disconnected (code: ' + event.code + ')');
       state.wsConnected = false; // Track connection state
       updateConnectionStatus('disconnected');
       scheduleReconnect();
     };
 
-    state.websocket.onerror = function(error) {
+    state.websocket.onerror = function (error) {
       console.error('WebSocket error:', error);
       updateConnectionStatus('error');
     };
@@ -5105,8 +5106,8 @@
       case 'failed':
         $indicator.addClass('ws-failed cursor-pointer').removeClass('cursor-default')
           .attr('title', 'Connection failed - click to retry').html(
-          '<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"/></svg>'
-        );
+            '<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"/></svg>'
+          );
         break;
     }
   }
@@ -5302,7 +5303,7 @@
         tag: 'waiting-' + project.id
       });
     } else if (Notification.permission !== 'denied') {
-      Notification.requestPermission().then(function(permission) {
+      Notification.requestPermission().then(function (permission) {
         if (permission === 'granted') {
           new Notification('Superengineer - Input Required', {
             body: project.name + ' is waiting for your input',
@@ -5340,7 +5341,7 @@
         var commitMsg = lines[0].trim();
         // Basic validation for conventional commit format
         if (commitMsg.match(/^(feat|fix|docs|style|refactor|test|chore|perf|build|ci)(\(.+\))?:\s*.+/i) ||
-            commitMsg.length < 100) {
+          commitMsg.length < 100) {
           $('#git-commit-message').val(commitMsg);
           showToast('Commit message generated!', 'success');
           state.gitCommitMessagePending = false;
@@ -5510,8 +5511,8 @@
   function appendRoadmapOutput(message) {
     var $output = $('#roadmap-progress-output');
     var typeClass = message.type === 'stderr' ? 'text-red-400' :
-                    message.type === 'system' ? 'text-blue-400' :
-                    message.type === 'question' ? 'text-yellow-400 font-semibold' : 'text-gray-300';
+      message.type === 'system' ? 'text-blue-400' :
+        message.type === 'question' ? 'text-yellow-400 font-semibold' : 'text-gray-300';
     $output.append('<div class="' + typeClass + '">' + escapeHtml(message.content) + '</div>');
     $output.parent().scrollTop($output.parent()[0].scrollHeight);
   }
@@ -5625,21 +5626,21 @@
   }
 
   function setupTabHandlers() {
-    $('#tab-agent-output').on('click', function() {
+    $('#tab-agent-output').on('click', function () {
       switchTab('agent-output');
     });
 
-    $('#tab-project-files').on('click', function() {
+    $('#tab-project-files').on('click', function () {
       // Reset mobile file editor view when switching to files tab
       FileBrowser.hideMobileFileEditor();
       switchTab('project-files');
     });
 
-    $('#tab-git').on('click', function() {
+    $('#tab-git').on('click', function () {
       switchTab('git');
     });
 
-    $('#tab-shell').on('click', function() {
+    $('#tab-shell').on('click', function () {
       if (!state.shellEnabled) {
         showShellDisabledNotification();
         return;
@@ -5647,7 +5648,7 @@
       switchTab('shell');
     });
 
-    $('#tab-run-configs').on('click', function() {
+    $('#tab-run-configs').on('click', function () {
       switchTab('run-configs');
     });
 
@@ -5656,7 +5657,7 @@
   // Load settings on init to get sendWithCtrlEnter preference and notification settings
   function loadInitialSettings() {
     api.getSettings()
-      .done(function(settings) {
+      .done(function (settings) {
         state.settings = settings;
         state.hasUnsavedMcpChanges = false; // Reset on initial load
         state.sendWithCtrlEnter = settings.sendWithCtrlEnter !== false;
@@ -5676,7 +5677,7 @@
    */
   function checkAuthenticationOnLoad() {
     ApiClient.getAuthStatus()
-      .done(function(response) {
+      .done(function (response) {
         if (response && response.authenticated) {
           // User is authenticated, proceed with app initialization
           loadProjects();
@@ -5694,7 +5695,7 @@
           window.location.href = '/login';
         }
       })
-      .fail(function() {
+      .fail(function () {
         // API call failed, redirect to login as fallback
         window.location.href = '/login';
       });
@@ -5727,11 +5728,11 @@
     // Initialize ResourceMonitor to track asset loading failures
     if (ResourceMonitor) {
       ResourceMonitor.init({
-        onError: function(error) {
+        onError: function (error) {
           // Log resource errors to backend
           logFrontendError(error.message, error.url, null, null, error, error.type);
         },
-        onResource: function(event) {
+        onResource: function (event) {
           // Send all resource events to backend for global monitoring
           if (state.websocket && state.websocket.readyState === WebSocket.OPEN) {
             state.websocket.send(JSON.stringify({
@@ -5755,7 +5756,7 @@
       });
 
       // Start periodic resource stats broadcasting
-      ResourceMonitor.startPeriodicBroadcast(function(stats) {
+      ResourceMonitor.startPeriodicBroadcast(function (stats) {
         if (state.websocket && state.websocket.readyState === WebSocket.OPEN) {
           state.websocket.send(JSON.stringify({
             type: 'resource_event',
@@ -5929,8 +5930,8 @@
         api: api,
         escapeHtml: escapeHtml,
         showToast: showToast,
-        showConfirm: function(message, onConfirm) {
-          showConfirm('Confirm', message).then(function(confirmed) {
+        showConfirm: function (message, onConfirm) {
+          showConfirm('Confirm', message).then(function (confirmed) {
             if (confirmed && onConfirm) {
               onConfirm();
             }
@@ -6046,7 +6047,7 @@
       escapeHtml: escapeHtml,
       openModal: openModal,
       closeAllModals: closeAllModals,
-      sendCommand: function(command) {
+      sendCommand: function (command) {
         $('#input-message').val(command);
         sendMessage();
       }
@@ -6077,8 +6078,8 @@
     }
 
     // Inventify folder browse button in settings
-    $(document).on('click', '#btn-settings-inventify-browse', function() {
-      state.folderBrowserCallback = function(selectedPath) {
+    $(document).on('click', '#btn-settings-inventify-browse', function () {
+      state.folderBrowserCallback = function (selectedPath) {
         if (selectedPath) {
           $('#input-inventify-folder').val(selectedPath);
         }
@@ -6131,9 +6132,9 @@
   function setupResizeHandler() {
     var resizeTimeout;
 
-    $(window).on('resize', function() {
+    $(window).on('resize', function () {
       clearTimeout(resizeTimeout);
-      resizeTimeout = setTimeout(function() {
+      resizeTimeout = setTimeout(function () {
         updateInputHint();
       }, 250);
     });
@@ -6141,7 +6142,7 @@
 
   // Handle page visibility changes (mobile tab switching, app backgrounding)
   function setupVisibilityHandler() {
-    document.addEventListener('visibilitychange', function() {
+    document.addEventListener('visibilitychange', function () {
       if (document.visibilityState === 'visible') {
         // Page became visible - verify WebSocket and reconnect if needed
         if (!state.websocket || state.websocket.readyState !== WebSocket.OPEN) {
@@ -6157,7 +6158,7 @@
 
   function loadDevModeStatus() {
     api.getDevStatus()
-      .done(function(data) {
+      .done(function (data) {
         state.devMode = data.devMode;
 
         if (state.devMode) {
@@ -6168,14 +6169,14 @@
 
   function loadResourceStatus() {
     api.getAgentResourceStatus()
-      .done(function(data) {
+      .done(function (data) {
         updateResourceStatus(data);
       });
   }
 
   function loadAppVersion() {
     api.getHealth()
-      .done(function(data) {
+      .done(function (data) {
         if (data.version) {
           $('#app-version').text('v' + data.version);
         }
