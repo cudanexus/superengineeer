@@ -112,7 +112,19 @@
   }
 
   function selectClaudeFile(filePath) {
+    if (!filePath) return;
+
     var file = state.claudeFilesState.files.find(function (f) { return f.path === filePath; });
+
+    // Fallback if filePath is relative (e.g. from file-browser.js)
+    if (!file) {
+      var normalizedArg = filePath.startsWith('/') ? filePath : '/' + filePath;
+      var possibleFiles = state.claudeFilesState.files.filter(function (f) {
+        return f.path.endsWith(normalizedArg);
+      });
+      // Prefer the project/local one over the global one if there's a tie
+      file = possibleFiles.find(function (f) { return !f.isGlobal; }) || possibleFiles[0];
+    }
 
     if (!file) return;
 
