@@ -118,9 +118,11 @@
 
     // Fallback if filePath is relative (e.g. from file-browser.js)
     if (!file) {
-      var normalizedArg = filePath.startsWith('/') ? filePath : '/' + filePath;
       var possibleFiles = state.claudeFilesState.files.filter(function (f) {
-        return f.path.endsWith(normalizedArg);
+        return f.path === filePath ||
+          f.path.endsWith('/' + filePath) ||
+          f.path.endsWith('\\' + filePath) ||
+          f.name === filePath; // final fallback, just match filename
       });
       // Prefer the project/local one over the global one if there's a tie
       file = possibleFiles.find(function (f) { return !f.isGlobal; }) || possibleFiles[0];
