@@ -1,0 +1,67 @@
+{
+  "compilerOptions": {
+    // Enable JavaScript support
+    "allowJs": true,
+    "checkJs": true,
+
+    // No output files - this is for type checking only
+    "noEmit": true,
+
+    // Target ES2015 for modern browsers
+    "target": "ES2015",
+    "lib": ["ES2015", "DOM", "DOM.Iterable"],
+
+    // Module system - none for browser scripts
+    "moduleResolution": "node",
+
+    // Type acquisition - remove jquery since it's not installed
+    "types": [],
+    "typeRoots": ["./types"],
+
+    // Path mapping for imports
+    "baseUrl": ".",
+    "paths": {
+      "*": ["types/*"]
+    },
+
+    // Strict type checking options
+    "strict": false,  // Start with false, can enable later
+    "noImplicitAny": false,  // Allow implicit any for gradual adoption
+    "strictNullChecks": false,  // Disabled for compatibility
+    "strictFunctionTypes": false,
+    "strictBindCallApply": false,
+
+    // Additional checks
+    "noUnusedLocals": false,  // Don't error on unused variables
+    "noUnusedParameters": false,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": false,
+
+    // Module interop
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+
+    // Source maps for debugging
+    "sourceMap": false,
+    "inlineSourceMap": false,
+
+    // Skip lib check for performance
+    "skipLibCheck": true,
+
+    // Preserve JSDoc comments
+    "removeComments": false
+  },
+
+  "include": [
+    "**/*.js",
+    "types/**/*.d.ts"
+  ],
+
+  "exclude": [
+    "vendor/**",
+    "**/*.test.js",
+    "**/*.spec.js",
+    "node_modules"
+  ]
+}

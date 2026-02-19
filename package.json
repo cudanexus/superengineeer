@@ -1,0 +1,92 @@
+{
+  "name": "claudito",
+  "version": "0.14.3",
+  "description": "Claude Code autonomous agent manager - A web UI for managing Claude Code agents",
+  "main": "dist/index.js",
+  "bin": {
+    "superengineer-v5": "dist/cli.js"
+  },
+  "type": "commonjs",
+  "scripts": {
+    "dev": "nodemon",
+    "build": "tsc",
+    "build-and-start": "npm run build && npm run start",
+    "build-and-start-loop": "node bin/start-loop.js",
+    "start": "node dist/index.js",
+    "cli": "node dist/cli.js",
+    "prepublishOnly": "npm run build",
+    "test": "jest && jest --config jest.frontend.config.js",
+    "test:backend": "jest",
+    "test:frontend": "jest --config jest.frontend.config.js",
+    "test:coverage": "jest --coverage",
+    "lint": "eslint src/ test/",
+    "lint:fix": "eslint src/ test/ --fix",
+    "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
+    "typecheck:frontend": "tsc -p public/js/tsconfig.json",
+    "typecheck": "npm run build && npm run typecheck:frontend"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "agent",
+    "manager",
+    "automation",
+    "ai",
+    "anthropic",
+    "cli",
+    "web-ui"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/anthropics/superengineer-v5.git"
+  },
+  "bugs": {
+    "url": "https://github.com/anthropics/superengineer-v5/issues"
+  },
+  "homepage": "https://github.com/anthropics/superengineer-v5#readme",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "files": [
+    "dist",
+    "public",
+    "README.md",
+    "LICENSE"
+  ],
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.11.0",
+    "@types/qrcode-terminal": "^0.12.2",
+    "@types/supertest": "^6.0.3",
+    "@types/ws": "^8.18.1",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^30.2.0",
+    "jsdom": "^27.4.0",
+    "mermaid": "^11.12.2",
+    "nodemon": "^3.0.3",
+    "prettier": "^3.2.5",
+    "rimraf": "^6.1.2",
+    "supertest": "^7.2.2",
+    "ts-jest": "^29.1.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/addon-web-links": "^0.11.0",
+    "@xterm/xterm": "^5.5.0",
+    "express": "^4.18.2",
+    "node-pty": "^1.1.0",
+    "qrcode-terminal": "^0.12.0",
+    "simple-git": "^3.30.0",
+    "ws": "^8.19.0",
+    "zod": "^4.3.6"
+  }
+}

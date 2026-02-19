@@ -1,0 +1,78 @@
+name: Publish to npm
+
+on:
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Get tag version
+        id: tag
+        run: echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Validate tag format
+        run: |
+          TAG_VERSION="${{ steps.tag.outputs.version }}"
+          if [[ ! "$TAG_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Error: Tag '$TAG_VERSION' does not match format X.Y.Z"
+            exit 1
+          fi
+          echo "Tag version: $TAG_VERSION"
+
+      - name: Validate package.json version matches tag
+        run: |
+          TAG_VERSION="${{ steps.tag.outputs.version }}"
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+
+          if [[ "$TAG_VERSION" != "$PACKAGE_VERSION" ]]; then
+            echo "Error: Tag version ($TAG_VERSION) does not match package.json version ($PACKAGE_VERSION)"
+            exit 1
+          fi
+          echo "package.json version matches tag: $PACKAGE_VERSION"
+
+      - name: Validate package-lock.json version matches tag
+        run: |
+          TAG_VERSION="${{ steps.tag.outputs.version }}"
+          LOCK_VERSION=$(node -p "require('./package-lock.json').version")
+
+          if [[ "$TAG_VERSION" != "$LOCK_VERSION" ]]; then
+            echo "Error: Tag version ($TAG_VERSION) does not match package-lock.json version ($LOCK_VERSION)"
+            exit 1
+          fi
+          echo "package-lock.json version matches tag: $LOCK_VERSION"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run linter
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Run tests
+        run: npm test
+
+      - name: Verify CLI works
+        run: |
+          node dist/cli.js --help
+          node dist/cli.js --version
+
+      - name: Publish to npm
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
