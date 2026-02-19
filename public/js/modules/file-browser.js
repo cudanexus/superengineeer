@@ -154,10 +154,7 @@
   function openFile(filePath, fileName) {
     if (filePath && (filePath.endsWith('/CLAUDE.md') || filePath === 'CLAUDE.md')) {
       if (window.ModalsModule && window.ModalsModule.openClaudeFilesModal) {
-        window.ModalsModule.openClaudeFilesModal();
-        setTimeout(function () {
-          window.ModalsModule.selectClaudeFile(filePath);
-        }, 100);
+        window.ModalsModule.openClaudeFilesModal(filePath);
       }
       return;
     }

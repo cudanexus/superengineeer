@@ -44,7 +44,7 @@
 
   // ===== AI Files Modal =====
 
-  function openClaudeFilesModal() {
+  function openClaudeFilesModal(fileToSelect) {
     var $list = $('#claude-files-list');
     $list.html('<div class="p-2 text-xs text-gray-500">Loading...</div>');
     $('#claude-file-editor').val('').prop('disabled', true);
@@ -65,9 +65,13 @@
         state.claudeFilesState.files = data.files || [];
         renderClaudeFilesList();
 
-        // Auto-select first file if available
+        // Auto-select requested file or first file if available
         if (data.files && data.files.length > 0) {
-          selectClaudeFile(data.files[0].path);
+          if (fileToSelect) {
+            selectClaudeFile(fileToSelect);
+          } else {
+            selectClaudeFile(data.files[0].path);
+          }
         }
       })
       .fail(function () {
