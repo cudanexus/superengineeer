@@ -2,13 +2,13 @@
  * File Browser Module
  * Handles file tree navigation, file editing, create/delete operations
  */
-(function(root, factory) {
+(function (root, factory) {
   if (typeof module === 'object' && module.exports) {
     module.exports = factory();
   } else {
     root.FileBrowser = factory();
   }
-}(typeof self !== 'undefined' ? self : this, function() {
+}(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
   // Dependencies injected via init()
@@ -53,11 +53,11 @@
     $tree.html('<div class="text-gray-500 text-center py-4">Loading...</div>');
 
     api.browseWithFiles(rootPath)
-      .done(function(entries) {
+      .done(function (entries) {
         state.fileBrowser.rootEntries = entries;
         renderFileTree(rootPath, entries);
       })
-      .fail(function() {
+      .fail(function () {
         $tree.html('<div class="text-red-400 text-center py-4">Failed to load files</div>');
       });
   }
@@ -71,7 +71,7 @@
       return;
     }
 
-    entries.forEach(function(entry) {
+    entries.forEach(function (entry) {
       $tree.append(renderFileTreeItem(entry, 0));
     });
   }
@@ -82,26 +82,26 @@
     var isSelected = state.fileBrowser.selectedFile === entry.path;
     var deleteBtn = '<button class="btn-delete-file" data-path="' + escapeHtml(entry.path) + '" data-is-dir="' + (entry.isDirectory ? 'true' : 'false') + '" data-name="' + escapeHtml(entry.name) + '" title="Delete">' +
       '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
-        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>' +
+      '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>' +
       '</svg>' +
-    '</button>';
+      '</button>';
 
     if (entry.isDirectory) {
       var chevronClass = isExpanded ? 'tree-chevron expanded' : 'tree-chevron';
       var html = '<div class="file-tree-item directory' + (isSelected ? ' selected' : '') + '" data-path="' + escapeHtml(entry.path) + '" data-is-dir="true" draggable="true" style="padding-left: ' + indent + 'px;">' +
         '<svg class="' + chevronClass + '" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
-          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>' +
+        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>' +
         '</svg>' +
         '<svg class="tree-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
-          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>' +
+        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>' +
         '</svg>' +
         '<span class="tree-name">' + escapeHtml(entry.name) + '</span>' +
         deleteBtn +
-      '</div>';
+        '</div>';
 
       if (isExpanded && entry.children) {
         html += '<div class="tree-children">';
-        entry.children.forEach(function(child) {
+        entry.children.forEach(function (child) {
           html += renderFileTreeItem(child, depth + 1);
         });
         html += '</div>';
@@ -112,11 +112,11 @@
       var editableClass = entry.isEditable ? ' editable' : '';
       return '<div class="file-tree-item file' + editableClass + (isSelected ? ' selected' : '') + '" data-path="' + escapeHtml(entry.path) + '" data-is-dir="false" data-editable="' + (entry.isEditable ? 'true' : 'false') + '" draggable="true" style="padding-left: ' + indent + 'px;">' +
         '<svg class="tree-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
-          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>' +
+        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>' +
         '</svg>' +
         '<span class="tree-name">' + escapeHtml(entry.name) + '</span>' +
         deleteBtn +
-      '</div>';
+        '</div>';
     }
   }
 
@@ -135,9 +135,9 @@
 
       // Load children
       api.browseWithFiles(dirPath)
-        .done(function(children) {
+        .done(function (children) {
           var childrenHtml = '<div class="tree-children">';
-          children.forEach(function(child) {
+          children.forEach(function (child) {
             var depth = (parseInt($item.css('padding-left')) / 16) + 1;
             childrenHtml += renderFileTreeItem(child, depth);
           });
@@ -152,8 +152,18 @@
   }
 
   function openFile(filePath, fileName) {
+    if (filePath && (filePath.endsWith('/CLAUDE.md') || filePath === 'CLAUDE.md')) {
+      if (window.ModalsModule && window.ModalsModule.openClaudeFilesModal) {
+        window.ModalsModule.openClaudeFilesModal();
+        setTimeout(function () {
+          window.ModalsModule.selectClaudeFile(filePath);
+        }, 100);
+      }
+      return;
+    }
+
     // Check if file is already open
-    var existingFile = state.openFiles.find(function(f) { return f.path === filePath; });
+    var existingFile = state.openFiles.find(function (f) { return f.path === filePath; });
 
     if (existingFile) {
       setActiveFile(filePath);
@@ -162,7 +172,7 @@
 
     // Load file content
     api.readFile(filePath)
-      .done(function(data) {
+      .done(function (data) {
         var isMarkdown = isMarkdownFile(filePath);
         state.openFiles.push({
           path: filePath,
@@ -176,7 +186,7 @@
         renderOpenFileTabs();
         setActiveFile(filePath);
       })
-      .fail(function() {
+      .fail(function () {
         showToast('Failed to open file', 'error');
       });
   }
@@ -193,7 +203,7 @@
     renderOpenFileTabs();
 
     // Show file content
-    var file = state.openFiles.find(function(f) { return f.path === filePath; });
+    var file = state.openFiles.find(function (f) { return f.path === filePath; });
 
     if (file) {
       $('#file-editor-empty').addClass('hidden');
@@ -253,7 +263,7 @@
     var $tabs = $('#open-file-tabs');
     $tabs.empty();
 
-    state.openFiles.forEach(function(file) {
+    state.openFiles.forEach(function (file) {
       var activeClass = file.path === state.activeFilePath ? ' active' : '';
       var modifiedIndicator = file.modified ? '<span class="tab-modified"></span>' : '';
 
@@ -264,7 +274,7 @@
             '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>' :
             '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>'
           ) +
-        '</button>';
+          '</button>';
       }
 
       var html = '<div class="file-tab' + activeClass + '" data-path="' + escapeHtml(file.path) + '">' +
@@ -272,18 +282,18 @@
         '<span class="tab-name">' + escapeHtml(file.name) + '</span>' +
         markdownToggle +
         '<button class="tab-close" data-path="' + escapeHtml(file.path) + '" title="Close">' +
-          '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
-            '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>' +
-          '</svg>' +
+        '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>' +
+        '</svg>' +
         '</button>' +
-      '</div>';
+        '</div>';
 
       $tabs.append(html);
     });
   }
 
   function closeFile(filePath) {
-    var fileIndex = state.openFiles.findIndex(function(f) { return f.path === filePath; });
+    var fileIndex = state.openFiles.findIndex(function (f) { return f.path === filePath; });
 
     if (fileIndex === -1) return;
 
@@ -313,7 +323,7 @@
     // Warn if modified
     if (file.modified) {
       showConfirm('Unsaved Changes', 'This file has unsaved changes. Close anyway?', { danger: true, confirmText: 'Close' })
-        .then(function(confirmed) {
+        .then(function (confirmed) {
           if (confirmed) {
             doClose();
           }
@@ -343,7 +353,7 @@
     var pending = state.pendingDeleteFile;
 
     api.deleteFileOrFolder(pending.path, pending.isDirectory)
-      .done(function() {
+      .done(function () {
         closeModal('modal-confirm-delete-file');
 
         // If this file was open, close it
@@ -351,7 +361,7 @@
           closeFileWithoutConfirm(pending.path);
         } else {
           // If it's a directory, close any files that were inside it
-          state.openFiles.forEach(function(f) {
+          state.openFiles.forEach(function (f) {
             if (f.path.startsWith(pending.path)) {
               closeFileWithoutConfirm(f.path);
             }
@@ -373,7 +383,7 @@
         showToast((pending.isDirectory ? 'Folder' : 'File') + ' deleted', 'success');
         state.pendingDeleteFile = null;
       })
-      .fail(function() {
+      .fail(function () {
         showToast('Failed to delete ' + (pending.isDirectory ? 'folder' : 'file'), 'error');
       });
   }
@@ -388,7 +398,7 @@
     openModal('modal-create-file');
 
     // Focus the input after modal opens
-    setTimeout(function() {
+    setTimeout(function () {
       $('#create-file-name').focus();
     }, 100);
   }
@@ -409,7 +419,7 @@
     var filePath = parentPath + (parentPath.endsWith(separator) ? '' : separator) + fileName.trim();
 
     api.writeFile(filePath, '')
-      .done(function() {
+      .done(function () {
         closeModal('modal-create-file');
         state.pendingCreateFile = null;
 
@@ -421,7 +431,7 @@
 
         showToast('File created', 'success');
       })
-      .fail(function() {
+      .fail(function () {
         $('#create-file-error').removeClass('hidden').text('Failed to create file');
       });
   }
@@ -436,7 +446,7 @@
     openModal('modal-create-folder');
 
     // Focus the input after modal opens
-    setTimeout(function() {
+    setTimeout(function () {
       $('#create-folder-name').focus();
     }, 100);
   }
@@ -457,7 +467,7 @@
     var folderPath = parentPath + (parentPath.endsWith(separator) ? '' : separator) + folderName.trim();
 
     api.createFolder(folderPath)
-      .done(function() {
+      .done(function () {
         closeModal('modal-create-folder');
         state.pendingCreateFolder = null;
 
@@ -466,7 +476,7 @@
 
         showToast('Folder created', 'success');
       })
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         var error = 'Failed to create folder';
 
         if (xhr.responseJSON && xhr.responseJSON.error) {
@@ -501,14 +511,14 @@
 
     // Refresh the directory contents
     api.browseWithFiles(dirPath)
-      .done(function(children) {
+      .done(function (children) {
         if ($children.length) {
           $children.remove();
         }
 
         var depth = Math.floor(parseInt($item.css('padding-left')) / 16) + 1;
         var childrenHtml = '<div class="tree-children">';
-        children.forEach(function(child) {
+        children.forEach(function (child) {
           childrenHtml += renderFileTreeItem(child, depth);
         });
         childrenHtml += '</div>';
@@ -517,7 +527,7 @@
   }
 
   function closeFileWithoutConfirm(filePath) {
-    var fileIndex = state.openFiles.findIndex(function(f) { return f.path === filePath; });
+    var fileIndex = state.openFiles.findIndex(function (f) { return f.path === filePath; });
 
     if (fileIndex === -1) return;
 
@@ -542,7 +552,7 @@
   function saveCurrentFile() {
     if (!state.activeFilePath) return;
 
-    var file = state.openFiles.find(function(f) { return f.path === state.activeFilePath; });
+    var file = state.openFiles.find(function (f) { return f.path === state.activeFilePath; });
 
     if (!file) return;
 
@@ -555,14 +565,14 @@
     }
 
     api.writeFile(file.path, content)
-      .done(function() {
+      .done(function () {
         file.content = content;
         file.originalContent = content;
         file.modified = false;
         updateFileModifiedState(file);
         showToast('File saved', 'success');
       })
-      .fail(function() {
+      .fail(function () {
         showToast('Failed to save file', 'error');
       });
   }
@@ -608,7 +618,7 @@
     var lowerSearchTerm = searchTerm.toLowerCase();
 
     function searchInEntries(entries, parentPath) {
-      entries.forEach(function(entry) {
+      entries.forEach(function (entry) {
         if (entry.name.toLowerCase().indexOf(lowerSearchTerm) !== -1) {
           results.push({
             name: entry.name,
@@ -639,13 +649,13 @@
 
     $results.html('<div class="text-gray-400 text-xs px-2 py-1 border-b border-gray-700">Found ' + results.length + ' result' + (results.length > 1 ? 's' : '') + '</div>');
 
-    results.forEach(function(result) {
+    results.forEach(function (result) {
       var icon = result.isDirectory ?
         '<svg class="tree-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
-          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>' +
+        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>' +
         '</svg>' :
         '<svg class="tree-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
-          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>' +
+        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>' +
         '</svg>';
 
       var highlightedName = highlightSearchMatch(result.name, searchTerm);
@@ -654,10 +664,10 @@
       var $item = $('<div class="file-search-result" data-path="' + escapeHtml(result.path) + '" data-is-dir="' + result.isDirectory + '">' +
         icon +
         '<div class="flex-1 min-w-0">' +
-          '<div class="tree-name">' + highlightedName + '</div>' +
-          '<div class="text-xs text-gray-500 truncate">' + escapeHtml(relativePath) + '</div>' +
+        '<div class="tree-name">' + highlightedName + '</div>' +
+        '<div class="text-xs text-gray-500 truncate">' + escapeHtml(relativePath) + '</div>' +
         '</div>' +
-      '</div>');
+        '</div>');
 
       $results.append($item);
     });
@@ -703,7 +713,7 @@
     updateTreeSelection();
 
     // Scroll to the item
-    setTimeout(function() {
+    setTimeout(function () {
       var $item = $('.file-tree-item[data-path="' + CSS.escape(targetPath) + '"]');
       if ($item.length) {
         var $container = $('#file-browser-tree');
@@ -719,7 +729,7 @@
 
   function setupHandlers() {
     // Click on file tree item (but not on delete button)
-    $(document).on('click', '.file-tree-item', function(e) {
+    $(document).on('click', '.file-tree-item', function (e) {
       if ($(e.target).closest('.btn-delete-file').length) {
         return; // Handled by delete button handler
       }
@@ -740,7 +750,7 @@
     });
 
     // Click on delete file/folder button
-    $(document).on('click', '.btn-delete-file', function(e) {
+    $(document).on('click', '.btn-delete-file', function (e) {
       e.stopPropagation();
       var path = $(this).data('path');
       var isDir = $(this).data('is-dir') === true || $(this).data('is-dir') === 'true';
@@ -749,7 +759,7 @@
     });
 
     // Right-click context menu on file tree items
-    $(document).on('contextmenu', '.file-tree-item', function(e) {
+    $(document).on('contextmenu', '.file-tree-item', function (e) {
       e.preventDefault();
       var $item = $(this);
       var path = $item.data('path');
@@ -776,13 +786,13 @@
       }).removeClass('hidden');
 
       // Close menu when clicking elsewhere
-      $(document).one('click', function() {
+      $(document).one('click', function () {
         $menu.addClass('hidden');
       });
     });
 
     // Context menu delete action
-    $('#context-menu-delete').on('click', function(e) {
+    $('#context-menu-delete').on('click', function (e) {
       e.stopPropagation();
       $('#file-context-menu').addClass('hidden');
 
@@ -796,12 +806,12 @@
     });
 
     // Confirm delete file/folder
-    $('#btn-confirm-delete-file').on('click', function() {
+    $('#btn-confirm-delete-file').on('click', function () {
       confirmDeleteFile();
     });
 
     // New file button in toolbar
-    $('#btn-new-file').on('click', function() {
+    $('#btn-new-file').on('click', function () {
       var project = findProjectById(state.selectedProjectId);
 
       if (project && project.path) {
@@ -810,7 +820,7 @@
     });
 
     // Context menu - New File option
-    $('#context-menu-new-file').on('click', function(e) {
+    $('#context-menu-new-file').on('click', function (e) {
       e.preventDefault();
       e.stopPropagation();
       $('#file-context-menu').addClass('hidden');
@@ -821,12 +831,12 @@
     });
 
     // Confirm create file button
-    $('#btn-confirm-create-file').on('click', function() {
+    $('#btn-confirm-create-file').on('click', function () {
       confirmCreateFile();
     });
 
     // Enter key in create file input
-    $('#create-file-name').on('keydown', function(e) {
+    $('#create-file-name').on('keydown', function (e) {
       if (e.key === 'Enter') {
         e.preventDefault();
         confirmCreateFile();
@@ -834,7 +844,7 @@
     });
 
     // New folder button in toolbar
-    $('#btn-new-folder').on('click', function() {
+    $('#btn-new-folder').on('click', function () {
       var project = findProjectById(state.selectedProjectId);
 
       if (project && project.path) {
@@ -843,7 +853,7 @@
     });
 
     // Context menu - New Folder option
-    $('#context-menu-new-folder').on('click', function(e) {
+    $('#context-menu-new-folder').on('click', function (e) {
       e.preventDefault();
       e.stopPropagation();
       $('#file-context-menu').addClass('hidden');
@@ -854,12 +864,12 @@
     });
 
     // Confirm create folder button
-    $('#btn-confirm-create-folder').on('click', function() {
+    $('#btn-confirm-create-folder').on('click', function () {
       confirmCreateFolder();
     });
 
     // Enter key in create folder input
-    $('#create-folder-name').on('keydown', function(e) {
+    $('#create-folder-name').on('keydown', function (e) {
       if (e.key === 'Enter') {
         e.preventDefault();
         confirmCreateFolder();
@@ -867,21 +877,21 @@
     });
 
     // Click on file tab
-    $(document).on('click', '.file-tab', function(e) {
+    $(document).on('click', '.file-tab', function (e) {
       if ($(e.target).closest('.tab-close').length) return;
       var path = $(this).data('path');
       setActiveFile(path);
     });
 
     // Click on tab close button
-    $(document).on('click', '.tab-close', function(e) {
+    $(document).on('click', '.tab-close', function (e) {
       e.stopPropagation();
       var path = $(this).data('path');
       closeFile(path);
     });
 
     // Middle-click on file tab to close it
-    $(document).on('mousedown', '.file-tab', function(e) {
+    $(document).on('mousedown', '.file-tab', function (e) {
       if (e.button === 1) {
         e.preventDefault();
         var path = $(this).data('path');
@@ -890,10 +900,10 @@
     });
 
     // File editor content change
-    $('#file-editor-textarea').on('input', function() {
+    $('#file-editor-textarea').on('input', function () {
       if (!state.activeFilePath) return;
 
-      var file = state.openFiles.find(function(f) { return f.path === state.activeFilePath; });
+      var file = state.openFiles.find(function (f) { return f.path === state.activeFilePath; });
 
       if (!file) return;
 
@@ -905,17 +915,17 @@
     });
 
     // Sync scroll between textarea and highlighted backdrop
-    $('#file-editor-textarea').on('scroll', function() {
+    $('#file-editor-textarea').on('scroll', function () {
       syncEditorScroll();
     });
 
     // Save file button
-    $('#btn-save-file').on('click', function() {
+    $('#btn-save-file').on('click', function () {
       saveCurrentFile();
     });
 
     // Ctrl+S to save
-    $('#file-editor-textarea').on('keydown', function(e) {
+    $('#file-editor-textarea').on('keydown', function (e) {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
         saveCurrentFile();
@@ -923,7 +933,7 @@
     });
 
     // Refresh files button
-    $('#btn-refresh-files').on('click', function() {
+    $('#btn-refresh-files').on('click', function () {
       var project = findProjectById(state.selectedProjectId);
 
       if (project && project.path) {
@@ -933,18 +943,18 @@
     });
 
     // Mobile file editor back button
-    $('#btn-file-editor-back').on('click', function() {
+    $('#btn-file-editor-back').on('click', function () {
       hideMobileFileEditor();
     });
 
     // Mobile Claude files back button
-    $('#btn-claude-files-back').on('click', function() {
+    $('#btn-claude-files-back').on('click', function () {
       hideMobileClaudeFileEditor();
     });
 
     // File search input
     var searchTimeout;
-    $('#file-search-input').on('input', function() {
+    $('#file-search-input').on('input', function () {
       clearTimeout(searchTimeout);
       var searchTerm = $(this).val().trim();
 
@@ -953,7 +963,7 @@
         return;
       }
 
-      searchTimeout = setTimeout(function() {
+      searchTimeout = setTimeout(function () {
         showSearchMode();
         var results = searchFiles(searchTerm);
         renderSearchResults(results, searchTerm);
@@ -961,18 +971,18 @@
     });
 
     // Clear search button
-    $('#btn-clear-file-search').on('click', function() {
+    $('#btn-clear-file-search').on('click', function () {
       hideSearchMode();
     });
 
     // Click on search result
-    $(document).on('click', '.file-search-result', function() {
+    $(document).on('click', '.file-search-result', function () {
       var filePath = $(this).data('path');
       var isDir = $(this).data('is-dir') === true;
 
       if (!isDir) {
         openFile(filePath);
-        if (isMobileView()) {
+        if (isMobileView() && (!filePath || (!filePath.endsWith('/CLAUDE.md') && filePath !== 'CLAUDE.md'))) {
           showMobileFileEditor();
         }
       } else {
@@ -988,7 +998,7 @@
     var draggedPath = null;
 
     // Drag start
-    $(document).on('dragstart', '.file-tree-item', function(e) {
+    $(document).on('dragstart', '.file-tree-item', function (e) {
       draggedElement = this;
       draggedPath = $(this).attr('data-path');
       e.originalEvent.dataTransfer.effectAllowed = 'move';
@@ -997,7 +1007,7 @@
     });
 
     // Drag over - only directories can be drop targets
-    $(document).on('dragover', '.file-tree-item.directory', function(e) {
+    $(document).on('dragover', '.file-tree-item.directory', function (e) {
       e.preventDefault();
       e.originalEvent.dataTransfer.dropEffect = 'move';
 
@@ -1008,12 +1018,12 @@
     });
 
     // Drag leave
-    $(document).on('dragleave', '.file-tree-item.directory', function() {
+    $(document).on('dragleave', '.file-tree-item.directory', function () {
       $(this).removeClass('drag-over');
     });
 
     // Drop
-    $(document).on('drop', '.file-tree-item.directory', function(e) {
+    $(document).on('drop', '.file-tree-item.directory', function (e) {
       e.preventDefault();
       e.stopPropagation();
 
@@ -1026,7 +1036,7 @@
     });
 
     // Drag end
-    $(document).on('dragend', '.file-tree-item', function() {
+    $(document).on('dragend', '.file-tree-item', function () {
       $(this).removeClass('dragging');
       $('.drag-over').removeClass('drag-over');
       draggedElement = null;
@@ -1055,10 +1065,10 @@
         sourcePath: sourcePath,
         targetPath: newPath
       })
-    }).done(function() {
+    }).done(function () {
       showToast('Moved successfully', 'success');
       loadFileTree(state.fileBrowser.rootPath);
-    }).fail(function(xhr) {
+    }).fail(function (xhr) {
       showToast('Failed to move: ' + getErrorMessage(xhr), 'error');
     });
   }
@@ -1095,7 +1105,7 @@
   }
 
   function toggleMarkdownPreview(filePath) {
-    var file = state.openFiles.find(function(f) { return f.path === filePath; });
+    var file = state.openFiles.find(function (f) { return f.path === filePath; });
     if (file && file.isMarkdown) {
       file.previewMode = !file.previewMode;
       renderOpenFileTabs();
@@ -1127,7 +1137,7 @@
     }
 
     // Handle mouse down on resize handle
-    $resizeHandle.on('mousedown', function(e) {
+    $resizeHandle.on('mousedown', function (e) {
       isResizing = true;
       startX = e.clientX;
       startWidth = parseInt($sidebar.width(), 10);
@@ -1136,7 +1146,7 @@
     });
 
     // Handle mouse move
-    $(document).on('mousemove', function(e) {
+    $(document).on('mousemove', function (e) {
       if (!isResizing) return;
 
       var width = startWidth + (e.clientX - startX);
@@ -1145,7 +1155,7 @@
     });
 
     // Handle mouse up
-    $(document).on('mouseup', function() {
+    $(document).on('mouseup', function () {
       if (!isResizing) return;
 
       isResizing = false;
@@ -1157,7 +1167,7 @@
     });
 
     // Handle collapse button click
-    $collapseBtn.on('click', function() {
+    $collapseBtn.on('click', function () {
       $sidebar.toggleClass('sidebar-collapsed');
       var isCollapsed = $sidebar.hasClass('sidebar-collapsed');
       localStorage.setItem('file-browser-collapsed', isCollapsed ? 'true' : 'false');
@@ -1173,7 +1183,7 @@
     var touchStartX = 0;
     var touchStartWidth = 0;
 
-    $resizeHandle.on('touchstart', function(e) {
+    $resizeHandle.on('touchstart', function (e) {
       var touch = e.originalEvent.touches[0];
       touchStartX = touch.clientX;
       touchStartWidth = parseInt($sidebar.width(), 10);
@@ -1181,7 +1191,7 @@
       e.preventDefault();
     });
 
-    $(document).on('touchmove', function(e) {
+    $(document).on('touchmove', function (e) {
       if (touchStartX === 0) return;
 
       var touch = e.originalEvent.touches[0];
@@ -1190,7 +1200,7 @@
       $sidebar.css('width', width + 'px');
     });
 
-    $(document).on('touchend touchcancel', function() {
+    $(document).on('touchend touchcancel', function () {
       if (touchStartX === 0) return;
 
       touchStartX = 0;

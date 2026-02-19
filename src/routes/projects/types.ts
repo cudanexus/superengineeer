@@ -249,4 +249,5 @@ export interface ClaudeFile {
   content: string;
   size: number;
   isGlobal: boolean;
+  isProtected?: boolean;
 }

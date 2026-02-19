@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { DEFAULT_WORKFLOW_RULES } from '../constants/claude-workflow';
 import { Project, ProjectRepository, CreateProjectData } from '../repositories/project';
 
 export interface FileSystemOperations {
@@ -76,6 +77,12 @@ export class DefaultProjectService implements ProjectService {
     }
 
     await this.initializeSuperengineerFolder(projectPath);
+
+    const claudeMdPath = path.join(projectPath, 'CLAUDE.md');
+    const claudeMdExists = await this.fileSystem.exists(claudeMdPath);
+    if (!claudeMdExists) {
+      await this.fileSystem.writeFile(claudeMdPath, DEFAULT_WORKFLOW_RULES);
+    }
 
     const data: CreateProjectData = { name: projectName, path: projectPath };
     const project = await this.projectRepository.create(data);

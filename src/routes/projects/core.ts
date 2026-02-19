@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
+import { DEFAULT_WORKFLOW_RULES, stripProtectedSection, validateProtectedSectionSave } from '../../constants/claude-workflow';
+import { AgentMessage } from '../../agents';
 import { asyncHandler, NotFoundError, ValidationError, getProjectLogs } from '../../utils';
 import { isPathWithinProject } from '../../utils/path-validator';
 import { SUPPORTED_MODELS, isValidModel, getModelDisplayName, DEFAULT_MODEL } from '../../config/models';
@@ -351,7 +353,8 @@ export function createCoreRouter(deps: ProjectRouterDependencies): Router {
   router.put('/:id/claude-files', validateParams(projectIdSchema), validateBody(saveClaudeFileSchema), projectExistsMiddleware, asyncHandler(async (req: Request, res: Response) => {
     const project = req.project!;
     const body = req.body as ClaudeFileSaveBody;
-    const { filePath, content } = body;
+    const { filePath } = body;
+    let content = body.content || '';
 
     // Security: Ensure the file is a CLAUDE.md file and within allowed paths
     const fileName = path.basename(filePath!);
@@ -388,8 +391,30 @@ export function createCoreRouter(deps: ProjectRouterDependencies): Router {
     const dir = path.dirname(filePath!);
     await fs.promises.mkdir(dir, { recursive: true });
 
+    // Enforce protected section if it already exists in the file, or if creating a new CLAUDE.md
+    if (fs.existsSync(filePath!)) {
+      const existingContent = await fs.promises.readFile(filePath!, 'utf-8');
+
+      try {
+        validateProtectedSectionSave(existingContent, content);
+      } catch (e: any) {
+        throw new ValidationError(e.message);
+      }
+
+      const { wasProtected: oldContentWasProtected } = stripProtectedSection(existingContent);
+      if (oldContentWasProtected) {
+        content = DEFAULT_WORKFLOW_RULES + content;
+      }
+    } else {
+      // If we are creating a new CLAUDE.md through this endpoint, prepend the rules if not already present
+      const { wasProtected } = stripProtectedSection(content);
+      if (!wasProtected) {
+        content = DEFAULT_WORKFLOW_RULES + content;
+      }
+    }
+
     // Write the file
-    await fs.promises.writeFile(filePath!, content!, 'utf-8');
+    await fs.promises.writeFile(filePath!, content, 'utf-8');
 
     res.json({
       success: true,

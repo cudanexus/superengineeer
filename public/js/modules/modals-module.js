@@ -2,13 +2,13 @@
  * Modals Module
  * Handles AI files modal and optimizations modal
  */
-(function(root, factory) {
+(function (root, factory) {
   if (typeof module === 'object' && module.exports) {
     module.exports = factory();
   } else {
     root.ModalsModule = factory();
   }
-}(typeof self !== 'undefined' ? self : this, function() {
+}(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
   // Dependencies injected via init()
@@ -61,7 +61,7 @@
     }
 
     api.getClaudeFiles(state.selectedProjectId)
-      .done(function(data) {
+      .done(function (data) {
         state.claudeFilesState.files = data.files || [];
         renderClaudeFilesList();
 
@@ -70,7 +70,7 @@
           selectClaudeFile(data.files[0].path);
         }
       })
-      .fail(function() {
+      .fail(function () {
         $list.html('<div class="p-2 text-xs text-red-400">Failed to load files</div>');
       });
   }
@@ -87,9 +87,9 @@
 
     var html = '';
 
-    files.forEach(function(file) {
+    files.forEach(function (file) {
       var isSelected = state.claudeFilesState.currentFile &&
-                       state.claudeFilesState.currentFile.path === file.path;
+        state.claudeFilesState.currentFile.path === file.path;
       var selectedClass = isSelected ? 'bg-purple-600/30 border-l-2 border-purple-500' : 'hover:bg-gray-700';
       var icon = file.isGlobal
         ? '<svg class="w-3 h-3 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>'
@@ -97,18 +97,18 @@
 
       html += '<div class="claude-file-item p-2 cursor-pointer ' + selectedClass + '" data-path="' + escapeHtml(file.path) + '">' +
         '<div class="flex items-center gap-2">' +
-          icon +
-          '<span class="text-xs text-gray-300 truncate">' + escapeHtml(file.name) + '</span>' +
+        icon +
+        '<span class="text-xs text-gray-300 truncate">' + escapeHtml(file.name) + '</span>' +
         '</div>' +
         '<div class="text-xs text-gray-500 mt-0.5 pl-5">' + formatFileSize(file.size) + '</div>' +
-      '</div>';
+        '</div>';
     });
 
     $list.html(html);
   }
 
   function selectClaudeFile(filePath) {
-    var file = state.claudeFilesState.files.find(function(f) { return f.path === filePath; });
+    var file = state.claudeFilesState.files.find(function (f) { return f.path === filePath; });
 
     if (!file) return;
 
@@ -120,7 +120,8 @@
       content: file.content,
       originalContent: file.content,
       size: file.size,
-      isGlobal: file.isGlobal
+      isGlobal: file.isGlobal,
+      originalEditorContent: file.content // The API already stripped the protected rules
     };
 
     $('#claude-file-name').text(file.name);
@@ -189,7 +190,7 @@
 
       // Apply syntax highlighting to code blocks
       if (hljs) {
-        $preview.find('pre code').each(function() {
+        $preview.find('pre code').each(function () {
           var el = this;
           var classes = el.className.split(/\s+/);
 
@@ -220,14 +221,16 @@
     $btn.text('Saving...').prop('disabled', true);
 
     api.saveClaudeFile(state.selectedProjectId, currentFile.path, newContent)
-      .done(function() {
+      .done(function () {
         currentFile.content = newContent;
         currentFile.originalContent = newContent;
+        // The editor content inside contentToSave is just the user's portion which is saved in the textarea
+        currentFile.originalEditorContent = $('#claude-file-editor').val();
         $btn.addClass('hidden').text('Save Changes').prop('disabled', false);
         showToast('File saved', 'success');
 
         // Update size in files list
-        var file = state.claudeFilesState.files.find(function(f) {
+        var file = state.claudeFilesState.files.find(function (f) {
           return f.path === currentFile.path;
         });
 
@@ -238,7 +241,7 @@
 
         renderClaudeFilesList();
       })
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         $btn.text('Save Changes').prop('disabled', false);
         showErrorToast(xhr, 'Failed to save file');
       });
@@ -270,7 +273,7 @@
 
     // Use dedicated optimization agent
     api.optimizeClaudeFile(state.selectedProjectId, currentFile.path, content, optimizationGoals)
-      .done(function(response) {
+      .done(function (response) {
         if (response.oneOffId && typeof OneOffTabsModule !== 'undefined') {
           OneOffTabsModule.createTab(state.selectedProjectId, response.oneOffId, 'Optimize CLAUDE.md');
 
@@ -287,7 +290,7 @@
 
         resetOptimizeButton();
       })
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         var errorMsg = 'Failed to start optimization';
 
         if (xhr.responseJSON && xhr.responseJSON.error) {
@@ -313,13 +316,13 @@
 
   function setupHandlers() {
     // AI file selection
-    $(document).on('click', '.claude-file-item', function() {
+    $(document).on('click', '.claude-file-item', function () {
       var path = $(this).data('path');
       selectClaudeFile(path);
     });
 
     // AI file editor change - show save button
-    $('#claude-file-editor').on('input', function() {
+    $('#claude-file-editor').on('input', function () {
       var currentFile = state.claudeFilesState.currentFile;
 
       if (!currentFile) return;
@@ -327,7 +330,9 @@
       var $btn = $('#btn-save-claude-file');
       var newContent = $(this).val();
 
-      if (newContent !== currentFile.originalContent) {
+      var compareContent = currentFile.originalEditorContent !== undefined ? currentFile.originalEditorContent : currentFile.originalContent;
+
+      if (newContent !== compareContent) {
         $btn.removeClass('hidden');
       } else {
         $btn.addClass('hidden');
@@ -337,17 +342,17 @@
     });
 
     // Save AI file
-    $('#btn-save-claude-file').on('click', function() {
+    $('#btn-save-claude-file').on('click', function () {
       saveClaudeFile();
     });
 
     // Optimize AI file
-    $('#btn-optimize-claude-file').on('click', function() {
+    $('#btn-optimize-claude-file').on('click', function () {
       optimizeClaudeFile();
     });
 
     // Toggle preview
-    $('#btn-toggle-claude-preview').on('click', function() {
+    $('#btn-toggle-claude-preview').on('click', function () {
       toggleClaudeFilePreview();
     });
   }

@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { AgentMessage } from '../../agents';
+import { stripProtectedSection } from '../../constants/claude-workflow';
 import { ConversationStats, OptimizationCheck, ClaudeFile } from './types';
 
 export function computeConversationStats(
@@ -223,14 +224,19 @@ export function findClaudeFiles(projectPath: string): ClaudeFile[] {
 
   if (fs.existsSync(globalClaudePath)) {
     try {
-      const content = fs.readFileSync(globalClaudePath, 'utf-8');
+      let content = fs.readFileSync(globalClaudePath, 'utf-8');
       const stats = fs.statSync(globalClaudePath);
+
+      const { strippedContent, wasProtected } = stripProtectedSection(content);
+      content = strippedContent;
+
       files.push({
         path: globalClaudePath,
         name: 'CLAUDE.md (Global)',
         content,
         size: stats.size,
         isGlobal: true,
+        isProtected: wasProtected,
       });
     } catch {
       // Ignore read errors
@@ -242,14 +248,19 @@ export function findClaudeFiles(projectPath: string): ClaudeFile[] {
 
   if (fs.existsSync(projectClaudePath)) {
     try {
-      const content = fs.readFileSync(projectClaudePath, 'utf-8');
+      let content = fs.readFileSync(projectClaudePath, 'utf-8');
       const stats = fs.statSync(projectClaudePath);
+
+      const { strippedContent, wasProtected } = stripProtectedSection(content);
+      content = strippedContent;
+
       files.push({
         path: projectClaudePath,
         name: 'CLAUDE.md (Project)',
         content,
         size: stats.size,
         isGlobal: false,
+        isProtected: wasProtected,
       });
     } catch {
       // Ignore read errors
@@ -261,14 +272,19 @@ export function findClaudeFiles(projectPath: string): ClaudeFile[] {
 
   if (fs.existsSync(localClaudePath)) {
     try {
-      const content = fs.readFileSync(localClaudePath, 'utf-8');
+      let content = fs.readFileSync(localClaudePath, 'utf-8');
       const stats = fs.statSync(localClaudePath);
+
+      const { strippedContent, wasProtected } = stripProtectedSection(content);
+      content = strippedContent;
+
       files.push({
         path: localClaudePath,
         name: 'CLAUDE.md (Local)',
         content,
         size: stats.size,
         isGlobal: false,
+        isProtected: wasProtected,
       });
     } catch {
       // Ignore read errors
