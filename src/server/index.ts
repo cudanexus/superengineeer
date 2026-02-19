@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { AppConfig } from '../config';
+import { DEFAULT_WORKFLOW_RULES } from '../constants/claude-workflow';
 import { createApiRouter, getAgentManager, getRoadmapGenerator, getShellService, getRalphLoopService, getConversationRepository, getProjectRepository, setWebSocketServer, getRunProcessManager } from '../routes';
 import { createAuthRouter } from '../routes/auth';
 import { DefaultWebSocketServer, ProjectWebSocketServer } from '../websocket';
@@ -171,6 +172,9 @@ export class ExpressHttpServer implements HttpServer {
     // Auto-register default project if none exist
     await this.ensureDefaultProject();
 
+    // Ensure all projects have a CLAUDE.md file
+    await this.ensureClaudeMdFiles();
+
     return new Promise((resolve, reject) => {
       this.httpServer = createServer(this.app);
 
@@ -266,6 +270,43 @@ export class ExpressHttpServer implements HttpServer {
       console.log(`Auto-registered default project: ${DEFAULT_PROJECT_PATH}`);
     } catch (err) {
       console.warn('Failed to auto-register default project:', err);
+    }
+  }
+
+  /**
+   * Ensure all registered projects have a CLAUDE.md file.
+   * This runs on every startup to cover projects that were registered
+   * before CLAUDE.md auto-creation was added, or via ensureDefaultProject
+   * which bypasses ProjectService.createProject.
+   */
+  private async ensureClaudeMdFiles(): Promise<void> {
+    try {
+      let projectRepository = getProjectRepository();
+
+      if (!projectRepository) {
+        const { getDataDirectory } = await import('../utils');
+        const { FileProjectRepository } = await import('../repositories');
+        projectRepository = new FileProjectRepository(getDataDirectory());
+      }
+
+      const projects = await projectRepository.findAll();
+
+      for (const project of projects) {
+        const projectPath = (project as { path: string }).path;
+        if (!projectPath || !fs.existsSync(projectPath)) continue;
+
+        const claudeMdPath = path.join(projectPath, 'CLAUDE.md');
+        if (!fs.existsSync(claudeMdPath)) {
+          try {
+            fs.writeFileSync(claudeMdPath, DEFAULT_WORKFLOW_RULES, 'utf-8');
+            console.log(`Created CLAUDE.md for project: ${projectPath}`);
+          } catch {
+            // Silently skip if we can't write (e.g. permission issues)
+          }
+        }
+      }
+    } catch {
+      // Non-critical, don't break startup
     }
   }
 
