@@ -48,11 +48,14 @@ export function createInventifyRouter(
         return;
       }
 
-      const { projectTypes, themes } = parseResult.data;
+      const { projectTypes, themes, languages, technologies, customPrompt } = parseResult.data;
 
       const result = await deps.inventifyService!.start({
         projectTypes,
         themes,
+        languages,
+        technologies,
+        customPrompt,
         inventifyFolder: settings.inventifyFolder,
       });
 

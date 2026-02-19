@@ -163,6 +163,9 @@ export const gitPushTagSchema = z.object({
 export const inventifyStartSchema = z.object({
   projectTypes: z.array(z.string()).min(1, 'At least one project type is required'),
   themes: z.array(z.string()).min(1, 'At least one theme is required'),
+  languages: z.array(z.string()).optional().default([]),
+  technologies: z.array(z.string()).optional().default([]),
+  customPrompt: z.string().optional().default(''),
 });
 
 export const inventifySuggestNamesSchema = z.object({

@@ -1123,26 +1123,6 @@
     </div>
   </div>
 
-  <!-- Confirm Permission Mode Change Modal -->
-  <div id="modal-confirm-mode-change" class="modal hidden">
-    <div class="modal-backdrop"></div>
-    <div class="modal-content">
-      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-sm">
-        <div class="p-3 border-b border-gray-700">
-          <h3 class="font-semibold text-blue-400">Switch Permission Mode</h3>
-        </div>
-        <div class="p-3">
-          <p class="text-sm text-gray-300 mb-2">Switch to <strong id="mode-change-target-label" class="text-white"></strong> mode?</p>
-          <p class="text-xs text-gray-500">The agent will be restarted and will continue from where it left off.</p>
-        </div>
-        <div class="p-3 border-t border-gray-700 flex justify-end gap-2">
-          <button type="button" class="modal-close px-3 py-1.5 text-sm text-gray-300 hover:text-white transition-colors">Cancel</button>
-          <button type="button" id="btn-confirm-mode-change" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-sm transition-colors">Switch & Restart</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <!-- Confirm Wipe All Data Modal -->
   <div id="modal-confirm-wipe-all" class="modal hidden" style="z-index: 50;">
     <div class="modal-backdrop"></div>
@@ -3275,6 +3255,49 @@
                 <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="iot" class="rounded bg-gray-700 border-gray-600 text-yellow-500 focus:ring-yellow-500"><span class="text-sm text-gray-300">IoT / Hardware</span></label>
               </div>
               <input id="inventify-custom-themes" type="text" placeholder="Custom themes (comma-separated)" class="mt-2 w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-yellow-500">
+            </div>
+            <!-- Languages -->
+            <div class="mt-4">
+              <label class="block text-xs font-medium text-gray-300 mb-2">Languages (optional)</label>
+              <div id="inventify-languages" class="grid grid-cols-2 gap-1.5">
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="TypeScript" class="rounded bg-gray-700 border-gray-600 text-green-500 focus:ring-green-500"><span class="text-sm text-gray-300">TypeScript</span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="JavaScript" class="rounded bg-gray-700 border-gray-600 text-green-500 focus:ring-green-500"><span class="text-sm text-gray-300">JavaScript</span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="Python" class="rounded bg-gray-700 border-gray-600 text-green-500 focus:ring-green-500"><span class="text-sm text-gray-300">Python</span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="Rust" class="rounded bg-gray-700 border-gray-600 text-green-500 focus:ring-green-500"><span class="text-sm text-gray-300">Rust</span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="Go" class="rounded bg-gray-700 border-gray-600 text-green-500 focus:ring-green-500"><span class="text-sm text-gray-300">Go</span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="Java" class="rounded bg-gray-700 border-gray-600 text-green-500 focus:ring-green-500"><span class="text-sm text-gray-300">Java</span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="C#" class="rounded bg-gray-700 border-gray-600 text-green-500 focus:ring-green-500"><span class="text-sm text-gray-300">C#</span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="C++" class="rounded bg-gray-700 border-gray-600 text-green-500 focus:ring-green-500"><span class="text-sm text-gray-300">C++</span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="Ruby" class="rounded bg-gray-700 border-gray-600 text-green-500 focus:ring-green-500"><span class="text-sm text-gray-300">Ruby</span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="Swift" class="rounded bg-gray-700 border-gray-600 text-green-500 focus:ring-green-500"><span class="text-sm text-gray-300">Swift</span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="Kotlin" class="rounded bg-gray-700 border-gray-600 text-green-500 focus:ring-green-500"><span class="text-sm text-gray-300">Kotlin</span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="PHP" class="rounded bg-gray-700 border-gray-600 text-green-500 focus:ring-green-500"><span class="text-sm text-gray-300">PHP</span></label>
+              </div>
+              <input id="inventify-custom-languages" type="text" placeholder="Custom languages (comma-separated)" class="mt-2 w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-green-500">
+            </div>
+            <!-- Technologies -->
+            <div class="mt-4">
+              <label class="block text-xs font-medium text-gray-300 mb-2">Technologies / Frameworks (optional)</label>
+              <div id="inventify-technologies" class="grid grid-cols-2 gap-1.5">
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="React" class="rounded bg-gray-700 border-gray-600 text-blue-500 focus:ring-blue-500"><span class="text-sm text-gray-300">React</span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="Next.js" class="rounded bg-gray-700 border-gray-600 text-blue-500 focus:ring-blue-500"><span class="text-sm text-gray-300">Next.js</span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="Express" class="rounded bg-gray-700 border-gray-600 text-blue-500 focus:ring-blue-500"><span class="text-sm text-gray-300">Express</span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="FastAPI" class="rounded bg-gray-700 border-gray-600 text-blue-500 focus:ring-blue-500"><span class="text-sm text-gray-300">FastAPI</span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="Django" class="rounded bg-gray-700 border-gray-600 text-blue-500 focus:ring-blue-500"><span class="text-sm text-gray-300">Django</span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="Spring Boot" class="rounded bg-gray-700 border-gray-600 text-blue-500 focus:ring-blue-500"><span class="text-sm text-gray-300">Spring Boot</span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="Actix" class="rounded bg-gray-700 border-gray-600 text-blue-500 focus:ring-blue-500"><span class="text-sm text-gray-300">Actix</span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="Tokio" class="rounded bg-gray-700 border-gray-600 text-blue-500 focus:ring-blue-500"><span class="text-sm text-gray-300">Tokio</span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="Tauri" class="rounded bg-gray-700 border-gray-600 text-blue-500 focus:ring-blue-500"><span class="text-sm text-gray-300">Tauri</span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="Electron" class="rounded bg-gray-700 border-gray-600 text-blue-500 focus:ring-blue-500"><span class="text-sm text-gray-300">Electron</span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="Flutter" class="rounded bg-gray-700 border-gray-600 text-blue-500 focus:ring-blue-500"><span class="text-sm text-gray-300">Flutter</span></label>
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="TailwindCSS" class="rounded bg-gray-700 border-gray-600 text-blue-500 focus:ring-blue-500"><span class="text-sm text-gray-300">TailwindCSS</span></label>
+              </div>
+              <input id="inventify-custom-technologies" type="text" placeholder="Custom technologies (comma-separated)" class="mt-2 w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500">
+            </div>
+            <!-- Custom Prompt -->
+            <div class="mt-4">
+              <label class="block text-xs font-medium text-gray-300 mb-2">Custom Instructions (optional)</label>
+              <textarea id="inventify-custom-prompt" rows="3" placeholder="Additional instructions for the brainstorm agent..." class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-purple-500 resize-y"></textarea>
             </div>
           </div>
           <!-- Ideas cards -->

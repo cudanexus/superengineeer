@@ -24,6 +24,9 @@
     selectedIdeaIndex: null,
     lastTypes: null,
     lastThemes: null,
+    lastLanguages: null,
+    lastTechnologies: null,
+    lastCustomPrompt: null,
   };
   var deps = {};
 
@@ -112,7 +115,12 @@
 
     var pending = state.pendingStatusEvent;
     state.pendingStatusEvent = null;
-    InventifyModule.handleOneOffStatus(pending.oneOffId, pending.status);
+
+    if (pending.status === 'waiting') {
+      InventifyModule.handleOneOffWaiting(pending.oneOffId, true);
+    } else {
+      InventifyModule.handleOneOffStatus(pending.oneOffId, pending.status);
+    }
   }
 
   function lockModal() {
@@ -145,10 +153,18 @@
     state.selectedIdeaIndex = null;
     state.lastTypes = null;
     state.lastThemes = null;
+    state.lastLanguages = null;
+    state.lastTechnologies = null;
+    state.lastCustomPrompt = null;
     $('#inventify-types input[type="checkbox"]').prop('checked', false);
     $('#inventify-themes input[type="checkbox"]').prop('checked', false);
+    $('#inventify-languages input[type="checkbox"]').prop('checked', false);
+    $('#inventify-technologies input[type="checkbox"]').prop('checked', false);
     $('#inventify-custom-types').val('');
     $('#inventify-custom-themes').val('');
+    $('#inventify-custom-languages').val('');
+    $('#inventify-custom-technologies').val('');
+    $('#inventify-custom-prompt').val('');
     $('#inventify-status').addClass('hidden').empty();
     $('#inventify-ideas').addClass('hidden').empty();
     $('#inventify-names').addClass('hidden').empty();
@@ -251,6 +267,11 @@
       .concat(getCustomValues('#inventify-custom-types'));
     var themes = getCheckedValues('#inventify-themes')
       .concat(getCustomValues('#inventify-custom-themes'));
+    var languages = getCheckedValues('#inventify-languages')
+      .concat(getCustomValues('#inventify-custom-languages'));
+    var technologies = getCheckedValues('#inventify-technologies')
+      .concat(getCustomValues('#inventify-custom-technologies'));
+    var customPrompt = ($('#inventify-custom-prompt').val() || '').trim();
 
     if (projectTypes.length === 0) {
       showStatus('Please select or enter at least one project type.', 'error');
@@ -269,6 +290,9 @@
     state.phase = 'brainstorming';
     state.lastTypes = projectTypes;
     state.lastThemes = themes;
+    state.lastLanguages = languages;
+    state.lastTechnologies = technologies;
+    state.lastCustomPrompt = customPrompt;
     $('#btn-inventify-generate').text('Brainstorming...');
     $('#btn-inventify-regenerate').addClass('hidden');
     showStatus('Agent is brainstorming 5 project ideas...', 'info');
@@ -277,6 +301,9 @@
     api.startInventify({
       projectTypes: projectTypes,
       themes: themes,
+      languages: languages,
+      technologies: technologies,
+      customPrompt: customPrompt,
     }).done(function(result) {
       state.activeOneOffId = result.oneOffId;
       state.placeholderProjectId = result.placeholderProjectId;
@@ -316,6 +343,9 @@
     api.startInventify({
       projectTypes: state.lastTypes,
       themes: state.lastThemes,
+      languages: state.lastLanguages || [],
+      technologies: state.lastTechnologies || [],
+      customPrompt: state.lastCustomPrompt || '',
     }).done(function(result) {
       state.activeOneOffId = result.oneOffId;
       state.placeholderProjectId = result.placeholderProjectId;
@@ -622,20 +652,6 @@
 
     if (oneOffId !== state.activeOneOffId) return;
 
-    if (state.phase === 'brainstorming' && status === 'stopped') {
-      state.activeOneOffId = null;
-      unlockModal();
-      fetchAndRenderIdeas();
-      return;
-    }
-
-    if (state.phase === 'naming' && status === 'stopped') {
-      state.activeOneOffId = null;
-      unlockModal();
-      fetchAndRenderNames();
-      return;
-    }
-
     if (status === 'error') {
       state.activeOneOffId = null;
       state.phase = 'idle';
@@ -643,6 +659,30 @@
       unlockModal();
       showStatus('Inventify agent encountered an error.', 'error');
       resetToIdle();
+    }
+  };
+
+  InventifyModule.handleOneOffWaiting = function(oneOffId, isWaiting) {
+    if (!isWaiting) return;
+
+    if (!state.activeOneOffId && isModalLocked()) {
+      state.pendingStatusEvent = { oneOffId: oneOffId, status: 'waiting' };
+      return;
+    }
+
+    if (oneOffId !== state.activeOneOffId) return;
+
+    if (state.phase === 'brainstorming') {
+      state.activeOneOffId = null;
+      unlockModal();
+      fetchAndRenderIdeas();
+      return;
+    }
+
+    if (state.phase === 'naming') {
+      state.activeOneOffId = null;
+      unlockModal();
+      fetchAndRenderNames();
     }
   };
 

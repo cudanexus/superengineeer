@@ -27,8 +27,6 @@
   // Per-project permission mode map: { projectId: 'acceptEdits' | 'plan' }
   var projectModes = {};
 
-  // Pending mode change target (set when modal is shown)
-  var pendingModeTarget = null;
 
   function init(deps) {
     state = deps.state;
@@ -178,8 +176,7 @@
   }
 
   /**
-   * Show confirmation modal for mode change when agent is running,
-   * or apply immediately when agent is not running
+   * Set permission mode. If agent is running, restart immediately.
    */
   function setMode(mode) {
     var project = findProjectById(state.selectedProjectId);
@@ -188,30 +185,13 @@
 
     if (currentMode === mode) return;
 
+    applyModeChange(mode);
+
     if (isRunning && state.currentSessionId) {
-      // Agent is running - show confirmation modal
-      pendingModeTarget = mode;
-      $('#mode-change-target-label').text(getModeLabel(mode));
-      openModal('modal-confirm-mode-change');
+      restartWithMode(mode);
     } else {
-      // Agent not running - apply immediately
-      applyModeChange(mode);
       showToast('Permission mode set to ' + getModeLabel(mode), 'info');
     }
-  }
-
-  /**
-   * Called when user confirms the mode change in the modal
-   */
-  function confirmModeChange() {
-    if (!pendingModeTarget) return;
-
-    var targetMode = pendingModeTarget;
-    pendingModeTarget = null;
-    closeModal('modal-confirm-mode-change');
-
-    applyModeChange(targetMode);
-    restartWithMode(targetMode);
   }
 
   /**
@@ -306,10 +286,6 @@
 
     $('#btn-perm-plan').on('click', function() {
       setMode('plan');
-    });
-
-    $('#btn-confirm-mode-change').on('click', function() {
-      confirmModeChange();
     });
   }
 

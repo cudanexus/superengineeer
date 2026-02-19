@@ -3126,14 +3126,9 @@
       $('#btn-start-agent').addClass('hidden');
       $('#btn-stop-agent').removeClass('hidden');
       $('#btn-restart-agent').removeClass('hidden');
-    } else if (hasSession) {
-      // Agent was started but is now stopped: show Start, hide Stop + Restart
-      $('#btn-start-agent').removeClass('hidden');
-      $('#btn-stop-agent').addClass('hidden');
-      $('#btn-restart-agent').addClass('hidden');
     } else {
-      // Never started: hide all
-      $('#btn-start-agent').addClass('hidden');
+      // Agent not running: show Start, hide Stop + Restart
+      $('#btn-start-agent').removeClass('hidden');
       $('#btn-stop-agent').addClass('hidden');
       $('#btn-restart-agent').addClass('hidden');
     }
@@ -5196,6 +5191,10 @@
             message.projectId, message.data.oneOffId,
             message.data.isWaiting, message.data.version
           );
+        }
+
+        if (InventifyModule) {
+          InventifyModule.handleOneOffWaiting(message.data.oneOffId, message.data.isWaiting);
         }
         break;
       case 'github_clone_progress':

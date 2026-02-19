@@ -77,7 +77,7 @@ All project routes prefixed with `/api/projects/:id`. Standard REST verbs (GET/P
 
 **Run Configurations** (`/:id/run-configs`): GET / (list), GET `/importable` (scan project files), POST / (create), PUT `/:configId` (update), DELETE `/:configId`, POST `/:configId/start`, POST `/:configId/stop`, GET `/:configId/status`
 
-**Inventify** (`/api/projects/inventify`): `POST /start` (body: projectTypes[], themes[]) — brainstorms 5 project ideas, `GET /ideas` — returns pending ideas, `POST /suggest-names` (body: selectedIndex) — suggests 5 project names for selected idea, `GET /name-suggestions` — returns pending name suggestions, `POST /select` (body: selectedIndex, projectName) — picks an idea + name and builds it (creates directory + plan, registers project, starts Ralph Loop), `GET /build-result` — returns `{newProjectId, projectName}` after build completes (polled by frontend)
+**Inventify** (`/api/projects/inventify`): `POST /start` (body: projectTypes[], themes[], languages?[], technologies?[], customPrompt?) — brainstorms 5 project ideas, `GET /ideas` — returns pending ideas, `POST /suggest-names` (body: selectedIndex) — suggests 5 project names for selected idea, `GET /name-suggestions` — returns pending name suggestions, `POST /select` (body: selectedIndex, projectName) — picks an idea + name and builds it (creates directory + plan, registers project, starts Ralph Loop), `GET /build-result` — returns `{newProjectId, projectName}` after build completes (polled by frontend)
 
 ## WebSocket Messages
 
@@ -134,7 +134,7 @@ Sessions use UUID v4 IDs: `--session-id {uuid}` (new) or `--resume {uuid}` (exis
 - **GitHub Import**: Browse/search repos via `gh` CLI, clone and register as project with progress streaming
 - **GitHub Issues**: Browse issues with state/label/assignee filters, view detail with comments, create new issues (with labels, assignees, milestones), "Start Working" (generates agent prompt), "Add to Roadmap" (creates task in milestone), close issues, add comments
 - **GitHub PRs**: Create PRs with auto-generated title/description (from conversation + diff), list PRs, view PR detail with reviews/comments, "Fix PR Feedback" (generates agent prompt from review feedback)
-- **Inventify**: Project idea generator — select project types + themes, agent brainstorms 5 ideas, user picks one, then agent creates detailed plan + directory with `doc/plan.md`, registers as Claudito project, auto-starts Ralph Loop to build it
+- **Inventify**: Project idea generator — select project types + themes, optionally languages + technologies + custom instructions, agent brainstorms 5 ideas, user picks one, then agent creates detailed plan + directory with `doc/plan.md`, registers as Claudito project, auto-starts Ralph Loop to build it
 - **Folder Browser**: "New Folder" button to create directories inline while browsing
 - **Other**: Conversation history (view/rename, configurable limit), debug modal, mobile-responsive layout, Settings Danger Zone (wipe all data)
 
