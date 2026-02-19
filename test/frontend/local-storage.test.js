@@ -18,23 +18,23 @@ describe('LocalStorage', () => {
 
   describe('KEYS', () => {
     it('should have FONT_SIZE key', () => {
-      expect(LocalStorage.KEYS.FONT_SIZE).toBe('claudito-font-size');
+      expect(LocalStorage.KEYS.FONT_SIZE).toBe('superengineer-font-size');
     });
 
     it('should have ACTIVE_TAB key', () => {
-      expect(LocalStorage.KEYS.ACTIVE_TAB).toBe('claudito-active-tab');
+      expect(LocalStorage.KEYS.ACTIVE_TAB).toBe('superengineer-active-tab');
     });
 
     it('should have SELECTED_PROJECT key', () => {
-      expect(LocalStorage.KEYS.SELECTED_PROJECT).toBe('claudito-selected-project');
+      expect(LocalStorage.KEYS.SELECTED_PROJECT).toBe('superengineer-selected-project');
     });
 
     it('should have SCROLL_LOCK key', () => {
-      expect(LocalStorage.KEYS.SCROLL_LOCK).toBe('claudito-scroll-lock');
+      expect(LocalStorage.KEYS.SCROLL_LOCK).toBe('superengineer-scroll-lock');
     });
 
     it('should have MILESTONE_EXPANDED key', () => {
-      expect(LocalStorage.KEYS.MILESTONE_EXPANDED).toBe('claudito-milestone-expanded');
+      expect(LocalStorage.KEYS.MILESTONE_EXPANDED).toBe('superengineer-milestone-expanded');
     });
   });
 
@@ -253,8 +253,8 @@ describe('LocalStorage', () => {
   });
 
   describe('clear', () => {
-    it('should remove all claudito keys', () => {
-      // Set up claudito keys
+    it('should remove all superengineer keys', () => {
+      // Set up superengineer keys
       localStorage.setItem(LocalStorage.KEYS.FONT_SIZE, '14');
       localStorage.setItem(LocalStorage.KEYS.ACTIVE_TAB, '"agent-output"');
       localStorage.setItem(LocalStorage.KEYS.SELECTED_PROJECT, '"proj-1"');
@@ -271,7 +271,7 @@ describe('LocalStorage', () => {
       expect(localStorage.getItem(LocalStorage.KEYS.MILESTONE_EXPANDED)).toBe(null);
     });
 
-    it('should not affect non-claudito keys', () => {
+    it('should not affect non-superengineer keys', () => {
       localStorage.setItem('other-app-key', 'should-remain');
       localStorage.setItem(LocalStorage.KEYS.FONT_SIZE, '14');
 
@@ -291,7 +291,7 @@ describe('LocalStorage', () => {
     it('should clean up test key', () => {
       LocalStorage.isAvailable();
 
-      expect(localStorage.getItem('__claudito_test__')).toBe(null);
+      expect(localStorage.getItem('__superengineer_test__')).toBe(null);
     });
   });
 

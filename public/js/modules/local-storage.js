@@ -20,11 +20,11 @@
    * Storage keys used by the application
    */
   LocalStorage.KEYS = {
-    FONT_SIZE: 'claudito-font-size',
-    ACTIVE_TAB: 'claudito-active-tab',
-    SELECTED_PROJECT: 'claudito-selected-project',
-    SCROLL_LOCK: 'claudito-scroll-lock',
-    MILESTONE_EXPANDED: 'claudito-milestone-expanded'
+    FONT_SIZE: 'superengineer-font-size',
+    ACTIVE_TAB: 'superengineer-active-tab',
+    SELECTED_PROJECT: 'superengineer-selected-project',
+    SCROLL_LOCK: 'superengineer-scroll-lock',
+    MILESTONE_EXPANDED: 'superengineer-milestone-expanded'
   };
 
   /**
@@ -75,7 +75,7 @@
   };
 
   /**
-   * Clear all claudito keys from localStorage
+   * Clear all superengineer keys from localStorage
    * @returns {boolean} True if clear succeeded
    */
   LocalStorage.clear = function() {
@@ -96,7 +96,7 @@
    */
   LocalStorage.isAvailable = function() {
     try {
-      var testKey = '__claudito_test__';
+      var testKey = '__superengineer_test__';
       localStorage.setItem(testKey, 'test');
       localStorage.removeItem(testKey);
       return true;

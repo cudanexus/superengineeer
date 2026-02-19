@@ -10,7 +10,7 @@ function printHelp(): void {
   console.log(`
 Claudito - Claude Code Autonomous Agent Manager
 
-Usage: claudito [options]
+Usage: superengineer [options]
 
 Options:
   -p, --port <port>     Server port (default: 3000, env: PORT)
@@ -29,11 +29,11 @@ Environment Variables:
   CLAUDITO_DEV_MODE     Enable development mode (1 to enable)
 
 Examples:
-  claudito                    Start with defaults (localhost:3000)
-  claudito -p 8080            Start on port 8080
-  claudito --host 0.0.0.0     Listen on all interfaces
-  claudito --dev              Start with development features
-  PORT=8080 claudito          Start on port 8080 via env var
+  superengineer                    Start with defaults (localhost:3000)
+  superengineer -p 8080            Start on port 8080
+  superengineer --host 0.0.0.0     Listen on all interfaces
+  superengineer --dev              Start with development features
+  PORT=8080 superengineer          Start on port 8080 via env var
 `);
 }
 
@@ -91,7 +91,7 @@ async function main(): Promise<void> {
   }
 
   if (args.version) {
-    console.log(`claudito v${VERSION}`);
+    console.log(`superengineer v${VERSION}`);
     process.exit(0);
   }
 
@@ -112,7 +112,7 @@ async function main(): Promise<void> {
   const config = configLoader.load();
 
   initializeLogger({ level: config.logLevel });
-  const logger = getLogger('claudito');
+  const logger = getLogger('superengineer');
 
   const server = new ExpressHttpServer({ config });
 

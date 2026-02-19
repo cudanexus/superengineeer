@@ -1,6 +1,6 @@
 # Claudito
 
-[![npm version](https://img.shields.io/npm/v/claudito.svg)](https://www.npmjs.com/package/claudito)
+[![npm version](https://img.shields.io/npm/v/superengineer.svg)](https://www.npmjs.com/package/superengineer)
 [![CI](https://github.com/comfortablynumb/claudito/actions/workflows/ci.yml/badge.svg)](https://github.com/comfortablynumb/claudito/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -23,7 +23,7 @@ A web-based manager for [Claude Code](https://docs.anthropic.com/en/docs/claude-
 **Best Practices:**
 1. **Use authentication**: Claudito requires login by default. Set custom credentials for production:
    ```bash
-   CLAUDITO_USERNAME=myuser CLAUDITO_PASSWORD=mystrongpassword claudito
+   CLAUDITO_USERNAME=myuser CLAUDITO_PASSWORD=mystrongpassword superengineer
    ```
 2. **Avoid exposing to the internet**: Use a reverse proxy with HTTPS if needed
 3. **Configure firewall rules**: Only allow trusted IP addresses
@@ -35,11 +35,11 @@ See [Security Recommendations](#security-recommendations) for more details.
 
 ```bash
 # Run directly with npx (no installation required)
-npx claudito
+npx superengineer
 
 # Or install globally
-npm install -g claudito
-claudito
+npm install -g superengineer
+superengineer
 ```
 
 Open your browser at **http://localhost:3000** to access the web UI.
@@ -94,7 +94,7 @@ For more details, see the [Claude Code documentation](https://docs.anthropic.com
 No installation required. Run directly:
 
 ```bash
-npx claudito
+npx superengineer
 ```
 
 This downloads and runs the latest version automatically.
@@ -104,8 +104,8 @@ This downloads and runs the latest version automatically.
 Install once, run anywhere:
 
 ```bash
-npm install -g claudito
-claudito
+npm install -g superengineer
+superengineer
 ```
 
 ### Option 3: Local Installation
@@ -113,8 +113,8 @@ claudito
 For development or integration into a project:
 
 ```bash
-npm install claudito
-npx claudito
+npm install superengineer
+npx superengineer
 ```
 
 ## Usage
@@ -123,17 +123,17 @@ npx claudito
 
 ```bash
 # Start with defaults (localhost:3000)
-claudito
+superengineer
 
 # Specify a custom port
-claudito --port 8080
-claudito -p 8080
+superengineer --port 8080
+superengineer -p 8080
 
 # Listen on all network interfaces
-claudito --host 0.0.0.0
+superengineer --host 0.0.0.0
 
 # Combine options
-claudito -p 8080 --host 0.0.0.0
+superengineer -p 8080 --host 0.0.0.0
 ```
 
 ### CLI Options
@@ -151,13 +151,13 @@ All options can also be set via environment variables:
 
 ```bash
 # Linux/macOS
-PORT=8080 HOST=0.0.0.0 LOG_LEVEL=debug claudito
+PORT=8080 HOST=0.0.0.0 LOG_LEVEL=debug superengineer
 
 # Windows (PowerShell)
-$env:PORT=8080; $env:HOST="0.0.0.0"; claudito
+$env:PORT=8080; $env:HOST="0.0.0.0"; superengineer
 
 # Windows (CMD)
-set PORT=8080 && set HOST=0.0.0.0 && claudito
+set PORT=8080 && set HOST=0.0.0.0 && superengineer
 ```
 
 | Variable | Default | Description |
@@ -466,7 +466,7 @@ Access via Settings > Danger Zone. The "Wipe All Data" button permanently delete
 - All project registrations and per-project `.superengineer-v5/` directories
 - All conversation history
 - Global settings, PID tracking, and project index (`~/.superengineer-v5/`)
-- Temporary MCP config files (`{OS_TEMP}/claudito-mcp/`)
+- Temporary MCP config files (`{OS_TEMP}/superengineer-mcp/`)
 
 Project source files are **never** deleted.
 
@@ -715,8 +715,8 @@ ws.send(JSON.stringify({ type: 'subscribe', projectId: 'your-project-id' }));
 ### Setup
 
 ```bash
-git clone https://github.com/comfortablynumb/claudito.git
-cd claudito
+git clone https://github.com/comfortablynumb/superengineer.git
+cd superengineer
 npm install
 ```
 
@@ -736,7 +736,7 @@ npm install
 ### Project Structure
 
 ```
-claudito/
+superengineer/
 ├── src/
 │   ├── index.ts          # Library entry point
 │   ├── cli.ts            # CLI entry point
@@ -751,7 +751,7 @@ claudito/
 ├── public/               # Static frontend assets
 ├── test/                 # Test files
 ├── doc/                  # Documentation
-└── claudito-plugin/      # Bundled Claude Code plugin
+└── superengineer-plugin/      # Bundled Claude Code plugin
     ├── plugin.json       # Plugin manifest
     └── skills/           # Plugin skills
         └── mermaid.md    # Mermaid diagram generation skill
@@ -772,18 +772,18 @@ npm run build
 # Create the package tarball
 npm pack
 
-# This creates claudito-0.1.0.tgz (version may vary)
+# This creates superengineer-0.1.0.tgz (version may vary)
 
 # Install globally from the tarball
-npm install -g ./claudito-0.1.0.tgz
+npm install -g ./superengineer-0.1.0.tgz
 
 # Test the CLI
-claudito --help
-claudito --version
-claudito  # Starts the server
+superengineer --help
+superengineer --version
+superengineer  # Starts the server
 
 # Uninstall when done
-npm uninstall -g claudito
+npm uninstall -g superengineer
 ```
 
 ### Method 2: npm link
@@ -797,12 +797,12 @@ npm run build
 # Create global symlink
 npm link
 
-# Now 'claudito' command is available globally
-claudito --help
-claudito
+# Now 'superengineer' command is available globally
+superengineer --help
+superengineer
 
 # Unlink when done
-npm unlink -g claudito
+npm unlink -g superengineer
 ```
 
 ### Method 3: Dry Run
@@ -856,19 +856,19 @@ For thorough testing, install in an isolated directory:
 
 ```bash
 # Create test directory
-mkdir /tmp/claudito-test
-cd /tmp/claudito-test
+mkdir /tmp/superengineer-test
+cd /tmp/superengineer-test
 
 # Install from tarball
 npm init -y
-npm install /path/to/claudito-0.1.0.tgz
+npm install /path/to/superengineer-0.1.0.tgz
 
 # Run via npx
-npx claudito --help
+npx superengineer --help
 
 # Clean up
 cd ..
-rm -rf /tmp/claudito-test
+rm -rf /tmp/superengineer-test
 ```
 
 ## Security Recommendations
@@ -885,20 +885,20 @@ By default, Claudito binds to `localhost` which only accepts connections from th
 
 ```bash
 # Local only (most secure)
-claudito --host 127.0.0.1
+superengineer --host 127.0.0.1
 
 # Specific network interface (LAN access)
-claudito --host 192.168.1.100
+superengineer --host 192.168.1.100
 
 # All interfaces (least secure - requires authentication)
-claudito --host 0.0.0.0
+superengineer --host 0.0.0.0
 ```
 
 ### Best Practices
 
 1. **Use authentication**: Claudito requires login by default. Set custom credentials via environment variables for production use:
    ```bash
-   CLAUDITO_USERNAME=myuser CLAUDITO_PASSWORD=mystrongpassword claudito
+   CLAUDITO_USERNAME=myuser CLAUDITO_PASSWORD=mystrongpassword superengineer
    ```
 
 2. **Avoid exposing to the internet**: Claudito is designed for local/LAN use. If you must expose it, use a reverse proxy with HTTPS.
@@ -923,7 +923,7 @@ Another process is using port 3000:
 
 ```bash
 # Use a different port
-claudito --port 3001
+superengineer --port 3001
 
 # Or find and kill the process using port 3000
 # Linux/macOS:

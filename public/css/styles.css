@@ -1,6 +1,6 @@
 /* Base font size - smaller throughout */
 :root {
-  --claudito-font-size: 14px;
+  --superengineer-font-size: 14px;
 }
 
 /* Hide main toolbar buttons when one-off tab is active */
@@ -215,7 +215,7 @@ body {
 #conversation,
 #project-detail,
 .modal-content {
-  font-size: var(--claudito-font-size);
+  font-size: var(--superengineer-font-size);
 }
 
 /* Modal styles */
@@ -2480,7 +2480,7 @@ body {
 
   /* Adjust font sizes for better readability */
   :root {
-    --claudito-font-size: 15px;
+    --superengineer-font-size: 15px;
   }
 
   /* Better spacing for conversation messages */

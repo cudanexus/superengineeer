@@ -79,7 +79,7 @@ describe('DefaultDataWipeService', () => {
     const summary = await service.wipeAll();
 
     expect(mockFs.rmSync).toHaveBeenCalledWith(
-      path.join('/tmp', 'claudito-mcp'),
+      path.join('/tmp', 'superengineer-mcp'),
       { recursive: true, force: true },
     );
     expect(summary.mcpTempDeleted).toBe(true);

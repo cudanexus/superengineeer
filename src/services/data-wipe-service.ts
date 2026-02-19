@@ -52,9 +52,9 @@ export class DefaultDataWipeService implements DataWipeService {
     let wiped = 0;
 
     for (const projectPath of projectPaths) {
-      const clauditoDir = path.join(projectPath, '.superengineer-v5');
+      const superengineerDir = path.join(projectPath, '.superengineer-v5');
 
-      if (this.deleteDirectoryRecursive(clauditoDir)) {
+      if (this.deleteDirectoryRecursive(superengineerDir)) {
         wiped++;
       }
     }
@@ -63,7 +63,7 @@ export class DefaultDataWipeService implements DataWipeService {
   }
 
   private wipeMcpTempData(): boolean {
-    const mcpTempDir = path.join(os.tmpdir(), 'claudito-mcp');
+    const mcpTempDir = path.join(os.tmpdir(), 'superengineer-mcp');
     return this.deleteDirectoryRecursive(mcpTempDir);
   }
 

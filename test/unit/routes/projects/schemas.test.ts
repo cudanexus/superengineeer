@@ -256,7 +256,7 @@ describe('Project Route Schemas', () => {
 
   describe('projectAndTagNameSchema', () => {
     it('should accept path-based project IDs', () => {
-      const valid = { id: 'D__Development_Typescript_claudito', name: '0.11.0' };
+      const valid = { id: 'D__Development_Typescript_superengineer', name: '0.11.0' };
       const result = projectAndTagNameSchema.safeParse(valid);
       expect(result.success).toBe(true);
     });
@@ -288,7 +288,7 @@ describe('Project Route Schemas', () => {
 
   describe('projectAndTaskIdSchema', () => {
     it('should accept path-based project IDs', () => {
-      const valid = { id: 'D__Development_Typescript_claudito', taskId: 'task-123' };
+      const valid = { id: 'D__Development_Typescript_superengineer', taskId: 'task-123' };
       const result = projectAndTaskIdSchema.safeParse(valid);
       expect(result.success).toBe(true);
     });

@@ -42,7 +42,7 @@ If the new templates aren't showing up in the UI, try these steps:
 
 1. Start Claude Code with the plugin:
    ```bash
-   claude --plugin-dir ./claudito-plugin
+   claude --plugin-dir ./superengineer-plugin
    ```
 
 2. Use the new skills:
@@ -67,10 +67,10 @@ If the new templates aren't showing up in the UI, try these steps:
 ## Technical Details
 
 ### File Locations
-- Agent skills: `claudito-plugin/skills/`
+- Agent skills: `superengineer-plugin/skills/`
   - `code-reviewer.md`
   - `expert-developer.md`
-- Plugin config: `claudito-plugin/plugin.json`
+- Plugin config: `superengineer-plugin/plugin.json`
 - Templates: `src/repositories/settings.ts` (DEFAULT_PROMPT_TEMPLATES)
 
 ### CSS Updates

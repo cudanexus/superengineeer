@@ -188,7 +188,7 @@
         notifyStateChange(ConnectionState.CONNECTED);
 
         // Register this client with the server
-        var clientId = sessionStorage.getItem('claudito-client-id');
+        var clientId = sessionStorage.getItem('superengineer-client-id');
         if (clientId) {
           send({
             type: 'register',

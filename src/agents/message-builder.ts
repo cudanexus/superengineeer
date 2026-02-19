@@ -175,7 +175,7 @@ export class MessageBuilder {
     }
 
     // Create temp directory if it doesn't exist
-    const tempDir = path.join(os.tmpdir(), 'claudito-mcp');
+    const tempDir = path.join(os.tmpdir(), 'superengineer-mcp');
     if (!fs.existsSync(tempDir)) {
       fs.mkdirSync(tempDir, { recursive: true });
     }

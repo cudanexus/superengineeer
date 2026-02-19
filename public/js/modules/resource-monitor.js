@@ -43,7 +43,7 @@
       viewport: window.innerWidth + 'x' + window.innerHeight,
       cookiesEnabled: navigator.cookieEnabled,
       online: navigator.onLine,
-      clientId: sessionStorage.getItem('claudito-client-id') || 'Unknown'
+      clientId: sessionStorage.getItem('superengineer-client-id') || 'Unknown'
     };
   }
 

@@ -49,7 +49,7 @@ describe('auth-middleware', () => {
       expect(result).toBe('value');
     });
 
-    it('should parse the claudito_session cookie', () => {
+    it('should parse the superengineer_session cookie', () => {
       const header = `${COOKIE_NAME}=test-session-id; other=value`;
       const result = parseCookie(header, COOKIE_NAME);
 
@@ -65,8 +65,8 @@ describe('auth-middleware', () => {
   });
 
   describe('COOKIE_NAME', () => {
-    it('should be claudito_session', () => {
-      expect(COOKIE_NAME).toBe('claudito_session');
+    it('should be superengineer_session', () => {
+      expect(COOKIE_NAME).toBe('superengineer_session');
     });
   });
 

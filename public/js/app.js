@@ -38,10 +38,10 @@
   var api = ApiClient;
 
   // Generate unique client ID for this session
-  var clientId = sessionStorage.getItem('claudito-client-id');
+  var clientId = sessionStorage.getItem('superengineer-client-id');
   if (!clientId) {
     clientId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-    sessionStorage.setItem('claudito-client-id', clientId);
+    sessionStorage.setItem('superengineer-client-id', clientId);
   }
 
   // Application state
@@ -2239,7 +2239,7 @@
     var size = state.fontSize + 'px';
 
     // Set CSS variable on document root for global scaling
-    document.documentElement.style.setProperty('--claudito-font-size', size);
+    document.documentElement.style.setProperty('--superengineer-font-size', size);
 
     $('#font-size-display').text(size);
 

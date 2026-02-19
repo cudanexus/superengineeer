@@ -146,4 +146,4 @@ Sessions use UUID v4 IDs: `--session-id {uuid}` (new) or `--resume {uuid}` (exis
 
 ## Mermaid.js Support
 
-Mermaid diagrams in ` ```mermaid ` code blocks render automatically in messages and plan content (dark theme). Use `/mermaid` skill via the bundled plugin (`claudito-plugin` directory, load with `claude --plugin-dir ./claudito-plugin`). See `doc/MERMAID_EXAMPLES.md` for syntax reference.
+Mermaid diagrams in ` ```mermaid ` code blocks render automatically in messages and plan content (dark theme). Use `/mermaid` skill via the bundled plugin (`superengineer-plugin` directory, load with `claude --plugin-dir ./superengineer-plugin`). See `doc/MERMAID_EXAMPLES.md` for syntax reference.
