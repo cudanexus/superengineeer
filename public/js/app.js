@@ -1356,9 +1356,7 @@
       loadAndShowSettings();
     });
 
-    $('#btn-logout').on('click', function () {
-      api.logout();
-    });
+
 
     // Settings tab switching
     $(document).on('click', '.settings-tab', function () {
@@ -5689,32 +5687,19 @@
 
   // Initialize application
   /**
-   * Check authentication status and load app if authenticated
+   * Load app directly, bypassing auth
    */
   function checkAuthenticationOnLoad() {
-    ApiClient.getAuthStatus()
-      .done(function (response) {
-        if (response && response.authenticated) {
-          // User is authenticated, proceed with app initialization
-          loadProjects();
-          loadResourceStatus();
-          loadInitialSettings();
-          loadFontSize();
-          loadScrollLockPreference();
-          loadDevModeStatus();
-          loadAppVersion();
-          connectWebSocket();
-          setupResizeHandler();
-          setupVisibilityHandler();
-        } else {
-          // User is not authenticated, redirect to login
-          window.location.href = '/login';
-        }
-      })
-      .fail(function () {
-        // API call failed, redirect to login as fallback
-        window.location.href = '/login';
-      });
+    loadProjects();
+    loadResourceStatus();
+    loadInitialSettings();
+    loadFontSize();
+    loadScrollLockPreference();
+    loadDevModeStatus();
+    loadAppVersion();
+    connectWebSocket();
+    setupResizeHandler();
+    setupVisibilityHandler();
   }
 
   function init() {

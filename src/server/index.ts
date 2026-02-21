@@ -39,44 +39,14 @@ export function createExpressApp(options: ExpressAppOptions = {}): Application {
 
   const publicPath = path.join(__dirname, '../../public');
 
-  // Serve login page (unprotected)
-  app.get('/login', (_req: Request, res: Response) => {
-    res.sendFile(path.join(publicPath, 'login.html'));
-  });
-
-  // Auth routes (unprotected)
-  if (options.authService) {
-    app.use('/api/auth', createAuthRouter({ authService: options.authService }));
-  }
-
-  // Health check (optionally checks auth when ?auth=1)
+  // Health check
   app.get('/api/health', (req: Request, res: Response) => {
-    // If auth query parameter is present, check authentication
-    if (req.query.auth === '1' && options.authService) {
-      const sessionId = parseCookie(req.headers.cookie || '', COOKIE_NAME);
-
-      if (!sessionId || !options.authService.validateSession(sessionId)) {
-        return res.status(401).json({
-          error: 'Unauthorized',
-          code: 'AUTH_REQUIRED'
-        });
-      }
-    }
-
     // Return normal health response
     return res.json({ status: 'ok', version: packageJson.version });
   });
 
-  // Root route - check auth and redirect to login if needed
+  // Root route
   app.get('/', (req: Request, res: Response) => {
-    if (options.authService) {
-      const sessionId = parseCookie(req.headers.cookie, COOKIE_NAME);
-
-      if (!sessionId || !options.authService.validateSession(sessionId)) {
-        res.redirect('/login');
-        return;
-      }
-    }
     serveIndexWithCacheBusting(publicPath, res);
   });
 
@@ -94,10 +64,6 @@ export function createExpressApp(options: ExpressAppOptions = {}): Application {
 
   app.use(express.static(publicPath));
 
-  // Apply auth middleware to all /api routes (except /api/auth and /api/health)
-  if (options.authService) {
-    app.use('/api', createAuthMiddleware({ authService: options.authService }));
-  }
 
   app.use('/api', createApiRouter({
     maxConcurrentAgents: options.maxConcurrentAgents,
