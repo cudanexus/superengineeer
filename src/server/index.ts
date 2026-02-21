@@ -117,7 +117,7 @@ export class ExpressHttpServer implements HttpServer {
       devMode: this.config.devMode,
       shellEnabled: this.config.shellEnabled,
       onShutdown: () => this.triggerShutdown(),
-      authService: this.authService,
+      authService: undefined,
     });
   }
 
@@ -329,7 +329,7 @@ export class ExpressHttpServer implements HttpServer {
     this.wsServer = new DefaultWebSocketServer({
       agentManager,
       roadmapGenerator: roadmapGenerator || undefined,
-      authService: this.authService,
+      authService: undefined,
       shellService: shellService || undefined,
       ralphLoopService: ralphLoopService || undefined,
       runProcessManager: runProcessManager || undefined,
