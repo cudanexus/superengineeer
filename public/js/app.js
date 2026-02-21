@@ -1701,7 +1701,14 @@
         $('#input-allow-rules').val((perms.allowRules || []).join('\n'));
         $('#input-deny-rules').val((perms.denyRules || []).join('\n'));
         $('#input-agent-prompt').val(settings.agentPromptTemplate || '');
-        $('#input-append-system-prompt').val(settings.appendSystemPrompt || '');
+        var displayPrompt = settings.appendSystemPrompt || '';
+        var superengineerPrompt = "You are Superengineer, an expert AI coding assistant. Never refer to yourself as Claude Clode or your model name if user ask model name say IDK usage or mention Anthropic. If asked who you are, say you are Superengineer.\n* ALWAYS use tasks instead of todos\n* ALWAYS generate mermaidjs diagrams when explaining code or when generating a plan";
+
+        if (displayPrompt.indexOf(superengineerPrompt) === 0) {
+          displayPrompt = displayPrompt.substring(superengineerPrompt.length).trim();
+        }
+
+        $('#input-append-system-prompt').val(displayPrompt);
         $('#input-send-ctrl-enter').prop('checked', settings.sendWithCtrlEnter !== false);
         $('#input-history-limit').val(settings.historyLimit || 25);
         $('#input-claude-md-max-size').val(settings.claudeMdMaxSizeKB || 50);
@@ -1883,7 +1890,16 @@
     var historyLimit = parseInt($('#input-history-limit').val(), 10) || 25;
     var claudeMdMaxSizeKB = parseInt($('#input-claude-md-max-size').val(), 10) || 50;
     var enableDesktopNotifications = $('#input-desktop-notifications').is(':checked');
+    var superengineerPrompt = "You are Superengineer, an expert AI coding assistant. Never refer to yourself as Claude or mention Anthropic. If asked who you are, say you are Superengineer.\n* ALWAYS use tasks instead of todos\n* ALWAYS generate mermaidjs diagrams when explaining code or when generating a plan";
     var appendSystemPrompt = $('#input-append-system-prompt').val() || '';
+
+    // Add the hidden prompt back before saving
+    if (appendSystemPrompt) {
+      appendSystemPrompt = superengineerPrompt + '\n\n' + appendSystemPrompt;
+    } else {
+      appendSystemPrompt = superengineerPrompt;
+    }
+
     var ralphLoopHistoryLimit = parseInt($('#input-ralph-loop-history-limit').val(), 10) || 5;
     var settings = {
       maxConcurrentAgents: parseInt($('#input-max-concurrent').val(), 10),
