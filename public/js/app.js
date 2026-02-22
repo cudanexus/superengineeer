@@ -371,12 +371,12 @@
   function showConfirm(title, message, options) {
     options = options || {};
     var confirmText = options.confirmText || 'Confirm';
-    var confirmClass = options.danger ? 'bg-red-600 hover:bg-red-700' : 'bg-purple-600 hover:bg-purple-700';
+    var confirmClass = options.danger ? 'btn-primary' : 'btn-primary';
 
     return new Promise(function (resolve) {
       $('#confirm-modal-title').text(title);
       $('#confirm-modal-message').text(message);
-      $('#confirm-modal-ok').text(confirmText).removeClass('bg-red-600 hover:bg-red-700 bg-purple-600 hover:bg-purple-700').addClass(confirmClass);
+      $('#confirm-modal-ok').text(confirmText).removeClass('bg-red-600 hover:bg-red-700 btn-primary').addClass(confirmClass);
 
       var cleanup = function () {
         $('#confirm-modal-ok').off('click.confirm');
@@ -793,7 +793,7 @@
         '</svg>' +
         '<h2 class="text-xl font-semibold text-gray-400 mb-2">No Projects Yet</h2>' +
         '<p class="text-sm text-gray-500 mb-4">Create your first project to get started</p>' +
-        '<button id="btn-add-project-overview" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm">' +
+        '<button id="btn-add-project-overview" class="btn-primary text-white px-4 py-2 rounded-lg text-sm">' +
         'Add Project' +
         '</button>' +
         '</div>'
@@ -873,7 +873,7 @@
       '</svg>' +
       '</button>';
 
-    return '<div class="project-overview-card bg-gray-800 rounded-lg p-4 cursor-pointer hover:bg-gray-750 transition-colors border border-gray-700 hover:border-gray-600' + waitingClass + '" data-id="' + project.id + '">' +
+    return '<div class="project-overview-card bg-gray-800 rounded-lg p-4 cursor-pointer hover:bg-gray-750 transition-colors border border-gray-700 hover:!border-[var(--theme-border)]' + waitingClass + '" data-id="' + project.id + '">' +
       '<div class="flex justify-between items-start mb-2">' +
       '<h3 class="font-semibold text-white truncate flex-1">' + escapeHtml(project.name) + '</h3>' +
       '<div class="flex items-center gap-1 ml-2">' +
@@ -1035,7 +1035,7 @@
       $btn.removeClass('hidden');
 
       if (!$btn.find('.new-msg-badge').length) {
-        $btn.append('<span class="new-msg-badge absolute -top-1 -right-1 w-3 h-3 bg-purple-500 rounded-full animate-pulse"></span>');
+        $btn.append('<span class="new-msg-badge absolute -top-1 -right-1 w-3 h-3 !bg-[var(--theme-accent-primary)] rounded-full animate-pulse"></span>');
       }
 
       return;
@@ -1363,8 +1363,8 @@
       var tabName = $(this).data('tab');
 
       // Update tab buttons
-      $('.settings-tab').removeClass('active border-purple-500 text-white').addClass('border-transparent text-gray-400');
-      $(this).addClass('active border-purple-500 text-white').removeClass('border-transparent text-gray-400');
+      $('.settings-tab').removeClass('active !border-[var(--theme-accent-primary)] text-white').addClass('border-transparent text-gray-400');
+      $(this).addClass('active !border-[var(--theme-accent-primary)] text-white').removeClass('border-transparent text-gray-400');
 
       // Show/hide tab content
       $('.settings-tab-content').addClass('hidden');
@@ -1413,13 +1413,37 @@
         pane.removeClass('w-full flex-1').addClass('w-1/2');
       }
 
-      // Prevent unnecessary reloads
       if (input.val() !== url) {
         input.val(url);
         $('#link-open-preview').attr('href', url);
         iframe.attr('src', url);
       }
     };
+
+    // --- Tool Logs Toggle Logic ---
+    let toolLogsHidden = loadFromLocalStorage('toolLogsHidden', 'true') === 'true';
+
+    function applyToolLogVisibility() {
+      if (toolLogsHidden) {
+        $('#conversation').addClass('hide-tools');
+        $('#btn-toggle-tool-logs').removeClass('!border-[var(--theme-accent-primary)] text-white').addClass('text-gray-400');
+        $('#btn-toggle-tool-logs svg').html('<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path>');
+      } else {
+        $('#conversation').removeClass('hide-tools');
+        $('#btn-toggle-tool-logs').addClass('!border-[var(--theme-accent-primary)] text-white').removeClass('text-gray-400');
+        $('#btn-toggle-tool-logs svg').html('<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.522 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.478 0-8.268-2.943-9.542-7z" />');
+      }
+    }
+
+    // Initialize tool log visibility on load
+    applyToolLogVisibility();
+
+    $('#btn-toggle-tool-logs').on('click', function () {
+      toolLogsHidden = !toolLogsHidden;
+      saveToLocalStorage('toolLogsHidden', toolLogsHidden.toString());
+      applyToolLogVisibility();
+    });
+    // -----------------------------
 
     $('#btn-toggle-preview').on('click', function () {
       const pane = $('#preview-pane');
@@ -1522,8 +1546,8 @@
       var tabName = $(this).data('tab');
 
       // Update tab buttons
-      $('.ralph-config-tab').removeClass('border-purple-500 text-white').addClass('border-transparent text-gray-400');
-      $(this).addClass('border-purple-500 text-white').removeClass('border-transparent text-gray-400');
+      $('.ralph-config-tab').removeClass('!border-[var(--theme-accent-primary)] text-white').addClass('border-transparent text-gray-400');
+      $(this).addClass('!border-[var(--theme-accent-primary)] text-white').removeClass('border-transparent text-gray-400');
 
       // Show/hide content
       $('.ralph-config-tab-content').addClass('hidden');
@@ -2103,7 +2127,7 @@
     }
 
     // Update image hint with attach link
-    var attachLink = '<a href="#" id="btn-attach-image" class="text-purple-400 hover:text-purple-300">attach</a>';
+    var attachLink = '<a href="#" id="btn-attach-image" class="!text-[var(--theme-accent-primary)] hover:!text-[var(--theme-accent-secondary)]">attach</a>';
 
     if (isMobile) {
       $('#input-hint-image').html('• Long-press to paste or ' + attachLink);
@@ -2116,11 +2140,11 @@
     var $btn = $('#btn-toggle-chrome');
 
     if (state.chromeEnabled) {
-      $btn.removeClass('bg-gray-700 hover:bg-gray-600').addClass('bg-blue-600 hover:bg-blue-700');
+      $btn.removeClass('glass-panel hover:bg-gray-600').addClass('bg-blue-600 hover:bg-blue-700');
       $('#chrome-toggle-label').text('Chrome');
       $btn.attr('title', 'Chrome browser enabled - click to disable');
     } else {
-      $btn.removeClass('bg-blue-600 hover:bg-blue-700').addClass('bg-gray-700 hover:bg-gray-600');
+      $btn.removeClass('bg-blue-600 hover:bg-blue-700').addClass('glass-panel hover:bg-gray-600');
       $('#chrome-toggle-label').text('Chrome');
       $btn.attr('title', 'Chrome browser disabled - click to enable');
     }
@@ -2339,10 +2363,10 @@
     var $btn = $('#btn-toggle-scroll-lock');
 
     if (state.agentOutputScrollLock) {
-      $btn.addClass('bg-yellow-600').removeClass('bg-gray-700');
+      $btn.addClass('bg-yellow-600').removeClass('glass-panel');
       $btn.attr('title', 'Auto-scroll paused. Click to resume.');
     } else {
-      $btn.removeClass('bg-yellow-600').addClass('bg-gray-700');
+      $btn.removeClass('bg-yellow-600').addClass('glass-panel');
       $btn.attr('title', 'Auto-scroll enabled. Click to pause.');
     }
   }
@@ -2889,11 +2913,11 @@
     // Clear previous selection for this question
     $container.find('div.flex[data-question-index="' + questionIndex + '"]')
       .find('.ask-user-option')
-      .removeClass('bg-purple-600 ring-2 ring-purple-400')
-      .addClass('bg-gray-700');
+      .removeClass('btn-primary ring-2 ring-purple-400')
+      .addClass('glass-panel');
 
     // Highlight selected
-    $btn.removeClass('bg-gray-700').addClass('bg-purple-600 ring-2 ring-purple-400');
+    $btn.removeClass('glass-panel').addClass('btn-primary ring-2 ring-purple-400');
   }
 
   function getMultiQuestionState() {
@@ -4078,13 +4102,13 @@
 
     var html = repos.map(function (repo) {
       var langBadge = repo.language
-        ? '<span class="text-xs bg-gray-700 px-1.5 py-0.5 rounded">' + escapeHtml(repo.language) + '</span>'
+        ? '<span class="text-xs glass-panel px-1.5 py-0.5 rounded">' + escapeHtml(repo.language) + '</span>'
         : '';
       var visBadge = repo.isPrivate
         ? '<span class="text-xs bg-yellow-900 text-yellow-300 px-1.5 py-0.5 rounded">Private</span>'
         : '<span class="text-xs bg-green-900 text-green-300 px-1.5 py-0.5 rounded">Public</span>';
 
-      return '<div class="github-repo-item p-2 rounded cursor-pointer hover:bg-gray-700 border border-transparent transition-colors" data-repo="' + escapeHtml(repo.fullName) + '">' +
+      return '<div class="github-repo-item p-2 rounded cursor-pointer hover:glass-panel border border-transparent transition-colors" data-repo="' + escapeHtml(repo.fullName) + '">' +
         '<div class="flex items-center justify-between">' +
         '<div class="flex items-center gap-2 min-w-0">' +
         '<span class="text-sm font-medium text-white truncate">' + escapeHtml(repo.fullName) + '</span>' +
@@ -4104,8 +4128,8 @@
     $('#btn-github-clone-selected').prop('disabled', true);
 
     $('#github-repos-list').off('click', '.github-repo-item').on('click', '.github-repo-item', function () {
-      $('.github-repo-item').removeClass('border-purple-500 bg-gray-700').addClass('border-transparent');
-      $(this).addClass('border-purple-500 bg-gray-700').removeClass('border-transparent');
+      $('.github-repo-item').removeClass('!border-[var(--theme-accent-primary)] glass-panel').addClass('border-transparent');
+      $(this).addClass('!border-[var(--theme-accent-primary)] glass-panel').removeClass('border-transparent');
       state.selectedGitHubRepo = $(this).data('repo');
       $('#btn-github-clone-selected').prop('disabled', false);
     });
@@ -4635,8 +4659,8 @@
         $('#ralph-default-reviewer-prompt').text(defaultReviewerPrompt);
 
         // Reset to first tab
-        $('.ralph-config-tab').removeClass('border-purple-500 text-white').addClass('border-transparent text-gray-400');
-        $('.ralph-config-tab:first').addClass('border-purple-500 text-white').removeClass('border-transparent text-gray-400');
+        $('.ralph-config-tab').removeClass('!border-[var(--theme-accent-primary)] text-white').addClass('border-transparent text-gray-400');
+        $('.ralph-config-tab:first').addClass('!border-[var(--theme-accent-primary)] text-white').removeClass('border-transparent text-gray-400');
         $('.ralph-config-tab-content').addClass('hidden');
         $('#ralph-config-tab-config').removeClass('hidden');
 
@@ -4666,8 +4690,8 @@
         $('#ralph-default-reviewer-prompt').text(defaultReviewerPrompt);
 
         // Reset to first tab
-        $('.ralph-config-tab').removeClass('border-purple-500 text-white').addClass('border-transparent text-gray-400');
-        $('.ralph-config-tab:first').addClass('border-purple-500 text-white').removeClass('border-transparent text-gray-400');
+        $('.ralph-config-tab').removeClass('!border-[var(--theme-accent-primary)] text-white').addClass('border-transparent text-gray-400');
+        $('.ralph-config-tab:first').addClass('!border-[var(--theme-accent-primary)] text-white').removeClass('border-transparent text-gray-400');
         $('.ralph-config-tab-content').addClass('hidden');
         $('#ralph-config-tab-config').removeClass('hidden');
 
@@ -5714,8 +5738,8 @@
     saveToLocalStorage(LOCAL_STORAGE_KEYS.ACTIVE_TAB, tabName);
 
     // Update tab button states
-    $('.tab-button').removeClass('active').addClass('text-gray-400 border-transparent').removeClass('text-white border-purple-500');
-    $('#tab-' + tabName).addClass('active text-white border-purple-500').removeClass('text-gray-400 border-transparent');
+    $('.tab-button').removeClass('active').addClass('text-gray-400 border-transparent').removeClass('text-white !border-[var(--theme-accent-primary)]');
+    $('#tab-' + tabName).addClass('active text-white !border-[var(--theme-accent-primary)]').removeClass('text-gray-400 border-transparent');
 
     // Show/hide tab content
     $('.tab-content').addClass('hidden');

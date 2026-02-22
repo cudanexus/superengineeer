@@ -307,12 +307,12 @@
 
     if (isWaiting) {
       $input.attr('placeholder', 'Agent is waiting for input...').focus();
-      $sendBtn.removeClass('bg-purple-600 hover:bg-purple-700')
+      $sendBtn.removeClass('btn-primary')
         .addClass('bg-green-600 hover:bg-green-700');
     } else {
       $input.attr('placeholder', 'Type a message...');
       $sendBtn.removeClass('bg-green-600 hover:bg-green-700')
-        .addClass('bg-purple-600 hover:bg-purple-700');
+        .addClass('btn-primary');
     }
   }
 
@@ -375,18 +375,18 @@
 
   function buildMainTabButtonHtml() {
     return '<button id="oneoff-tab-main" class="oneoff-tab shrink-0 px-3 py-1.5 text-xs font-medium border-r border-gray-700 whitespace-nowrap transition-colors ' +
-      (!state.activeOneOffTabId ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-700/50') +
+      (!state.activeOneOffTabId ? 'glass-panel text-white' : 'text-gray-400 hover:text-white hover:glass-panel/50') +
       '" data-oneoff-tab="main">Main</button>';
   }
 
   function buildOneOffTabHtml(tab) {
     var isActive = state.activeOneOffTabId === tab.oneOffId;
     var statusIcon = tab.status === 'running'
-      ? '<svg class="w-3 h-3 animate-spin text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke-width="2" stroke-dasharray="31.4 31.4" stroke-linecap="round"/></svg>'
+      ? '<svg class="w-3 h-3 animate-spin !text-[var(--theme-accent-primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke-width="2" stroke-dasharray="31.4 31.4" stroke-linecap="round"/></svg>'
       : '<svg class="w-3 h-3 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>';
 
     return '<div class="oneoff-tab shrink-0 flex items-center gap-1.5 px-3 py-1.5 border-r border-gray-700 transition-colors ' +
-      (isActive ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-700/50') + '">' +
+      (isActive ? 'glass-panel text-white' : 'text-gray-400 hover:text-white hover:glass-panel/50') + '">' +
       '<button class="oneoff-tab-select flex items-center gap-1.5 text-xs font-medium whitespace-nowrap" data-oneoff-tab="' + tab.oneOffId + '">' +
         statusIcon +
         '<span>' + escapeHtml(tab.label) + '</span>' +
@@ -403,9 +403,9 @@
     var $main = $bar.find('#oneoff-tab-main');
 
     if (!state.activeOneOffTabId) {
-      $main.addClass('bg-gray-700 text-white').removeClass('text-gray-400 hover:text-white hover:bg-gray-700/50');
+      $main.addClass('glass-panel text-white').removeClass('text-gray-400 hover:text-white hover:glass-panel/50');
     } else {
-      $main.removeClass('bg-gray-700 text-white').addClass('text-gray-400 hover:text-white hover:bg-gray-700/50');
+      $main.removeClass('glass-panel text-white').addClass('text-gray-400 hover:text-white hover:glass-panel/50');
     }
 
     $bar.find('.oneoff-tab').not('#oneoff-tab-main').each(function() {
@@ -413,9 +413,9 @@
       var tabId = $tab.find('.oneoff-tab-select').data('oneoff-tab');
 
       if (tabId === state.activeOneOffTabId) {
-        $tab.addClass('bg-gray-700 text-white').removeClass('text-gray-400 hover:text-white hover:bg-gray-700/50');
+        $tab.addClass('glass-panel text-white').removeClass('text-gray-400 hover:text-white hover:glass-panel/50');
       } else {
-        $tab.removeClass('bg-gray-700 text-white').addClass('text-gray-400 hover:text-white hover:bg-gray-700/50');
+        $tab.removeClass('glass-panel text-white').addClass('text-gray-400 hover:text-white hover:glass-panel/50');
       }
     });
   }

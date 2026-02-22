@@ -403,7 +403,7 @@
   }
 
   function buildIdeaCard(idea, index) {
-    return '<label class="inventify-idea-card cursor-pointer p-3 rounded border border-gray-600 hover:border-purple-500 hover:bg-gray-700/50 transition-all block" data-index="' + index + '">' +
+    return '<label class="inventify-idea-card cursor-pointer p-3 rounded border !border-[var(--theme-border)] hover:!border-[var(--theme-accent-primary)] hover:glass-panel/50 transition-all block" data-index="' + index + '">' +
       '<div class="flex items-start gap-2">' +
         '<input type="radio" name="inventify-idea" value="' + index + '" class="mt-1 accent-purple-500">' +
         '<div class="flex-1 min-w-0">' +
@@ -501,7 +501,7 @@
   }
 
   function buildNameCard(name) {
-    return '<label class="inventify-name-card cursor-pointer p-2 rounded border border-gray-600 hover:border-yellow-500 hover:bg-gray-700/50 transition-all block">' +
+    return '<label class="inventify-name-card cursor-pointer p-2 rounded border !border-[var(--theme-border)] hover:border-yellow-500 hover:glass-panel/50 transition-all block">' +
       '<div class="flex items-center gap-2">' +
         '<input type="radio" name="inventify-name" value="' + escapeHtml(name) + '" class="accent-yellow-500">' +
         '<span class="text-sm text-white font-mono">' + escapeHtml(name) + '</span>' +

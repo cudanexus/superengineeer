@@ -82,7 +82,7 @@
     if (currentPath) {
       $('#selected-path').html(
         '<span class="text-gray-300">Current folder:</span> ' +
-        '<span class="text-purple-400">' + escapeHtml(currentPath) + '</span>'
+        '<span class="!text-[var(--theme-accent-primary)]">' + escapeHtml(currentPath) + '</span>'
       );
       $('#btn-new-folder').prop('disabled', false);
     } else {

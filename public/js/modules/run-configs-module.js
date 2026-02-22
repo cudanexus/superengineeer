@@ -171,7 +171,7 @@
       cmdPreview += ' ' + escapeHtml(config.args.join(' '));
     }
 
-    return '<div id="rc-card-' + config.id + '" class="rc-card bg-gray-700/50 rounded p-3 flex items-center justify-between" data-config-id="' + config.id + '" data-state="' + currentState + '">' +
+    return '<div id="rc-card-' + config.id + '" class="rc-card glass-panel/50 rounded p-3 flex items-center justify-between" data-config-id="' + config.id + '" data-state="' + currentState + '">' +
       '<div class="flex-1 min-w-0">' +
         '<div class="flex items-center gap-2">' +
           '<span class="font-medium text-sm text-white truncate">' + escapeHtml(config.name) + '</span>' +
@@ -217,7 +217,7 @@
     configs.forEach(function(config) {
       var isActive = config.id === activeConfigId;
       html += '<button class="rc-output-tab px-3 py-1.5 text-xs rounded-t ' +
-        (isActive ? 'bg-gray-900 text-white border-b-2 border-purple-500' : 'bg-gray-700 text-gray-400 hover:text-gray-200') +
+        (isActive ? 'bg-gray-900 text-white border-b-2 !border-[var(--theme-accent-primary)]' : 'glass-panel text-gray-400 hover:text-gray-200') +
         '" data-id="' + config.id + '">' + escapeHtml(config.name) + '</button>';
     });
 
@@ -488,8 +488,8 @@
   function addEnvVarRow(_event, key, value) {
     var $container = $('#rc-env-vars');
     var html = '<div class="rc-env-row flex items-center gap-2 mb-1">' +
-      '<input type="text" class="rc-env-key bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm w-1/3" placeholder="KEY" value="' + (key || '') + '">' +
-      '<input type="text" class="rc-env-val bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm flex-1" placeholder="value" value="' + (value || '') + '">' +
+      '<input type="text" class="rc-env-key glass-panel border !border-[var(--theme-border)] rounded px-2 py-1 text-sm w-1/3" placeholder="KEY" value="' + (key || '') + '">' +
+      '<input type="text" class="rc-env-val glass-panel border !border-[var(--theme-border)] rounded px-2 py-1 text-sm flex-1" placeholder="value" value="' + (value || '') + '">' +
       '<button class="rc-remove-env text-red-400 hover:text-red-300 text-sm px-1">&times;</button>' +
     '</div>';
     $container.append(html);
@@ -618,7 +618,7 @@
 
     importable.forEach(function(group) {
       html += '<div class="mb-3">';
-      html += '<div class="text-xs text-purple-400 font-medium mb-1">' +
+      html += '<div class="text-xs !text-[var(--theme-accent-primary)] font-medium mb-1">' +
         escapeHtml(group.source) +
         ' <span class="text-gray-500">(' + escapeHtml(group.sourceFile) + ')</span>' +
       '</div>';
@@ -628,8 +628,8 @@
         var checkId = 'rc-import-' + group.source.replace(/\./g, '-') + '-' + idx;
         var argsStr = cfg.args ? cfg.args.join(' ') : '';
 
-        html += '<label class="flex items-start gap-2 py-1.5 px-2 rounded hover:bg-gray-700 cursor-pointer">';
-        html += '<input type="checkbox" class="rc-import-check mt-0.5 rounded bg-gray-700 border-gray-600 text-purple-500"' +
+        html += '<label class="flex items-start gap-2 py-1.5 px-2 rounded hover:glass-panel cursor-pointer">';
+        html += '<input type="checkbox" class="rc-import-check mt-0.5 rounded glass-panel !border-[var(--theme-border)] !text-[var(--theme-accent-primary)]"' +
           ' data-source="' + escapeHtml(group.source) + '"' +
           ' data-index="' + idx + '"' +
           ' id="' + checkId + '"' +

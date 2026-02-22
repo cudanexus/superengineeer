@@ -567,7 +567,7 @@
 
       // Question header
       if (question.header) {
-        html += '<div class="text-xs text-purple-400 font-medium mb-1">' + escapeHtml(question.header) + '</div>';
+        html += '<div class="text-xs !text-[var(--theme-accent-primary)] font-medium mb-1">' + escapeHtml(question.header) + '</div>';
       }
 
       // Question text
@@ -579,7 +579,7 @@
       if (question.options && question.options.length > 0) {
         question.options.forEach(function(option, oIndex) {
           var optionId = toolId + '-q' + qIndex + '-o' + oIndex;
-          html += '<button type="button" class="ask-user-option bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm transition-colors flex flex-col items-start" ' +
+          html += '<button type="button" class="ask-user-option glass-panel hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm transition-colors flex flex-col items-start" ' +
                   'data-tool-id="' + escapeHtml(toolId) + '" ' +
                   'data-question-index="' + qIndex + '" ' +
                   'data-option-index="' + oIndex + '" ' +
@@ -594,7 +594,7 @@
         });
 
         // Always add "Other" option
-        html += '<button type="button" class="ask-user-option ask-user-other bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm transition-colors" ' +
+        html += '<button type="button" class="ask-user-option ask-user-other glass-panel hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm transition-colors" ' +
                 'data-tool-id="' + escapeHtml(toolId) + '" ' +
                 'data-question-index="' + qIndex + '" ' +
                 'data-option-index="-1" ' +
@@ -616,7 +616,7 @@
 
     // Submit button (hidden until all questions answered)
     html += '<div class="mt-3 flex justify-end">' +
-      '<button type="button" class="ask-user-submit hidden bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors" ' +
+      '<button type="button" class="ask-user-submit hidden btn-primary text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors" ' +
         'data-tool-id="' + escapeHtml(toolId) + '">' +
         'Submit Answers' +
       '</button>' +

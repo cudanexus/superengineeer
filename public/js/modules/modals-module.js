@@ -94,7 +94,7 @@
     files.forEach(function (file) {
       var isSelected = state.claudeFilesState.currentFile &&
         state.claudeFilesState.currentFile.path === file.path;
-      var selectedClass = isSelected ? 'bg-purple-600/30 border-l-2 border-purple-500' : 'hover:bg-gray-700';
+      var selectedClass = isSelected ? 'btn-primary/30 border-l-2 !border-[var(--theme-accent-primary)]' : 'hover:glass-panel';
       var icon = file.isGlobal
         ? '<svg class="w-3 h-3 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>'
         : '<svg class="w-3 h-3 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>';
@@ -167,7 +167,7 @@
       // Switch to edit view
       $previewPane.addClass('hidden');
       $editorPane.removeClass('hidden');
-      $btn.removeClass('bg-purple-600').addClass('bg-gray-700');
+      $btn.removeClass('btn-primary').addClass('glass-panel');
       $btnText.text('Preview');
       // Eye icon for preview
       $icon.html('<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>');
@@ -175,7 +175,7 @@
       // Switch to preview view
       $previewPane.removeClass('hidden');
       $editorPane.addClass('hidden');
-      $btn.addClass('bg-purple-600').removeClass('bg-gray-700');
+      $btn.addClass('btn-primary').removeClass('glass-panel');
       $btnText.text('Edit');
       // Pencil icon for edit
       $icon.html('<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>');

@@ -93,7 +93,7 @@
         return 'border-l-2 border-yellow-500/50';
       case 'pending':
       default:
-        return 'border-l-2 border-gray-600/50';
+        return 'border-l-2 !border-[var(--theme-border)]/50';
     }
   }
 
@@ -110,7 +110,7 @@
         return 'bg-yellow-900/50 text-yellow-400';
       case 'pending':
       default:
-        return 'bg-gray-700 text-gray-400';
+        return 'glass-panel text-gray-400';
     }
   }
 
@@ -315,7 +315,7 @@
         '<span>' + completed + ' of ' + total + ' completed</span>' +
         '<span>' + percent + '%</span>' +
       '</div>' +
-      '<div class="w-full bg-gray-700 rounded-full h-2">' +
+      '<div class="w-full glass-panel rounded-full h-2">' +
         '<div class="bg-green-500 h-2 rounded-full transition-all duration-300" style="width: ' + percent + '%"></div>' +
       '</div>' +
       '<div class="flex gap-4 mt-2 text-xs">' +
@@ -438,7 +438,7 @@
         } else if (check.action === 'edit') {
           html += '<button class="optimization-action bg-gray-600 hover:bg-gray-500 text-white px-2 py-1 rounded text-xs transition-colors" data-action="edit" data-path="' + escapeHtml(check.filePath) + '">';
         } else if (check.action === 'claude-files') {
-          html += '<button class="optimization-action bg-purple-600 hover:bg-purple-500 text-white px-2 py-1 rounded text-xs transition-colors" data-action="claude-files">';
+          html += '<button class="optimization-action btn-primary text-white px-2 py-1 rounded text-xs transition-colors" data-action="claude-files">';
         }
 
         html += escapeHtml(check.actionLabel);

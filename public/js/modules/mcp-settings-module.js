@@ -43,7 +43,7 @@
       var statusClass = server.enabled ? 'bg-green-600' : 'bg-gray-600';
       var typeLabel = server.type === 'stdio' ? 'Local' : 'Remote';
 
-      html += '<div class="mcp-server-item flex items-center justify-between p-3 bg-gray-700 rounded" data-id="' + escapeHtml(server.id) + '">' +
+      html += '<div class="mcp-server-item flex items-center justify-between p-3 glass-panel rounded" data-id="' + escapeHtml(server.id) + '">' +
         '<div class="flex items-center gap-3">' +
           '<div class="w-2 h-2 rounded-full ' + statusClass + '"></div>' +
           '<div>' +

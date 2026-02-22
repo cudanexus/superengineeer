@@ -509,7 +509,7 @@
         '</div>' +
         '<div class="flex-1 min-w-0">' +
         '<div class="text-gray-300 text-sm">' +
-        '<p>The <code class="bg-gray-700 px-1 rounded">/' + escapeHtml(unknownCommand) + '</code> command is a built-in Claude Code command that only works in interactive terminal mode.</p>' +
+        '<p>The <code class="glass-panel px-1 rounded">/' + escapeHtml(unknownCommand) + '</code> command is a built-in Claude Code command that only works in interactive terminal mode.</p>' +
         '<p class="mt-2 text-gray-400 text-xs">Built-in commands like /usage, /help, /compact, /context, /config, /clear, and /model are UI commands that cannot be used via the API.</p>' +
         '</div>' +
         '</div>' +
@@ -547,13 +547,13 @@
     var isCompacting = status === 'compacting';
 
     if (isCompacting) {
-      return '<div class="conversation-message status-change bg-purple-900/20 border-l-2 border-purple-500 p-3 rounded" data-msg-type="status_change" data-status="' + escapeHtml(status) + '">' +
+      return '<div class="conversation-message status-change bg-purple-900/20 border-l-2 !border-[var(--theme-accent-primary)] p-3 rounded" data-msg-type="status_change" data-status="' + escapeHtml(status) + '">' +
         '<div class="flex items-center gap-2">' +
-        '<svg class="w-5 h-5 text-purple-400 animate-spin" fill="none" viewBox="0 0 24 24">' +
+        '<svg class="w-5 h-5 !text-[var(--theme-accent-primary)] animate-spin" fill="none" viewBox="0 0 24 24">' +
         '<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>' +
         '<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>' +
         '</svg>' +
-        '<span class="text-purple-300 font-medium">Compacting Context</span>' +
+        '<span class="!text-[var(--theme-accent-secondary)] font-medium">Compacting Context</span>' +
         formatTimestamp(msg.timestamp) +
         '</div>' +
         '<div class="text-gray-400 text-sm mt-1">Summarizing conversation to reduce token usage...</div>' +

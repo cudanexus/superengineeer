@@ -346,7 +346,7 @@
 
     // Add history results section at the top
     var html = '<div class="history-search-results mb-4">' +
-      '<div class="text-xs text-purple-400 mb-2 font-semibold">Found in conversation history (' + results.length + ' matches)</div>';
+      '<div class="text-xs !text-[var(--theme-accent-primary)] mb-2 font-semibold">Found in conversation history (' + results.length + ' matches)</div>';
 
     results.forEach(function(result) {
       var highlightedContent = escapeHtml(result.content).replace(searchRegex, '<span class="search-highlight">$1</span>');

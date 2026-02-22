@@ -64,19 +64,19 @@
   }
 
   function generateTasksButton(oneOffId) {
-    return '<button class="oneoff-toolbar-tasks bg-gray-700 hover:bg-gray-600 text-white py-1 px-2 rounded flex items-center gap-1 text-xs transition-colors relative" ' +
+    return '<button class="oneoff-toolbar-tasks glass-panel hover:bg-gray-600 text-white py-1 px-2 rounded flex items-center gap-1 text-xs transition-colors relative" ' +
       'data-oneoff-id="' + oneOffId + '" title="View tasks for this tab">' +
       '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
       '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>' +
       '</svg>' +
       'Tasks' +
-      '<span class="oneoff-tasks-badge hidden absolute -top-1 -right-1 bg-purple-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-medium" ' +
+      '<span class="oneoff-tasks-badge hidden absolute -top-1 -right-1 !bg-[var(--theme-accent-primary)] text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-medium" ' +
       'data-oneoff-id="' + oneOffId + '">0</span>' +
       '</button>';
   }
 
   function generateSearchButton(oneOffId) {
-    return '<button class="oneoff-toolbar-search bg-gray-700 hover:bg-gray-600 text-white py-1 px-2 rounded flex items-center gap-1 text-xs transition-colors" ' +
+    return '<button class="oneoff-toolbar-search glass-panel hover:bg-gray-600 text-white py-1 px-2 rounded flex items-center gap-1 text-xs transition-colors" ' +
       'data-oneoff-id="' + oneOffId + '" title="Search in this tab">' +
       '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
       '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>' +
@@ -90,25 +90,25 @@
       generateSearchControls(oneOffId) +
       generatePermissionSelector(oneOffId, permMode) +
       generateModelSelector(oneOffId, modelValue) +
-      '<div class="border-r border-gray-600 h-4"></div>' +
+      '<div class="border-r !border-[var(--theme-border)] h-4"></div>' +
       generateFontSizeControls(oneOffId, fontSize) +
       '</div>';
   }
 
   function generateSearchControls(oneOffId) {
-    return '<div class="oneoff-search-controls flex items-center gap-1 border-r border-gray-600 pr-2 hidden" data-oneoff-id="' + oneOffId + '">' +
-      '<input type="text" class="oneoff-search-input bg-gray-700 text-white text-xs px-2 py-1 rounded w-32 border border-gray-600 focus:border-purple-500 focus:outline-none" ' +
+    return '<div class="oneoff-search-controls flex items-center gap-1 border-r !border-[var(--theme-border)] pr-2 hidden" data-oneoff-id="' + oneOffId + '">' +
+      '<input type="text" class="oneoff-search-input glass-panel text-white text-xs px-2 py-1 rounded w-32 border !border-[var(--theme-border)] focus:!border-[var(--theme-accent-primary)] focus:outline-none" ' +
       'placeholder="Search..." data-oneoff-id="' + oneOffId + '">' +
       '<span class="oneoff-search-counter text-xs text-gray-400 w-16 text-center" data-oneoff-id="' + oneOffId + '"></span>' +
-      '<button class="oneoff-search-prev bg-gray-700 hover:bg-gray-600 text-white w-6 h-6 rounded flex items-center justify-center text-xs transition-colors disabled:opacity-50" ' +
+      '<button class="oneoff-search-prev glass-panel hover:bg-gray-600 text-white w-6 h-6 rounded flex items-center justify-center text-xs transition-colors disabled:opacity-50" ' +
       'data-oneoff-id="' + oneOffId + '" title="Previous match">' +
       '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/></svg>' +
       '</button>' +
-      '<button class="oneoff-search-next bg-gray-700 hover:bg-gray-600 text-white w-6 h-6 rounded flex items-center justify-center text-xs transition-colors disabled:opacity-50" ' +
+      '<button class="oneoff-search-next glass-panel hover:bg-gray-600 text-white w-6 h-6 rounded flex items-center justify-center text-xs transition-colors disabled:opacity-50" ' +
       'data-oneoff-id="' + oneOffId + '" title="Next match">' +
       '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>' +
       '</button>' +
-      '<button class="oneoff-search-close bg-gray-700 hover:bg-gray-600 text-gray-400 hover:text-white w-6 h-6 rounded flex items-center justify-center text-xs transition-colors" ' +
+      '<button class="oneoff-search-close glass-panel hover:bg-gray-600 text-gray-400 hover:text-white w-6 h-6 rounded flex items-center justify-center text-xs transition-colors" ' +
       'data-oneoff-id="' + oneOffId + '" title="Close search">' +
       '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>' +
       '</button>' +
@@ -119,7 +119,7 @@
     var acceptActive = permMode === 'acceptEdits' ? ' perm-active' : '';
     var planActive = permMode === 'plan' ? ' perm-active' : '';
 
-    return '<div class="flex items-center bg-gray-700 rounded overflow-hidden text-xs h-6">' +
+    return '<div class="flex items-center glass-panel rounded overflow-hidden text-xs h-6">' +
       '<button class="oneoff-perm-btn h-full px-2 transition-colors perm-btn' + acceptActive + ' flex items-center justify-center gap-1" ' +
       'data-oneoff-id="' + oneOffId + '" data-mode="acceptEdits" title="Accept Edits">' +
       '<svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
@@ -149,11 +149,11 @@
 
     for (var i = 0; i < models.length; i++) {
       var selected = models[i].value === modelValue ? ' selected' : '';
-      options += '<option value="' + models[i].value + '" class="bg-gray-700 text-white"' + selected + '>' + models[i].label + '</option>';
+      options += '<option value="' + models[i].value + '" class="glass-panel text-white"' + selected + '>' + models[i].label + '</option>';
     }
 
-    return '<div class="flex items-center bg-gray-700 rounded text-xs h-6" title="Select AI model">' +
-      '<select class="oneoff-model-select bg-gray-700 text-white text-xs px-1.5 h-full rounded cursor-pointer focus:outline-none focus:ring-1 focus:ring-purple-500 appearance-none pr-5" ' +
+    return '<div class="flex items-center glass-panel rounded text-xs h-6" title="Select AI model">' +
+      '<select class="oneoff-model-select glass-panel text-white text-xs px-1.5 h-full rounded cursor-pointer focus:outline-none focus:ring-1 focus:ring-purple-500 appearance-none pr-5" ' +
       'data-oneoff-id="' + oneOffId + '" style="background-image: url(\'data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%239ca3af%22 stroke-width=%222%22%3E%3Cpath stroke-linecap=%22round%22 stroke-linejoin=%22round%22 d=%22M19 9l-7 7-7-7%22/%3E%3C/svg%3E\'); background-repeat: no-repeat; background-position: right 0.25rem center; background-size: 0.75rem;">' +
       options +
       '</select>' +
@@ -162,12 +162,12 @@
 
   function generateFontSizeControls(oneOffId, fontSize) {
     return '<div class="flex items-center gap-1">' +
-      '<button class="oneoff-font-decrease bg-gray-700 hover:bg-gray-600 text-white w-6 h-6 rounded flex items-center justify-center text-xs transition-colors" ' +
+      '<button class="oneoff-font-decrease glass-panel hover:bg-gray-600 text-white w-6 h-6 rounded flex items-center justify-center text-xs transition-colors" ' +
       'data-oneoff-id="' + oneOffId + '" title="Decrease font size">' +
       '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/></svg>' +
       '</button>' +
       '<span class="oneoff-font-size-display text-xs text-gray-400 w-8 text-center" data-oneoff-id="' + oneOffId + '">' + fontSize + 'px</span>' +
-      '<button class="oneoff-font-increase bg-gray-700 hover:bg-gray-600 text-white w-6 h-6 rounded flex items-center justify-center text-xs transition-colors" ' +
+      '<button class="oneoff-font-increase glass-panel hover:bg-gray-600 text-white w-6 h-6 rounded flex items-center justify-center text-xs transition-colors" ' +
       'data-oneoff-id="' + oneOffId + '" title="Increase font size">' +
       '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>' +
       '</button>' +

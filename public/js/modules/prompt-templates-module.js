@@ -116,7 +116,7 @@
         return;
       }
 
-      html += '<div class="template-selector-item px-3 py-2 hover:bg-gray-700 cursor-pointer" data-id="' + escapeHtml(template.id) + '">' +
+      html += '<div class="template-selector-item px-3 py-2 hover:glass-panel cursor-pointer" data-id="' + escapeHtml(template.id) + '">' +
         '<div class="text-sm text-white">' + escapeHtml(template.name) + '</div>' +
         (template.description ? '<div class="text-xs text-gray-400 mt-0.5">' + escapeHtml(template.description) + '</div>' : '') +
         '</div>';
@@ -218,18 +218,18 @@
       case 'text':
         html += '<input type="text" name="' + escapeHtml(variable.name) + '" ' +
           (variable.defaultValue ? 'value="' + escapeHtml(variable.defaultValue) + '" ' : '') +
-          'class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-purple-500">';
+          'class="w-full glass-panel border !border-[var(--theme-border)] rounded px-2 py-1.5 text-sm focus:outline-none focus:!border-[var(--theme-accent-primary)]">';
         break;
 
       case 'textarea':
         html += '<textarea name="' + escapeHtml(variable.name) + '" rows="3" ' +
-          'class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-purple-500 textarea-resizable">' +
+          'class="w-full glass-panel border !border-[var(--theme-border)] rounded px-2 py-1.5 text-sm focus:outline-none focus:!border-[var(--theme-accent-primary)] textarea-resizable">' +
           (variable.defaultValue ? escapeHtml(variable.defaultValue) : '') + '</textarea>';
         break;
 
       case 'select':
         html += '<select name="' + escapeHtml(variable.name) + '" ' +
-          'class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-purple-500">';
+          'class="w-full glass-panel border !border-[var(--theme-border)] rounded px-2 py-1.5 text-sm focus:outline-none focus:!border-[var(--theme-accent-primary)]">';
 
         if (variable.options) {
           variable.options.forEach(function(opt) {
@@ -246,7 +246,7 @@
         html += '<label class="flex items-center gap-2 cursor-pointer">' +
           '<input type="checkbox" name="' + escapeHtml(variable.name) + '" ' +
           (isChecked ? 'checked ' : '') +
-          'class="rounded bg-gray-700 border-gray-600 text-purple-500 focus:ring-purple-500">' +
+          'class="rounded glass-panel !border-[var(--theme-border)] !text-[var(--theme-accent-primary)] focus:ring-purple-500">' +
           '<span class="text-sm text-gray-300">Enable</span>' +
           '</label>';
         break;
@@ -319,11 +319,11 @@
         return;
       }
 
-      html += '<div class="template-list-item flex items-center justify-between p-2 bg-gray-700 rounded" data-id="' + escapeHtml(template.id) + '">' +
+      html += '<div class="template-list-item flex items-center justify-between p-2 glass-panel rounded" data-id="' + escapeHtml(template.id) + '">' +
         '<div class="flex-1 min-w-0">' +
         '<div class="flex items-center gap-2">' +
         '<span class="text-sm text-white truncate">' + escapeHtml(template.name) + '</span>' +
-        (template.isQuickAction ? '<span class="text-xs bg-purple-600/20 text-purple-400 px-2 py-0.5 rounded">Quick Action</span>' : '') +
+        (template.isQuickAction ? '<span class="text-xs btn-primary/20 !text-[var(--theme-accent-primary)] px-2 py-0.5 rounded">Quick Action</span>' : '') +
         '</div>' +
         (template.description ? '<div class="text-xs text-gray-400 truncate">' + escapeHtml(template.description) + '</div>' : '') +
         '</div>' +
@@ -464,8 +464,8 @@
       closeSelector();
       openModal('modal-settings');
       // Switch to templates tab
-      $('.settings-tab').removeClass('active border-purple-500 text-white').addClass('border-transparent text-gray-400');
-      $('.settings-tab[data-tab="templates"]').addClass('active border-purple-500 text-white').removeClass('border-transparent text-gray-400');
+      $('.settings-tab').removeClass('active !border-[var(--theme-accent-primary)] text-white').addClass('border-transparent text-gray-400');
+      $('.settings-tab[data-tab="templates"]').addClass('active !border-[var(--theme-accent-primary)] text-white').removeClass('border-transparent text-gray-400');
       $('.settings-tab-content').addClass('hidden');
       $('#settings-tab-templates').removeClass('hidden');
       renderSettingsTab();

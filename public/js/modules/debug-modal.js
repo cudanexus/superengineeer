@@ -238,7 +238,7 @@
         var valueStr = formatValue(log.context[key]);
 
         html += '<div>';
-        html += '<div class="text-purple-400 text-xs font-semibold mb-1">' + escapeHtml(key) + '</div>';
+        html += '<div class="!text-[var(--theme-accent-primary)] text-xs font-semibold mb-1">' + escapeHtml(key) + '</div>';
         html += '<pre class="bg-gray-900 rounded p-3 text-gray-300 text-xs whitespace-pre-wrap break-words">' + escapeHtml(valueStr) + '</pre>';
         html += '</div>';
       });
@@ -248,7 +248,7 @@
     }
 
     // Completion message
-    html += '<div class="bg-gray-800 rounded-lg p-4 mt-4 border border-gray-600">';
+    html += '<div class="bg-gray-800 rounded-lg p-4 mt-4 border !border-[var(--theme-border)]">';
     html += '<div class="flex items-center justify-center gap-2 text-gray-400">';
     html += '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">';
     html += '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>';
@@ -417,7 +417,7 @@
         html += '<span class="' + directionColor + ' text-xs font-semibold">' + directionLabel + '</span>';
 
         if (log.context.eventType) {
-          html += '<span class="bg-gray-700 text-gray-300 px-1.5 py-0.5 rounded text-xs">' + log.context.eventType + '</span>';
+          html += '<span class="glass-panel text-gray-300 px-1.5 py-0.5 rounded text-xs">' + log.context.eventType + '</span>';
         }
 
         if (log.context.toolName) {
@@ -603,7 +603,7 @@
       html += '<span>Heap Usage</span>';
       html += '<span>' + heapPercent + '%</span>';
       html += '</div>';
-      html += '<div class="w-full bg-gray-700 rounded-full h-2">';
+      html += '<div class="w-full glass-panel rounded-full h-2">';
       html += '<div class="' + barColor + ' h-2 rounded-full transition-all" style="width: ' + heapPercent + '%"></div>';
       html += '</div>';
       html += '</div>';
@@ -627,7 +627,7 @@
   function renderConnectedClientsSection(data) {
     var html = '<div class="bg-gray-800 rounded-lg p-4 mt-4">';
     html += '<h4 class="text-gray-300 font-semibold mb-3 flex items-center gap-2">';
-    html += '<svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">';
+    html += '<svg class="w-4 h-4 !text-[var(--theme-accent-primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">';
     html += '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>';
     html += '</svg>Connected Clients</h4>';
 
@@ -648,7 +648,7 @@
         if (isCurrentClient) {
           html += '<span class="text-blue-400 font-medium text-sm">This Client</span>';
         } else {
-          html += '<span class="text-purple-400 font-medium text-sm">Client ' + escapeHtml(client.clientId.substring(0, 8)) + '</span>';
+          html += '<span class="!text-[var(--theme-accent-primary)] font-medium text-sm">Client ' + escapeHtml(client.clientId.substring(0, 8)) + '</span>';
         }
         html += '<span class="text-gray-500 text-xs">Connected ' + formatDateTime(client.connectedAt) + '</span>';
         html += '</div>';
@@ -724,7 +724,7 @@
       html += '<span>Heap Usage</span>';
       html += '<span>' + usedPercent + '%</span>';
       html += '</div>';
-      html += '<div class="w-full bg-gray-700 rounded-full h-2">';
+      html += '<div class="w-full glass-panel rounded-full h-2">';
       html += '<div class="' + barColor + ' h-2 rounded-full transition-all" style="width: ' + usedPercent + '%"></div>';
       html += '</div>';
       html += '</div>';
@@ -740,14 +740,14 @@
 
     html += '<div class="bg-gray-800 rounded-lg p-4">';
     html += '<h4 class="text-gray-300 font-semibold mb-3 flex items-center gap-2">';
-    html += '<svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">';
+    html += '<svg class="w-4 h-4 !text-[var(--theme-accent-primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">';
     html += '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>';
     html += '</svg>Last Executed Command</h4>';
 
     if (data.lastCommand) {
       html += '<div class="relative">';
       html += '<pre class="bg-gray-900 rounded p-4 text-sm text-gray-300 whitespace-pre-wrap break-all font-mono overflow-x-auto">' + escapeHtml(data.lastCommand) + '</pre>';
-      html += '<button onclick="copyToClipboard(\'' + escapeHtml(data.lastCommand.replace(/'/g, "\\'").replace(/\n/g, '\\n')) + '\')" class="absolute top-2 right-2 bg-gray-700 hover:bg-gray-600 text-gray-300 px-2 py-1 rounded text-xs transition-colors">Copy</button>';
+      html += '<button onclick="copyToClipboard(\'' + escapeHtml(data.lastCommand.replace(/'/g, "\\'").replace(/\n/g, '\\n')) + '\')" class="absolute top-2 right-2 glass-panel hover:bg-gray-600 text-gray-300 px-2 py-1 rounded text-xs transition-colors">Copy</button>';
       html += '</div>';
     } else {
       html += '<div class="text-gray-500 text-center py-4">No command executed yet</div>';
@@ -790,7 +790,7 @@
     if (Object.keys(clientIds).length > 1 || (state && state.allClientResources && Object.keys(state.allClientResources).length > 0)) {
       html += '<div class="mb-3 flex items-center gap-2">';
       html += '<label class="text-sm text-gray-400">Show Logs From:</label>';
-      html += '<select id="log-client-filter" class="bg-gray-700 text-gray-300 px-2 py-1 rounded text-sm border border-gray-600">';
+      html += '<select id="log-client-filter" class="glass-panel text-gray-300 px-2 py-1 rounded text-sm border !border-[var(--theme-border)]">';
       html += '<option value="all"' + (selectedClientFilter === 'all' ? ' selected' : '') + '>All Clients</option>';
       html += '<option value="current"' + (selectedClientFilter === 'current' ? ' selected' : '') + '>Current Client Only</option>';
       html += '<option value="server"' + (selectedClientFilter === 'server' ? ' selected' : '') + '>Server Only</option>';
@@ -849,7 +849,7 @@
         var isFrontend = log.context && log.context.type === 'frontend';
 
         if (isFrontend) {
-          levelBgClass = 'border-l-2 border-purple-500';
+          levelBgClass = 'border-l-2 !border-[var(--theme-accent-primary)]';
         }
 
         var hasContext = log.context && Object.keys(log.context).length > 0;
@@ -867,7 +867,7 @@
         if (log.context && log.context.clientId) {
           var isCurrentClient = log.context.clientId === state.clientId;
           var clientLabel = isCurrentClient ? 'This Client' : 'Client ' + log.context.clientId.substring(0, 8);
-          var clientColor = isCurrentClient ? 'bg-blue-600' : 'bg-purple-600';
+          var clientColor = isCurrentClient ? 'bg-blue-600' : 'btn-primary';
           html += '<span class="text-xs px-2 py-0.5 rounded ' + clientColor + ' text-white" title="' + escapeHtml(log.context.clientId) + '">' + escapeHtml(clientLabel) + '</span>';
         } else if (!isFrontend) {
           html += '<span class="text-xs px-2 py-0.5 rounded bg-gray-600 text-white">Server</span>';
@@ -948,8 +948,8 @@
 
       data.trackedProcesses.forEach(function(proc) {
         var isCurrentProject = proc.projectId === state.selectedProjectId;
-        var borderColor = isCurrentProject ? 'border-purple-500' : 'border-gray-700';
-        var badge = isCurrentProject ? '<span class="text-xs bg-purple-500 text-white px-2 py-0.5 rounded">Current</span>' : '';
+        var borderColor = isCurrentProject ? '!border-[var(--theme-accent-primary)]' : 'border-gray-700';
+        var badge = isCurrentProject ? '<span class="text-xs !bg-[var(--theme-accent-primary)] text-white px-2 py-0.5 rounded">Current</span>' : '';
 
         html += '<div class="bg-gray-900 rounded p-3 border-l-2 ' + borderColor + '">';
         html += '<div class="flex items-center justify-between mb-2">';
@@ -998,7 +998,7 @@
     html += '<div class="mb-4 flex items-center justify-between">';
     html += '<div class="flex items-center gap-2">';
     html += '<label class="text-sm text-gray-400">Show Resources From:</label>';
-    html += '<select id="resource-client-filter" class="bg-gray-700 text-gray-300 px-2 py-1 rounded text-sm border border-gray-600">';
+    html += '<select id="resource-client-filter" class="glass-panel text-gray-300 px-2 py-1 rounded text-sm border !border-[var(--theme-border)]">';
     html += '<option value="all"' + (selectedClient === 'all' ? ' selected' : '') + '>All Clients</option>';
     html += '<option value="current"' + (selectedClient === 'current' ? ' selected' : '') + '>Current Client Only</option>';
     if (hasRemoteClients) {
@@ -1138,7 +1138,7 @@
         // Client info (collapsible)
         if (resource.clientInfo) {
           html += '<div class="border-t border-gray-700 pt-2 mt-2">';
-          html += '<button class="flex items-center gap-1 text-purple-400 hover:text-purple-300 text-xs debug-resource-toggle" data-target="' + resourceId + '-client">';
+          html += '<button class="flex items-center gap-1 !text-[var(--theme-accent-primary)] hover:!text-[var(--theme-accent-secondary)] text-xs debug-resource-toggle" data-target="' + resourceId + '-client">';
           html += '<svg class="w-3 h-3 debug-resource-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">';
           html += '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>';
           html += '</svg>';
@@ -1368,8 +1368,8 @@
       var $tab = $(this);
       var tabName = $tab.data('tab');
 
-      $('.debug-tab').removeClass('active border-purple-500 text-white').addClass('border-transparent text-gray-400');
-      $tab.addClass('active border-purple-500 text-white').removeClass('border-transparent text-gray-400');
+      $('.debug-tab').removeClass('active !border-[var(--theme-accent-primary)] text-white').addClass('border-transparent text-gray-400');
+      $tab.addClass('active !border-[var(--theme-accent-primary)] text-white').removeClass('border-transparent text-gray-400');
 
       $('.debug-tab-content').addClass('hidden');
       $('#debug-tab-' + tabName).removeClass('hidden');

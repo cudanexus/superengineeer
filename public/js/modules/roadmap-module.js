@@ -61,7 +61,7 @@
         '<span class="text-gray-300">Overall Progress</span>' +
         '<span class="text-gray-400">' + progress + '%</span>' +
       '</div>' +
-      '<div class="w-full bg-gray-700 rounded-full h-2">' +
+      '<div class="w-full glass-panel rounded-full h-2">' +
         '<div class="bg-green-500 h-2 rounded-full" style="width: ' + progress + '%"></div>' +
       '</div>' +
     '</div>';
@@ -149,7 +149,7 @@
           '</svg>' +
         '</button>' +
       '</div>' +
-      '<div class="w-full bg-gray-700 rounded-full h-1 mt-1">' +
+      '<div class="w-full glass-panel rounded-full h-1 mt-1">' +
         '<div class="' + barColor + ' h-1 rounded-full transition-all duration-300" style="width: ' + progress + '%"></div>' +
       '</div>';
 

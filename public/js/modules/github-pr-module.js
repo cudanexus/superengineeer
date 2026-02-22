@@ -230,7 +230,7 @@
         badges += '<span class="text-xs bg-red-900 text-red-300 px-1.5 py-0.5 rounded">Changes Requested</span>';
       }
 
-      return '<div class="pr-item p-2.5 rounded hover:bg-gray-700/50 border border-transparent hover:border-gray-600 transition-colors" data-pr-number="' + pr.number + '">' +
+      return '<div class="pr-item p-2.5 rounded hover:glass-panel/50 border border-transparent hover:!border-[var(--theme-border)] transition-colors" data-pr-number="' + pr.number + '">' +
         '<div class="flex items-center justify-between gap-2">' +
           '<div class="flex-1 min-w-0">' +
             '<div class="flex items-center gap-1.5">' +
@@ -360,7 +360,7 @@
 
     comments.forEach(function(comment) {
       var fileInfo = comment.path
-        ? '<code class="text-xs text-purple-300">' + escapeHtml(comment.path) +
+        ? '<code class="text-xs !text-[var(--theme-accent-secondary)]">' + escapeHtml(comment.path) +
           (comment.line ? ':' + comment.line : '') + '</code> &middot; '
         : '';
 

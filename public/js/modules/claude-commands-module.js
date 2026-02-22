@@ -40,10 +40,10 @@
     var html = '<div class="py-1">';
 
     commands.forEach(function(cmd) {
-      html += '<div class="command-selector-item px-3 py-2 hover:bg-gray-700 cursor-pointer" data-id="' + escapeHtml(cmd.id) + '">' +
+      html += '<div class="command-selector-item px-3 py-2 hover:glass-panel cursor-pointer" data-id="' + escapeHtml(cmd.id) + '">' +
         '<div class="flex items-center justify-between">' +
-        '<span class="text-sm text-purple-400 font-mono">' + escapeHtml(cmd.name) + '</span>' +
-        (cmd.requiresArgs ? '<span class="text-xs text-gray-500 bg-gray-700 px-1.5 py-0.5 rounded">args</span>' : '') +
+        '<span class="text-sm !text-[var(--theme-accent-primary)] font-mono">' + escapeHtml(cmd.name) + '</span>' +
+        (cmd.requiresArgs ? '<span class="text-xs text-gray-500 glass-panel px-1.5 py-0.5 rounded">args</span>' : '') +
         '</div>' +
         '<div class="text-xs text-gray-400 mt-0.5">' + escapeHtml(cmd.description) + '</div>' +
         '</div>';

@@ -62,14 +62,14 @@
       '<div>' +
       '<label class="block text-xs text-gray-400 mb-1">Task Source</label>' +
       '<div class="flex gap-2 mb-2">' +
-      '<button type="button" id="ralph-source-custom" class="flex-1 py-1 px-2 bg-purple-600 text-white rounded text-xs transition-colors hover:bg-purple-500 source-btn active">Custom</button>' +
-      '<button type="button" id="ralph-source-roadmap" class="flex-1 py-1 px-2 bg-gray-700 text-gray-200 rounded text-xs transition-colors hover:bg-gray-600 source-btn">From Roadmap</button>' +
+      '<button type="button" id="ralph-source-custom" class="flex-1 py-1 px-2 btn-primary text-white rounded text-xs transition-colors hover:!bg-[var(--theme-accent-primary)] source-btn active">Custom</button>' +
+      '<button type="button" id="ralph-source-roadmap" class="flex-1 py-1 px-2 glass-panel text-gray-200 rounded text-xs transition-colors hover:bg-gray-600 source-btn">From Roadmap</button>' +
       '</div>' +
       '</div>' +
       '<div id="ralph-roadmap-selector" class="hidden">' +
       '<label class="block text-xs text-gray-400 mb-1">Selected Roadmap Tasks</label>' +
       '<div class="space-y-2">' +
-      '<div id="ralph-selected-tasks" class="min-h-[2rem] p-2 bg-gray-700 text-gray-300 rounded text-sm border-dashed border border-gray-600">' +
+      '<div id="ralph-selected-tasks" class="min-h-[2rem] p-2 glass-panel text-gray-300 rounded text-sm border-dashed border !border-[var(--theme-border)]">' +
       '<span class="text-gray-500">No tasks selected</span>' +
       '</div>' +
       '<button type="button" id="btn-select-roadmap-tasks" class="w-full py-2 px-3 bg-blue-600 hover:bg-blue-500 text-white rounded text-sm transition-colors" ' + disabled + '>' +
@@ -79,18 +79,18 @@
       '</div>' +
       '<div id="ralph-custom-description">' +
       '<label class="block text-xs text-gray-400 mb-1">Task Description</label>' +
-      '<textarea id="ralph-task-description" class="w-full p-2 bg-gray-700 text-gray-200 rounded text-sm resize-none" ' +
+      '<textarea id="ralph-task-description" class="w-full p-2 glass-panel text-gray-200 rounded text-sm resize-none" ' +
       'rows="3" placeholder="Describe the task for the worker agent..." ' + disabled + '></textarea>' +
       '</div>' +
       '<div class="grid grid-cols-2 gap-2">' +
       '<div>' +
       '<label class="block text-xs text-gray-400 mb-1">Max Turns</label>' +
-      '<input type="number" id="ralph-max-turns" class="w-full p-2 bg-gray-700 text-gray-200 rounded text-sm" ' +
+      '<input type="number" id="ralph-max-turns" class="w-full p-2 glass-panel text-gray-200 rounded text-sm" ' +
       'value="5" min="1" max="20" ' + disabled + ' />' +
       '</div>' +
       '<div>' +
       '<label class="block text-xs text-gray-400 mb-1">Worker Model</label>' +
-      '<select id="ralph-worker-model" class="w-full p-2 bg-gray-700 text-gray-200 rounded text-sm" ' + disabled + '>' +
+      '<select id="ralph-worker-model" class="w-full p-2 glass-panel text-gray-200 rounded text-sm" ' + disabled + '>' +
       '<option value="claude-sonnet-4-6" selected>Claude Sonnet 4.6</option>' +
       '<option value="claude-opus-4-6">Claude Opus 4.6</option>' +
       '<option value="claude-sonnet-4-5-20250929">Claude Sonnet 4.5</option>' +
@@ -100,7 +100,7 @@
       '</div>' +
       '<div>' +
       '<label class="block text-xs text-gray-400 mb-1">Reviewer Model</label>' +
-      '<select id="ralph-reviewer-model" class="w-full p-2 bg-gray-700 text-gray-200 rounded text-sm" ' + disabled + '>' +
+      '<select id="ralph-reviewer-model" class="w-full p-2 glass-panel text-gray-200 rounded text-sm" ' + disabled + '>' +
       '<option value="claude-opus-4-6" selected>Claude Opus 4.6</option>' +
       '<option value="claude-sonnet-4-5-20250929">Claude Sonnet 4.5</option>' +
       '<option value="claude-haiku-4-5-20251001">Claude Haiku 4.5</option>' +
@@ -165,8 +165,8 @@
       '<span class="text-gray-300">Iteration ' + iteration + ' / ' + maxTurns + '</span>' +
       '<span class="' + statusColor + '">' + phaseText + '</span>' +
       '</div>' +
-      '<div class="w-full bg-gray-700 rounded-full h-2">' +
-      '<div class="bg-purple-500 h-2 rounded-full transition-all duration-300" style="width: ' + progress + '%"></div>' +
+      '<div class="w-full glass-panel rounded-full h-2">' +
+      '<div class="!bg-[var(--theme-accent-primary)] h-2 rounded-full transition-all duration-300" style="width: ' + progress + '%"></div>' +
       '</div>' +
       (currentLoop.finalStatus ? renderFinalStatus(currentLoop.finalStatus) : '') +
       '</div>';
@@ -189,7 +189,7 @@
         text = 'Critical failure occurred';
         break;
       default:
-        bgColor = 'bg-gray-700 text-gray-300';
+        bgColor = 'glass-panel text-gray-300';
         text = finalStatus;
     }
 
@@ -282,7 +282,7 @@
   function getStatusColor(status) {
     switch (status) {
       case 'worker_running': return 'text-blue-400';
-      case 'reviewer_running': return 'text-purple-400';
+      case 'reviewer_running': return '!text-[var(--theme-accent-primary)]';
       case 'completed': return 'text-green-400';
       case 'failed': return 'text-red-400';
       case 'paused': return 'text-yellow-400';
@@ -523,14 +523,14 @@
   function handleIterationStart(data) {
     if (currentLoop && currentLoop.taskId === data.taskId) {
       currentLoop.currentIteration = data.iteration;
-      addOutput('--- Iteration ' + data.iteration + ' started ---', 'text-purple-400');
+      addOutput('--- Iteration ' + data.iteration + ' started ---', '!text-[var(--theme-accent-primary)]');
       updateProgressUI();
     }
   }
 
   function handleOutput(data) {
     if (currentLoop && currentLoop.taskId === data.taskId) {
-      var cssClass = data.phase === 'worker' ? 'text-blue-300' : 'text-purple-300';
+      var cssClass = data.phase === 'worker' ? 'text-blue-300' : '!text-[var(--theme-accent-secondary)]';
       var timestamp = new Date(data.timestamp).toLocaleTimeString();
       addOutput('[' + timestamp + '] [' + data.phase + '] ' + data.content, cssClass);
     }
@@ -620,7 +620,7 @@
 
     $progress.find('.text-gray-300').first().text('Iteration ' + iteration + ' / ' + maxTurns);
     $progress.find('span').last().removeClass().addClass(statusColor).text(phaseText);
-    $progress.find('.bg-purple-500').css('width', progress + '%');
+    $progress.find('.!bg-[var(--theme-accent-primary)]').css('width', progress + '%');
   }
 
   // ============================================================
@@ -705,12 +705,12 @@
     // Task source selection
     $(document).on('click', '.source-btn', function () {
       $('.source-btn')
-        .removeClass('active bg-purple-600 text-white hover:bg-purple-500')
-        .addClass('bg-gray-700 text-gray-200 hover:bg-gray-600');
+        .removeClass('active btn-primary text-white hover:!bg-[var(--theme-accent-primary)]')
+        .addClass('glass-panel text-gray-200 hover:bg-gray-600');
 
       $(this)
-        .addClass('active bg-purple-600 text-white hover:bg-purple-500')
-        .removeClass('bg-gray-700 text-gray-200 hover:bg-gray-600');
+        .addClass('active btn-primary text-white hover:!bg-[var(--theme-accent-primary)]')
+        .removeClass('glass-panel text-gray-200 hover:bg-gray-600');
 
       var source = $(this).attr('id').replace('ralph-source-', '');
       taskSource = source;

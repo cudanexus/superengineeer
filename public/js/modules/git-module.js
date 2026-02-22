@@ -81,7 +81,7 @@
     var html = '';
 
     tags.forEach(function(tag) {
-      html += '<div class="flex items-center justify-between py-1 px-1 hover:bg-gray-700 rounded">' +
+      html += '<div class="flex items-center justify-between py-1 px-1 hover:glass-panel rounded">' +
         '<span class="text-gray-300 truncate" title="' + escapeHtml(tag) + '">' + escapeHtml(tag) + '</span>' +
         '<div class="flex items-center gap-1 flex-shrink-0">' +
         '<button class="git-push-tag-btn text-xs text-blue-400 hover:text-blue-300 px-1" data-tag="' + escapeHtml(tag) + '" title="Push tag">&#8593;</button>' +
@@ -312,7 +312,7 @@
     });
 
     if (branches.remote.length > 0) {
-      html += '<div class="mt-1 pt-1 border-t border-gray-600">';
+      html += '<div class="mt-1 pt-1 border-t !border-[var(--theme-border)]">';
       html += '<div class="text-gray-500 text-[10px] uppercase px-2 py-0.5">Remote</div>';
 
       branches.remote.forEach(function(branch) {
@@ -1095,7 +1095,7 @@
     if ($mask.length === 0) {
       $mask = $('<div class="commit-loading-mask absolute inset-0 bg-gray-900/80 z-50 flex items-center justify-center">' +
         '<div class="text-center">' +
-          '<svg class="w-8 h-8 animate-spin mx-auto mb-2 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+          '<svg class="w-8 h-8 animate-spin mx-auto mb-2 !text-[var(--theme-accent-primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
             '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>' +
           '</svg>' +
           '<p class="text-sm text-gray-300">Generating commit message...</p>' +

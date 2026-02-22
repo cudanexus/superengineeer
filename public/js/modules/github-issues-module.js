@@ -219,12 +219,12 @@
       }).join(' ');
     }
 
-    var stateColor = issue.state === 'OPEN' ? 'text-green-400' : 'text-purple-400';
+    var stateColor = issue.state === 'OPEN' ? 'text-green-400' : '!text-[var(--theme-accent-primary)]';
     var stateIcon = issue.state === 'OPEN'
       ? '<svg class="w-3.5 h-3.5 inline-block mr-1" fill="currentColor" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="2"/></svg>'
       : '<svg class="w-3.5 h-3.5 inline-block mr-1" fill="currentColor" viewBox="0 0 16 16"><path d="M11.28 6.78a.75.75 0 00-1.06-1.06L7.25 8.69 5.78 7.22a.75.75 0 00-1.06 1.06l2 2a.75.75 0 001.06 0l3.5-3.5z"/><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
 
-    return '<div class="issue-item border border-transparent hover:border-gray-600 p-2.5 rounded cursor-pointer hover:bg-gray-700/50 transition-colors" data-issue-number="' + issue.number + '">' +
+    return '<div class="issue-item border border-transparent hover:!border-[var(--theme-border)] p-2.5 rounded cursor-pointer hover:glass-panel/50 transition-colors" data-issue-number="' + issue.number + '">' +
       '<div class="flex items-start justify-between gap-2">' +
         '<div class="flex-1 min-w-0">' +
           '<div class="flex items-center gap-1.5">' +
@@ -239,7 +239,7 @@
           '</div>' +
         '</div>' +
         '<div class="flex gap-1 shrink-0">' +
-          '<button class="issue-start-working bg-purple-600 hover:bg-purple-500 text-white text-xs px-2 py-1 rounded transition-colors" title="Start working on this issue">Work</button>' +
+          '<button class="issue-start-working btn-primary text-white text-xs px-2 py-1 rounded transition-colors" title="Start working on this issue">Work</button>' +
           '<button class="issue-add-roadmap bg-gray-600 hover:bg-gray-500 text-white text-xs px-2 py-1 rounded transition-colors" title="Add to roadmap">+Roadmap</button>' +
         '</div>' +
       '</div>' +

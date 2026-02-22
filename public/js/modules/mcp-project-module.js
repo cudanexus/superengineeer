@@ -97,7 +97,7 @@
         ? (server.command || '')
         : (server.url || '');
 
-      html += '<div class="flex items-center justify-between p-3 bg-gray-700 rounded" data-server-id="' + escapeHtml(server.id) + '">' +
+      html += '<div class="flex items-center justify-between p-3 glass-panel rounded" data-server-id="' + escapeHtml(server.id) + '">' +
         '<div class="flex items-center gap-3 flex-1">' +
           '<div class="w-2 h-2 rounded-full ' + (server.enabled ? 'bg-green-600' : 'bg-gray-600') + '"></div>' +
           '<div class="flex-1">' +
@@ -115,7 +115,7 @@
             '<input type="checkbox" class="sr-only peer project-mcp-toggle" data-server-id="' + escapeHtml(server.id) + '"' +
               (isEnabled ? ' checked' : '') +
               (!server.enabled ? ' disabled' : '') + '>' +
-            '<div class="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[\'\'] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600 peer-disabled:opacity-50 peer-disabled:cursor-not-allowed"></div>' +
+            '<div class="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[\'\'] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:btn-primary peer-disabled:opacity-50 peer-disabled:cursor-not-allowed"></div>' +
           '</label>' +
         '</div>' +
       '</div>';
