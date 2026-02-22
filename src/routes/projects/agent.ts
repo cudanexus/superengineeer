@@ -7,6 +7,7 @@ import { ProjectRouterDependencies, AgentMessageBody } from './types';
 import { validateBody, validateParams } from '../../middleware/validation';
 import { validateProjectExists } from '../../middleware/project';
 import { agentOperationRateLimit, moderateRateLimit } from '../../middleware/rate-limit';
+import { getDefaultWorkflowRules, stripProtectedSection } from '../../constants/claude-workflow';
 import {
   agentMessageSchema,
   agentSendMessageSchema,
@@ -36,6 +37,22 @@ export function createAgentRouter(deps: ProjectRouterDependencies): Router {
       await fs.promises.access(roadmapPath);
     } catch {
       throw new ValidationError('Roadmap not found. A ROADMAP.md file is required to start the agent.');
+    }
+
+    try {
+      const body = req.body as AgentMessageBody;
+      const claudeMdPath = path.join(project.path, 'CLAUDE.md');
+
+      let content = '';
+      if (fs.existsSync(claudeMdPath)) {
+        content = await fs.promises.readFile(claudeMdPath, 'utf-8');
+      }
+
+      const { strippedContent } = stripProtectedSection(content);
+      const newContent = getDefaultWorkflowRules(body?.currentUrl) + strippedContent;
+      await fs.promises.writeFile(claudeMdPath, newContent, 'utf-8');
+    } catch (error) {
+      // silently skip if we cannot write or read claude md
     }
 
     await agentManager.startAutonomousLoop(id);
@@ -141,6 +158,23 @@ export function createAgentRouter(deps: ProjectRouterDependencies): Router {
     }
 
     // Don't validate sessionId - let the agent manager handle session creation/resumption
+
+    try {
+      const project = req.project!;
+      const claudeMdPath = path.join(project.path, 'CLAUDE.md');
+
+      let content = '';
+      if (fs.existsSync(claudeMdPath)) {
+        content = await fs.promises.readFile(claudeMdPath, 'utf-8');
+      }
+
+      const { strippedContent } = stripProtectedSection(content);
+      const newContent = getDefaultWorkflowRules(body?.currentUrl) + strippedContent;
+      await fs.promises.writeFile(claudeMdPath, newContent, 'utf-8');
+    } catch (error) {
+      // silently skip if we cannot write or read claude md
+    }
+
     await agentManager.startInteractiveAgent(id, {
       initialMessage: message,
       images,

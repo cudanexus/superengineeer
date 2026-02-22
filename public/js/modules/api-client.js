@@ -413,6 +413,8 @@
       payload.permissionMode = permissionMode;
     }
 
+    payload.currentUrl = window.location.href;
+
     return $.ajax({
       url: baseUrl + '/api/projects/' + id + '/agent/interactive',
       method: 'POST',

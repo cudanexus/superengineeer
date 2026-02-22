@@ -86,6 +86,7 @@ export const agentMessageSchema = z.object({
   images: z.array(imageSchema).optional(),
   sessionId: z.string().optional(),
   permissionMode: z.enum(['acceptEdits', 'plan']).optional(),
+  currentUrl: z.string().optional(),
 });
 
 export const agentSendMessageSchema = z.object({
