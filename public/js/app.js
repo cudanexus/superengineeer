@@ -1371,6 +1371,128 @@
       $('#settings-tab-' + tabName).removeClass('hidden');
     });
 
+    // --- Split View / Preview Pane Logic ---
+    function showPreviewPane(url) {
+      if (typeof window['showPreviewPaneGlobal'] === 'function') {
+        window['showPreviewPaneGlobal'](url);
+      } else {
+        const pane = $('#preview-pane');
+        const iframe = $('#preview-iframe');
+        const input = $('#preview-url-input');
+
+        pane.removeClass('hidden');
+        if (window.innerWidth <= 768) {
+          $('#conversation-pane').addClass('hidden');
+          pane.removeClass('w-1/2').addClass('w-full flex-1');
+        } else {
+          $('#conversation-pane').removeClass('hidden w-full').addClass('w-1/2 border-r border-gray-700');
+          pane.removeClass('w-full flex-1').addClass('w-1/2');
+        }
+
+        // Prevent unnecessary reloads
+        if (input.val() !== url) {
+          input.val(url);
+          $('#link-open-preview').attr('href', url);
+          iframe.attr('src', url);
+        }
+      }
+    }
+
+    // Assign to global scope so handleAgentMessage inside app.js can reach it
+    window['showPreviewPaneGlobal'] = function (url) {
+      const pane = $('#preview-pane');
+      const iframe = $('#preview-iframe');
+      const input = $('#preview-url-input');
+
+      pane.removeClass('hidden');
+      if (window.innerWidth <= 768) {
+        $('#conversation-pane').addClass('hidden');
+        pane.removeClass('w-1/2').addClass('w-full flex-1');
+      } else {
+        $('#conversation-pane').removeClass('hidden w-full flex-1').addClass('w-1/2 border-r border-gray-700');
+        pane.removeClass('w-full flex-1').addClass('w-1/2');
+      }
+
+      // Prevent unnecessary reloads
+      if (input.val() !== url) {
+        input.val(url);
+        $('#link-open-preview').attr('href', url);
+        iframe.attr('src', url);
+      }
+    };
+
+    $('#btn-toggle-preview').on('click', function () {
+      const pane = $('#preview-pane');
+      if (pane.hasClass('hidden')) {
+        // Find existing URL if any, or leave blank
+        const url = $('#preview-url-input').val() || 'about:blank';
+        if (typeof window['showPreviewPaneGlobal'] === 'function') {
+          window['showPreviewPaneGlobal'](url);
+        }
+      } else {
+        pane.addClass('hidden');
+        $('#conversation-pane').removeClass('hidden w-1/2 border-r border-gray-700').addClass('flex-1 w-full');
+      }
+    });
+
+    $('#preview-url-input').on('keydown', function (e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        let url = $(this).val().trim();
+        if (url && !url.startsWith('http')) {
+          url = 'http://' + url;
+          $(this).val(url);
+        }
+
+        /** @type {HTMLIFrameElement} */
+        // @ts-ignore
+        const iframe = (document.getElementById('preview-iframe'));
+        if (iframe) {
+          iframe.src = url;
+        }
+        $('#link-open-preview').attr('href', url);
+      }
+    });
+
+    $('#btn-back-preview').on('click', function () {
+      /** @type {HTMLIFrameElement} */
+      // @ts-ignore
+      const iframe = (document.getElementById('preview-iframe'));
+      try {
+        if (iframe && iframe.contentWindow) {
+          iframe.contentWindow.history.back();
+        }
+      } catch (e) {
+        console.warn('Cannot go back in iframe due to cross-origin policies', e);
+      }
+    });
+
+    $('#btn-refresh-preview').on('click', function () {
+      /** @type {HTMLIFrameElement} */
+      // @ts-ignore
+      const iframe = (document.getElementById('preview-iframe'));
+      if (iframe) {
+        iframe.src = iframe.src; // Reloads the internal iframe
+      }
+    });
+
+    $('#btn-close-preview').on('click', function () {
+      $('#preview-pane').addClass('hidden');
+      $('#conversation-pane').removeClass('hidden w-1/2 border-r border-gray-700').addClass('flex-1 w-full');
+      $('#preview-iframe').attr('src', 'about:blank');
+      $('#preview-url-input').val('');
+    });
+
+    // Intercept clicks on links inside the chat to open in the preview pane
+    $('#conversation-container, #oneoff-conversation-container').on('click', '.message-content a', function (e) {
+      e.preventDefault();
+      const url = $(this).attr('href');
+      if (url && typeof window['showPreviewPaneGlobal'] === 'function') {
+        window['showPreviewPaneGlobal'](url);
+      }
+    });
+    // ------------------------------------
+
     // Wipe All Data - open confirmation modal
     $('#btn-wipe-all-data').on('click', function () {
       $('#modal-confirm-wipe-all').removeClass('hidden');
@@ -5335,6 +5457,30 @@
 
   function handleAgentMessage(projectId, message) {
     appendMessage(projectId, message);
+
+    // Auto-load preview URL if one is detected in the AI's response
+    if ((message.type === 'assistant' || message.type === 'stdout') && message.content) {
+      // Regex to find common dev URLs, e.g., http://localhost:5173, http://192.168.1.x:3000, Daytona proxies
+      const urlRegex = /((?:https?:\/\/)?(?:localhost|0\.0\.0\.0|127\.0\.0\.1|192\.168\.\d+\.\d+|[a-zA-Z0-9-]+\.proxy\.daytona\.works)(?::\d+)?(?:\/[^\s)\]"']*)?)/ig;
+      const matches = Array.from(message.content.matchAll(urlRegex));
+
+      if (matches.length > 0) {
+        // pick the last matched URL, as sometimes it talks about backend then frontend
+        let latestUrl = matches[matches.length - 1][1];
+
+        // Ensure it has a protocol
+        if (!latestUrl.startsWith('http')) {
+          latestUrl = 'http://' + latestUrl;
+        }
+
+        // Show the split pane and load URL
+        if (latestUrl) {
+          if (typeof window['showPreviewPaneGlobal'] === 'function') {
+            window['showPreviewPaneGlobal'](latestUrl);
+          }
+        }
+      }
+    }
 
     // Clear waiting indicator when receiving agent messages (Claude is actively working)
     if (projectId === state.selectedProjectId) {
