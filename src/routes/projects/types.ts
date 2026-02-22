@@ -48,6 +48,7 @@ export interface CreateProjectBody {
   name?: string;
   path?: string;
   createNew?: boolean;
+  currentUrl?: string;
 }
 
 export interface RoadmapPromptBody {
@@ -100,6 +101,7 @@ export interface RenameConversationBody {
 export interface ClaudeFileSaveBody {
   filePath?: string;
   content?: string;
+  currentUrl?: string;
 }
 
 export interface PermissionOverridesBody {

@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { AppConfig } from '../config';
-import { DEFAULT_WORKFLOW_RULES } from '../constants/claude-workflow';
+import { getDefaultWorkflowRules } from '../constants/claude-workflow';
 import { createApiRouter, getAgentManager, getRoadmapGenerator, getShellService, getRalphLoopService, getConversationRepository, getProjectRepository, setWebSocketServer, getRunProcessManager } from '../routes';
 import { createAuthRouter } from '../routes/auth';
 import { DefaultWebSocketServer, ProjectWebSocketServer } from '../websocket';
@@ -264,7 +264,7 @@ export class ExpressHttpServer implements HttpServer {
         const claudeMdPath = path.join(projectPath, 'CLAUDE.md');
         if (!fs.existsSync(claudeMdPath)) {
           try {
-            fs.writeFileSync(claudeMdPath, DEFAULT_WORKFLOW_RULES, 'utf-8');
+            fs.writeFileSync(claudeMdPath, getDefaultWorkflowRules(), 'utf-8');
             console.log(`Created CLAUDE.md for project: ${projectPath}`);
           } catch {
             // Silently skip if we can't write (e.g. permission issues)

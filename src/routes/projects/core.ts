@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
-import { DEFAULT_WORKFLOW_RULES, stripProtectedSection, validateProtectedSectionSave } from '../../constants/claude-workflow';
+import { getDefaultWorkflowRules, stripProtectedSection, validateProtectedSectionSave } from '../../constants/claude-workflow';
 import { AgentMessage } from '../../agents';
 import { asyncHandler, NotFoundError, ValidationError, getProjectLogs } from '../../utils';
 import { isPathWithinProject } from '../../utils/path-validator';
@@ -72,6 +72,7 @@ export function createCoreRouter(deps: ProjectRouterDependencies): Router {
       name: name ?? '',
       path: projectPath!,
       createNew: createNew === true,
+      currentUrl: body.currentUrl
     });
 
     if (!result.success) {
@@ -403,13 +404,13 @@ export function createCoreRouter(deps: ProjectRouterDependencies): Router {
 
       const { wasProtected: oldContentWasProtected } = stripProtectedSection(existingContent);
       if (oldContentWasProtected) {
-        content = DEFAULT_WORKFLOW_RULES + content;
+        content = getDefaultWorkflowRules(body.currentUrl) + content;
       }
     } else {
       // If we are creating a new CLAUDE.md through this endpoint, prepend the rules if not already present
       const { wasProtected } = stripProtectedSection(content);
       if (!wasProtected) {
-        content = DEFAULT_WORKFLOW_RULES + content;
+        content = getDefaultWorkflowRules(body.currentUrl) + content;
       }
     }
 

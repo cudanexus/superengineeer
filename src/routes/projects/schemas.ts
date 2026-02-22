@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 // Core project schemas
 export const createProjectSchema = z.object({
-  name: z.string().min(1, 'Project name is required').max(255),
+  name: z.string().min(1, 'Project name is required').max(255).optional(),
   path: z.string().min(1, 'Project path is required'),
   createNew: z.preprocess(
     (val) => {
@@ -11,6 +11,7 @@ export const createProjectSchema = z.object({
     },
     z.boolean().optional(),
   ),
+  currentUrl: z.string().optional(),
 });
 
 export const updatePermissionsSchema = z.object({
@@ -34,6 +35,7 @@ export const updateMcpOverridesSchema = z.object({
 export const saveClaudeFileSchema = z.object({
   filePath: z.string().min(1, 'File path is required'),
   content: z.string(),
+  currentUrl: z.string().optional(),
 });
 
 // Roadmap schemas

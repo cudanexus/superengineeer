@@ -1,4 +1,19 @@
-export const DEFAULT_WORKFLOW_RULES = `## Development Workflow
+export const getDefaultWorkflowRules = (currentUrl?: string) => {
+    let baseUrl = 'http://localhost';
+    if (currentUrl) {
+        try {
+            const urlObj = new URL(currentUrl);
+            urlObj.port = '';
+            urlObj.pathname = '/';
+            urlObj.search = '';
+            urlObj.hash = '';
+            // Remove trailing slash for a clean base URL (e.g., http://192.168.1.26)
+            baseUrl = urlObj.toString().replace(/\/+$/, "");
+        } catch (e) {
+            // Ignore parse errors, fallback to default
+        }
+    }
+    return `## Development Workflow
 
 ### Project Setup
 
@@ -12,12 +27,14 @@ When instructed to run a Vite project:
 
 1. Execute \`npm run dev\` (or the appropriate package manager command)
 2. Wait for the server to start successfully
-3. Extract and return the local development URL from the output (typically \`http://localhost:5173/\`)
+3. The application's viewing environment is available through the Daytona proxy host at: ${baseUrl}. When you start the development server, access the application using the Daytona port-based format by prefixing the running port to the host (for example, if the development server runs on port 5173, open https://5173-bf32fb03-f1e8-4445-80f5-505249ce964f.proxy.daytona.works
+). Always use this Daytona URL structure for testing and navigation.
 4. Keep the response concise—provide the URL and brief status, avoiding verbose logs unless errors occur
 
 If the server fails to start, provide a clear error summary to help with troubleshooting.
 
 `;
+};
 
 /**
  * Robustly identify and strip the protected workflow section from a CLAUDE.md file's content.

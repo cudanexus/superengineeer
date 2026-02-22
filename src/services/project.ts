@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { DEFAULT_WORKFLOW_RULES } from '../constants/claude-workflow';
+import { getDefaultWorkflowRules } from '../constants/claude-workflow';
 import { Project, ProjectRepository, CreateProjectData } from '../repositories/project';
 
 export interface FileSystemOperations {
@@ -35,6 +35,7 @@ export interface CreateProjectOptions {
   name?: string;
   path: string;
   createNew: boolean;
+  currentUrl?: string;
 }
 
 export interface CreateProjectResult {
@@ -81,7 +82,7 @@ export class DefaultProjectService implements ProjectService {
     const claudeMdPath = path.join(projectPath, 'CLAUDE.md');
     const claudeMdExists = await this.fileSystem.exists(claudeMdPath);
     if (!claudeMdExists) {
-      await this.fileSystem.writeFile(claudeMdPath, DEFAULT_WORKFLOW_RULES);
+      await this.fileSystem.writeFile(claudeMdPath, getDefaultWorkflowRules(options.currentUrl));
     }
 
     const data: CreateProjectData = { name: projectName, path: projectPath };
