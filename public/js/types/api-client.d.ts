@@ -168,7 +168,23 @@ declare module 'api-client' {
     remote: Array<string>;
   }>;
   export function getGitUserName(projectId: string): JQuery.Promise<{ name: string | null }>;
+  export function getGitUserIdentity(projectId: string): JQuery.Promise<{ name: string | null; email: string | null }>;
+  export function setGitUserIdentity(
+    projectId: string,
+    name: string,
+    email: string
+  ): JQuery.Promise<{ success: boolean }>;
+  export function gitCreateGithubRepo(
+    projectId: string,
+    name: string,
+    isPrivate?: boolean,
+    remote?: string
+  ): JQuery.Promise<{ success: boolean; repo: string; remoteUrl: string }>;
   export function getGitDiff(projectId: string, staged: boolean): JQuery.Promise<string>;
+  export function getGitCommits(
+    projectId: string,
+    limit?: number
+  ): JQuery.Promise<{ commits: Array<{ hash: string; message: string; author: string; date: string }> }>;
   export function getGitFileDiff(
     projectId: string,
     filePath: string,
@@ -183,7 +199,11 @@ declare module 'api-client' {
   export function gitStageAll(projectId: string): JQuery.Promise<void>;
   export function gitUnstage(projectId: string, paths: Array<string>): JQuery.Promise<void>;
   export function gitUnstageAll(projectId: string): JQuery.Promise<void>;
-  export function gitCommit(projectId: string, message: string): JQuery.Promise<{ hash: string }>;
+  export function gitCommit(
+    projectId: string,
+    message: string,
+    allowEmpty?: boolean
+  ): JQuery.Promise<{ hash: string }>;
   export function gitCreateBranch(
     projectId: string,
     name: string,
@@ -201,6 +221,13 @@ declare module 'api-client' {
     remote: string,
     branch: string
   ): JQuery.Promise<void>;
+  export function gitMergeToMain(
+    projectId: string,
+    sourceBranch?: string,
+    targetBranch?: string,
+    push?: boolean,
+    remote?: string
+  ): JQuery.Promise<{ sourceBranch: string; targetBranch: string; pushed: boolean }>;
   export function gitDiscard(projectId: string, paths: Array<string>): JQuery.Promise<void>;
   export function gitCreateTag(
     projectId: string,

@@ -20,6 +20,7 @@
   var gitOperationInProgress = false;
   var lastGitStatus = null;
   var gitAuthPollTimer = null;
+  var gitAuthConnected = false;
 
   /**
    * Initialize the module with dependencies
@@ -43,6 +44,8 @@
   function loadGitStatus() {
     if (!state.selectedProjectId) return;
 
+    refreshGitAuthGate();
+
     api.getGitStatus(state.selectedProjectId)
       .done(function(status) {
         renderGitStatus(status);
@@ -57,6 +60,28 @@
       });
 
     loadGitTags();
+  }
+
+  function refreshGitAuthGate() {
+    api.getGitHubStatus()
+      .done(function(status) {
+        gitAuthConnected = !!(status && status.authenticated);
+        renderGitAuthGate();
+      })
+      .fail(function() {
+        gitAuthConnected = false;
+        renderGitAuthGate();
+      });
+  }
+
+  function renderGitAuthGate() {
+    if (gitAuthConnected) {
+      $('#git-connect-required').addClass('hidden');
+      $('#git-auth-gated-content').removeClass('hidden');
+    } else {
+      $('#git-connect-required').removeClass('hidden');
+      $('#git-auth-gated-content').addClass('hidden');
+    }
   }
 
   function loadGitTags() {
@@ -911,19 +936,7 @@
       setGitOperationState(true);
       $(this).text('Committing...');
 
-      api.gitCommit(state.selectedProjectId, message)
-        .done(function(result) {
-          showToast('Committed: ' + result.hash, 'success');
-          $('#git-commit-message').val('');
-          loadGitStatus();
-        })
-        .fail(function(xhr) {
-          showToast('Failed to commit: ' + getErrorMessage(xhr), 'error');
-        })
-        .always(function() {
-          setGitOperationState(false);
-          $('#btn-git-commit').text('Commit');
-        });
+      commitWithRecovery(message);
     });
 
     $('#btn-git-push').on('click', function() {
@@ -937,7 +950,13 @@
           showToast('Pushed successfully', 'success');
         })
         .fail(function(xhr) {
-          showToast('Failed to push: ' + getErrorMessage(xhr), 'error');
+          var normalizedPushError = normalizePushErrorMessage(getErrorMessage(xhr));
+          if (isDetachedHeadPushError(normalizedPushError)) {
+            recoverPushFromDetachedHead(state.selectedProjectId);
+            return;
+          }
+
+          showToast('Failed to push: ' + normalizedPushError, 'error');
         })
         .always(function() {
           setGitOperationState(false);
@@ -963,6 +982,50 @@
           setGitOperationState(false);
           $('#btn-git-pull').text('Pull');
         });
+    });
+
+    $('#btn-git-create-repo-push').on('click', function() {
+      if (gitOperationInProgress || !state.selectedProjectId) return;
+      createRepoOnly();
+    });
+
+    $('#btn-git-restore-commit').on('click', function() {
+      if (gitOperationInProgress || !state.selectedProjectId) return;
+      openRestoreCommitModal();
+    });
+
+    $('#btn-git-merge-main').on('click', function() {
+      if (gitOperationInProgress || !state.selectedProjectId) return;
+      mergeCurrentBranchToMain();
+    });
+
+    $('#form-restore-commit').on('submit', function(e) {
+      e.preventDefault();
+      if (!state.selectedProjectId || gitOperationInProgress) return;
+
+      var commitHash = $('#restore-commit-select').val();
+      if (!commitHash) return;
+
+      setGitOperationState(true);
+      $('#btn-restore-commit-confirm').text('Checking out...');
+
+      api.gitCheckout(state.selectedProjectId, String(commitHash))
+        .done(function() {
+          showToast('Checked out commit ' + String(commitHash).slice(0, 7), 'success');
+          $('#modal-restore-commit').addClass('hidden');
+          loadGitStatus();
+        })
+        .fail(function(xhr) {
+          showToast('Failed to checkout commit: ' + getErrorMessage(xhr), 'error');
+        })
+        .always(function() {
+          setGitOperationState(false);
+          $('#btn-restore-commit-confirm').text('Checkout');
+        });
+    });
+
+    $('#modal-restore-commit .modal-close, #modal-restore-commit .modal-backdrop').on('click', function() {
+      $('#modal-restore-commit').addClass('hidden');
     });
 
     $('#btn-git-connect-auth').on('click', function() {
@@ -1124,6 +1187,280 @@
       });
   }
 
+  function normalizeCommitErrorMessage(message) {
+    var normalized = String(message || '').trim();
+    while (/^Failed to commit:\s*/i.test(normalized)) {
+      normalized = normalized.replace(/^Failed to commit:\s*/i, '');
+    }
+    return normalized;
+  }
+
+  function isAuthorIdentityUnknownError(message) {
+    var text = String(message || '');
+    return /Author identity unknown/i.test(text) || /unable to auto-detect email address/i.test(text);
+  }
+
+  function normalizePushErrorMessage(message) {
+    var normalized = String(message || '').trim();
+    while (/^Failed to push:\s*/i.test(normalized)) {
+      normalized = normalized.replace(/^Failed to push:\s*/i, '');
+    }
+    return normalized;
+  }
+
+  function isDetachedHeadPushError(message) {
+    var text = String(message || '').toLowerCase();
+    return text.includes('not currently on a branch') || text.includes('detached head');
+  }
+
+  function recoverPushFromDetachedHead(projectId) {
+    if (!projectId) return;
+
+    showPrompt('Detached HEAD', 'Enter a branch name to continue push:', {
+      placeholder: 'restore-work',
+      submitText: 'Create Branch & Push'
+    }).then(function(branchName) {
+      if (!branchName) return;
+
+      setGitOperationState(true);
+      $('#btn-git-push').text('Creating branch...');
+
+      api.gitCreateBranch(projectId, branchName, true)
+        .done(function() {
+          $('#btn-git-push').text('Pushing...');
+          api.gitPush(projectId, 'origin', branchName, true)
+            .done(function() {
+              showToast('Pushed successfully on branch ' + branchName, 'success');
+              loadGitStatus();
+            })
+            .fail(function(xhr) {
+              showToast('Failed to push: ' + normalizePushErrorMessage(getErrorMessage(xhr)), 'error');
+            })
+            .always(function() {
+              setGitOperationState(false);
+              $('#btn-git-push').text('Push');
+            });
+        })
+        .fail(function(xhr) {
+          showToast('Failed to create branch: ' + getErrorMessage(xhr), 'error');
+          setGitOperationState(false);
+          $('#btn-git-push').text('Push');
+        });
+    });
+  }
+
+  function commitWithRecovery(message, onSuccess, allowEmpty) {
+    if (!state.selectedProjectId) return;
+
+    api.gitCommit(state.selectedProjectId, message, !!allowEmpty)
+      .done(function(result) {
+        showToast('Committed: ' + result.hash, 'success');
+        $('#git-commit-message').val('');
+        loadGitStatus();
+        if (typeof onSuccess === 'function') {
+          onSuccess(result);
+        }
+      })
+      .fail(function(xhr) {
+        var rawError = getErrorMessage(xhr);
+        var normalizedError = normalizeCommitErrorMessage(rawError);
+
+        if (isAuthorIdentityUnknownError(normalizedError)) {
+          promptAndSetGitIdentity(message, onSuccess, allowEmpty);
+          return;
+        }
+
+        showToast('Failed to commit: ' + normalizedError, 'error');
+      })
+      .always(function() {
+        setGitOperationState(false);
+        $('#btn-git-commit').text('Commit');
+      });
+  }
+
+  function promptAndSetGitIdentity(commitMessageToRetry, onSuccess, allowEmpty) {
+    if (!state.selectedProjectId) return;
+
+    var projectId = state.selectedProjectId;
+    var existingIdentity = { name: '', email: '' };
+
+    api.getGitUserIdentity(projectId)
+      .done(function(identity) {
+        if (identity) {
+          existingIdentity.name = identity.name || '';
+          existingIdentity.email = identity.email || '';
+        }
+      })
+      .always(function() {
+        showPrompt('Set Git Name', 'Git user.name:', {
+          defaultValue: existingIdentity.name,
+          placeholder: 'Your Name',
+          submitText: 'Next'
+        }).then(function(name) {
+          if (!name) return;
+
+          showPrompt('Set Git Email', 'Git user.email:', {
+            defaultValue: existingIdentity.email,
+            placeholder: 'you@example.com',
+            submitText: 'Save'
+          }).then(function(email) {
+            if (!email) return;
+
+            api.setGitUserIdentity(projectId, name, email)
+              .done(function() {
+                showToast('Git identity saved. Retrying commit...', 'success');
+                setGitOperationState(true);
+                $('#btn-git-commit').text('Committing...');
+                commitWithRecovery(commitMessageToRetry, onSuccess, allowEmpty);
+              })
+              .fail(function(xhr) {
+                showToast('Failed to save git identity: ' + getErrorMessage(xhr), 'error');
+              });
+          });
+        });
+      });
+  }
+
+  function slugifyRepoName(value) {
+    return String(value || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9._-]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+  }
+
+  function defaultRepoNameFromProject() {
+    var project = findProjectById(state.selectedProjectId);
+    if (!project) return 'project';
+
+    var candidate = project.name || '';
+    if (!candidate && project.path) {
+      var parts = String(project.path).split(/[\\/]/);
+      candidate = parts[parts.length - 1] || 'project';
+    }
+
+    return slugifyRepoName(candidate) || 'project';
+  }
+
+  function createRepoOnly() {
+    if (!state.selectedProjectId) return;
+
+    var projectId = state.selectedProjectId;
+    var defaultRepo = defaultRepoNameFromProject();
+
+    showPrompt('Create GitHub Repo', 'Repository name:', {
+      defaultValue: defaultRepo,
+      placeholder: 'my-repo',
+      submitText: 'Create'
+    }).then(function(repoName) {
+      if (!repoName) return;
+
+      setGitOperationState(true);
+      $('#btn-git-create-repo-push').text('Creating...');
+
+      api.gitCreateGithubRepo(projectId, repoName, true, 'origin')
+        .done(function(result) {
+          showToast('Repository ready: ' + (result.repo || repoName), 'success');
+          showToast('Repo created. Now commit and push using the buttons below.', 'success');
+          loadGitStatus();
+          setGitOperationState(false);
+          $('#btn-git-create-repo-push').text('Create Repo');
+        })
+        .fail(function(xhr) {
+          showToast('Failed to create repository: ' + getErrorMessage(xhr), 'error');
+          setGitOperationState(false);
+          $('#btn-git-create-repo-push').text('Create Repo');
+        });
+    });
+  }
+
+  function openRestoreCommitModal() {
+    if (!state.selectedProjectId) return;
+
+    var $select = $('#restore-commit-select');
+    $select.html('<option value="">Loading commits...</option>');
+    $('#modal-restore-commit').removeClass('hidden');
+
+    api.getGitCommits(state.selectedProjectId, 50)
+      .done(function(result) {
+        var commits = (result && result.commits) || [];
+        if (!commits.length) {
+          $select.html('<option value="">No commits found</option>');
+          return;
+        }
+
+        var optionsHtml = '';
+        commits.forEach(function(commit) {
+          var shortHash = String(commit.hash || '').slice(0, 7);
+          var message = String(commit.message || '').replace(/\s+/g, ' ').trim();
+          var author = String(commit.author || '');
+          var label = shortHash + ' - ' + message + (author ? ' (' + author + ')' : '');
+          optionsHtml += '<option value="' + escapeHtml(commit.hash) + '">' + escapeHtml(label) + '</option>';
+        });
+
+        $select.html(optionsHtml);
+      })
+      .fail(function(xhr) {
+        $select.html('<option value="">Unable to load commits</option>');
+        showToast('Failed to load commits: ' + getErrorMessage(xhr), 'error');
+      });
+  }
+
+  function mergeCurrentBranchToMain() {
+    if (!state.selectedProjectId) return;
+
+    var projectId = state.selectedProjectId;
+    setGitOperationState(true);
+    $('#btn-git-merge-main').text('Preparing...');
+
+    api.getGitBranches(projectId)
+      .done(function(branches) {
+        var current = branches && branches.current ? branches.current : null;
+        if (!current) {
+          showToast('Unable to determine current branch', 'error');
+          setGitOperationState(false);
+          $('#btn-git-merge-main').text('Merge Current Branch To Master');
+          return;
+        }
+
+        if (current === 'master') {
+          showToast('Already on master branch', 'warning');
+          setGitOperationState(false);
+          $('#btn-git-merge-main').text('Merge Current Branch To Master');
+          return;
+        }
+
+        showConfirm(
+          'Merge To Master',
+          'Merge branch "' + current + '" into "master" and push to origin?'
+        ).then(function(confirmed) {
+          if (!confirmed) {
+            setGitOperationState(false);
+            $('#btn-git-merge-main').text('Merge Current Branch To Master');
+            return;
+          }
+
+          $('#btn-git-merge-main').text('Merging...');
+          api.gitMergeToMain(projectId, current, 'master', true, 'origin')
+            .done(function() {
+              showToast('Merged "' + current + '" into master and pushed', 'success');
+              loadGitStatus();
+            })
+            .fail(function(xhr) {
+              showToast('Failed to merge to master: ' + getErrorMessage(xhr), 'error');
+            })
+            .always(function() {
+              setGitOperationState(false);
+              $('#btn-git-merge-main').text('Merge Current Branch To Master');
+            });
+        });
+      })
+      .fail(function(xhr) {
+        showToast('Failed to load branches: ' + getErrorMessage(xhr), 'error');
+        setGitOperationState(false);
+        $('#btn-git-merge-main').text('Merge Current Branch To Master');
+      });
+  }
+
   function startGitHubAuthPolling() {
     stopGitHubAuthPolling();
 
@@ -1137,6 +1474,7 @@
             if (status && status.phase === 'completed') {
               showToast('GitHub connected successfully', 'success');
               closeGitHubAuthDeviceModal(false);
+              refreshGitAuthGate();
             } else if (status && status.phase === 'error') {
               showToast('GitHub auth failed', 'error');
             }

@@ -127,6 +127,7 @@ export interface GitStageBody {
 
 export interface GitCommitBody {
   message?: string;
+  allowEmpty?: boolean;
 }
 
 export interface GitBranchBody {
@@ -150,6 +151,13 @@ export interface GitPullBody {
   rebase?: boolean;
 }
 
+export interface GitMergeToMainBody {
+  sourceBranch?: string;
+  targetBranch?: string;
+  remote?: string;
+  push?: boolean;
+}
+
 export interface GitTagBody {
   name: string;
   message?: string;
@@ -157,6 +165,17 @@ export interface GitTagBody {
 
 export interface GitPushTagBody {
   remote?: string;
+}
+
+export interface GitUserIdentityBody {
+  name?: string;
+  email?: string;
+}
+
+export interface GitCreateGithubRepoBody {
+  name?: string;
+  remote?: string;
+  private?: boolean;
 }
 
 export interface ShellInputBody {

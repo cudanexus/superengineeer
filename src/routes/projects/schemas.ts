@@ -130,6 +130,7 @@ export const gitStageSchema = z.object({
 
 export const gitCommitSchema = z.object({
   message: z.string().min(1, 'Commit message is required'),
+  allowEmpty: z.boolean().optional(),
 });
 
 export const gitBranchSchema = z.object({
@@ -153,6 +154,13 @@ export const gitPullSchema = z.object({
   rebase: z.boolean().optional(),
 });
 
+export const gitMergeToMainSchema = z.object({
+  sourceBranch: z.string().optional(),
+  targetBranch: z.string().optional().default('master'),
+  remote: z.string().optional().default('origin'),
+  push: z.boolean().optional().default(true),
+});
+
 export const gitTagSchema = z.object({
   name: z.string().min(1, 'Tag name is required'),
   message: z.string().optional(),
@@ -160,6 +168,17 @@ export const gitTagSchema = z.object({
 
 export const gitPushTagSchema = z.object({
   remote: z.string().default('origin'),
+});
+
+export const gitUserIdentitySchema = z.object({
+  name: z.string().min(1, 'Name is required'),
+  email: z.string().email('Valid email is required'),
+});
+
+export const gitCreateGithubRepoSchema = z.object({
+  name: z.string().min(1, 'Repository name is required'),
+  remote: z.string().default('origin'),
+  private: z.boolean().optional().default(true),
 });
 
 // Inventify schemas

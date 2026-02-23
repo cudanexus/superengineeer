@@ -992,6 +992,13 @@
                 <!-- Lower Section: Actions -->
                 <div id="git-actions-section" class="flex-shrink-0 border-t border-gray-700 bg-gray-850 overflow-y-auto"
                   style="max-height: 45%;">
+                  <div id="git-connect-required" class="hidden p-3">
+                    <div class="bg-gray-900 border border-gray-700 rounded p-3 text-center">
+                      <p class="text-sm text-gray-300">Connect to Git to enable commit and branch actions.</p>
+                      <p class="text-xs text-gray-500 mt-1">Use the <span class="text-indigo-400">Connect Git</span> button above the Diff Preview panel.</p>
+                    </div>
+                  </div>
+                  <div id="git-auth-gated-content">
                   <!-- Commit Section -->
                   <div class="p-3 pb-2">
                     <div class="flex items-center justify-between mb-1">
@@ -1016,14 +1023,6 @@
                   </div>
 
                   <!-- Push/Pull Section -->
-                  <div class="px-3 pb-2">
-                    <button id="btn-git-connect-auth"
-                      class="w-full bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded text-xs transition-colors">
-                      Connect Git
-                    </button>
-                  </div>
-
-                  <!-- Push/Pull Section -->
                   <div class="flex gap-2 px-3 pb-2">
                     <button id="btn-git-push"
                       class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-xs flex-1 transition-colors">
@@ -1032,6 +1031,20 @@
                     <button id="btn-git-pull"
                       class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1.5 rounded text-xs flex-1 transition-colors">
                       Pull
+                    </button>
+                  </div>
+
+                  <div class="px-3 pb-2">
+                    <button id="btn-git-restore-commit"
+                      class="w-full bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded text-xs transition-colors">
+                      Restore (Checkout Commit)
+                    </button>
+                  </div>
+
+                  <div class="px-3 pb-2">
+                    <button id="btn-git-merge-main"
+                      class="w-full bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded text-xs transition-colors">
+                      Merge Current Branch To Master
                     </button>
                   </div>
 
@@ -1054,6 +1067,7 @@
                       <div class="text-gray-500 text-center py-1">No tags</div>
                     </div>
                   </div>
+                  </div>
                 </div>
               </div>
 
@@ -1070,6 +1084,16 @@
                 </div>
                 <!-- Diff Content -->
                 <div class="p-4 flex-1 flex flex-col overflow-hidden">
+                  <div class="mb-2 p-2 bg-gray-800 border border-gray-700 rounded flex items-center gap-2 flex-shrink-0">
+                    <button id="btn-git-connect-auth"
+                      class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded text-xs transition-colors">
+                      Connect Git
+                    </button>
+                    <button id="btn-git-create-repo-push"
+                      class="bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 rounded text-xs transition-colors">
+                      Create Repo
+                    </button>
+                  </div>
                   <label class="text-xs text-gray-400 mb-2 flex-shrink-0">Diff Preview</label>
                   <div id="git-diff-preview"
                     class="flex-1 overflow-auto bg-gray-800 rounded border border-gray-700 p-2 text-xs font-mono text-gray-300">
@@ -2848,6 +2872,37 @@
               class="modal-close px-3 py-1.5 text-sm text-gray-300 hover:text-white transition-colors">Cancel</button>
             <button type="submit" id="btn-create-tag"
               class="px-3 py-1.5 text-sm bg-purple-600 hover:bg-purple-700 text-white rounded transition-colors">Create</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Restore Commit Modal -->
+  <div id="modal-restore-commit" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl">
+        <div class="p-3 border-b border-gray-700 flex items-center justify-between">
+          <h3 class="font-semibold text-white">Restore From Commit</h3>
+          <button class="modal-close text-gray-400 hover:text-white">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <form id="form-restore-commit">
+          <div class="p-3 space-y-2">
+            <label class="text-sm text-gray-300">Select commit to checkout</label>
+            <select id="restore-commit-select"
+              class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-2 text-sm text-gray-100 focus:outline-none focus:border-purple-500">
+            </select>
+            <p class="text-xs text-gray-400">This checks out a commit in detached HEAD state.</p>
+          </div>
+          <div class="p-3 border-t border-gray-700 flex justify-end gap-2">
+            <button type="button" class="modal-close px-3 py-1.5 text-sm text-gray-300 hover:text-white transition-colors">Cancel</button>
+            <button type="submit" id="btn-restore-commit-confirm"
+              class="px-3 py-1.5 text-sm bg-amber-600 hover:bg-amber-700 text-white rounded transition-colors">Checkout</button>
           </div>
         </form>
       </div>

@@ -8,8 +8,11 @@ import {
   GitCheckoutBody,
   GitPushBody,
   GitPullBody,
+  GitMergeToMainBody,
   GitTagBody,
-  GitPushTagBody
+  GitPushTagBody,
+  GitUserIdentityBody,
+  GitCreateGithubRepoBody
 } from './types';
 import { validateBody, validateParams, validateQuery } from '../../middleware/validation';
 import { validateProjectExists } from '../../middleware/project';
@@ -20,8 +23,11 @@ import {
   gitCheckoutSchema,
   gitPushSchema,
   gitPullSchema,
+  gitMergeToMainSchema,
   gitTagSchema,
   gitPushTagSchema,
+  gitUserIdentitySchema,
+  gitCreateGithubRepoSchema,
   projectAndTagNameSchema,
   fileDiffQuerySchema
 } from './schemas';
@@ -185,6 +191,14 @@ export function createGitRouter(deps: ProjectRouterDependencies): Router {
     res.json({ diff });
   }));
 
+  // Get recent commits
+  router.get('/commits', validateProjectExists(projectRepository), asyncHandler(async (req: Request, res: Response) => {
+    const project = req.project!;
+    const limit = Math.max(1, Math.min(100, Number(req.query['limit'] || 30)));
+    const commits = await gitService.listCommits((project).path, limit);
+    res.json({ commits });
+  }));
+
   // Stage specific files
   router.post('/stage', validateBody(gitStageSchema), validateProjectExists(projectRepository), asyncHandler(async (req: Request, res: Response) => {
     const project = req.project!;
@@ -225,7 +239,7 @@ export function createGitRouter(deps: ProjectRouterDependencies): Router {
   router.post('/commit', validateBody(gitCommitSchema), validateProjectExists(projectRepository), asyncHandler(async (req: Request, res: Response) => {
     const id = req.params['id'] as string;
     const body = req.body as GitCommitBody;
-    const { message } = body;
+    const { message, allowEmpty } = body;
 
 
     const project = await projectRepository.findById(id);
@@ -234,7 +248,7 @@ export function createGitRouter(deps: ProjectRouterDependencies): Router {
       throw new NotFoundError('Project');
     }
 
-    const result = await gitService.commit((project).path, message!);
+    const result = await gitService.commit((project).path, message!, !!allowEmpty);
     res.json(result);
   }));
 
@@ -301,6 +315,32 @@ export function createGitRouter(deps: ProjectRouterDependencies): Router {
     }
 
     const result = await gitService.pull((project).path, remote, branch, rebase);
+    res.json(result);
+  }));
+
+  // Merge current/source branch into main and optionally push
+  router.post('/merge-to-main', validateBody(gitMergeToMainSchema), validateProjectExists(projectRepository), asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params['id'] as string;
+    const body = req.body as GitMergeToMainBody;
+    const {
+      sourceBranch,
+      targetBranch = 'master',
+      push = true,
+      remote = 'origin',
+    } = body;
+
+    const project = await projectRepository.findById(id);
+    if (!project) {
+      throw new NotFoundError('Project');
+    }
+
+    const result = await gitService.mergeToMain(
+      (project).path,
+      sourceBranch,
+      targetBranch,
+      push,
+      remote
+    );
     res.json(result);
   }));
 
@@ -474,6 +514,37 @@ export function createGitRouter(deps: ProjectRouterDependencies): Router {
     const project = req.project!;
     const name = await gitService.getUserName(project.path);
     res.json({ name });
+  }));
+
+  // Get git user identity
+  router.get('/user-identity', validateProjectExists(projectRepository), asyncHandler(async (req: Request, res: Response) => {
+    const project = req.project!;
+    const name = await gitService.getUserName(project.path);
+    const email = await gitService.getUserEmail(project.path);
+    res.json({ name, email });
+  }));
+
+  // Set git user identity (repo-local)
+  router.post('/user-identity', validateBody(gitUserIdentitySchema), validateProjectExists(projectRepository), asyncHandler(async (req: Request, res: Response) => {
+    const project = req.project!;
+    const body = req.body as GitUserIdentityBody;
+    const { name, email } = body;
+
+    await gitService.setUserIdentity(project.path, name!, email!);
+    res.json({ success: true });
+  }));
+
+  // Create GitHub repository and configure remote
+  router.post('/github/repo', validateBody(gitCreateGithubRepoSchema), validateProjectExists(projectRepository), asyncHandler(async (req: Request, res: Response) => {
+    const project = req.project!;
+    const body = req.body as GitCreateGithubRepoBody;
+    const { name, remote = 'origin', private: isPrivate = true } = body;
+
+    const result = await gitService.createGithubRepoRemote(project.path, name!, {
+      remote,
+      isPrivate,
+    });
+    res.json({ success: true, ...result });
   }));
 
   return router;

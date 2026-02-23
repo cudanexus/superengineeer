@@ -1085,6 +1085,44 @@
   };
 
   /**
+   * Get git user identity from git config
+   * @param {string} projectId - Project UUID
+   * @returns {Promise<{name: string|null, email: string|null}>}
+   */
+  ApiClient.getGitUserIdentity = function (projectId) {
+    return $.get(baseUrl + '/api/projects/' + projectId + '/git/user-identity');
+  };
+
+  /**
+   * Set git user identity in repository-local config
+   * @param {string} projectId - Project UUID
+   * @param {string} name - user.name
+   * @param {string} email - user.email
+   * @returns {Promise<{success: boolean}>}
+   */
+  ApiClient.setGitUserIdentity = function (projectId, name, email) {
+    return $.ajax({
+      url: baseUrl + '/api/projects/' + projectId + '/git/user-identity',
+      method: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify({ name: name, email: email })
+    });
+  };
+
+  ApiClient.gitCreateGithubRepo = function (projectId, name, isPrivate, remote) {
+    return $.ajax({
+      url: baseUrl + '/api/projects/' + projectId + '/git/github/repo',
+      method: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify({
+        name: name,
+        private: isPrivate !== false,
+        remote: remote || 'origin'
+      })
+    });
+  };
+
+  /**
    * Get Git diff for staged or unstaged changes
    * @function getGitDiff
    * @memberof module:ApiClient
@@ -1100,6 +1138,16 @@
    */
   ApiClient.getGitDiff = function (projectId, staged) {
     return $.get(baseUrl + '/api/projects/' + projectId + '/git/diff', { staged: staged ? 'true' : 'false' });
+  };
+
+  /**
+   * Get recent commits
+   * @param {string} projectId - Project UUID
+   * @param {number} limit - Number of commits
+   * @returns {Promise<{commits: Array<{hash: string, message: string, author: string, date: string}>}>}
+   */
+  ApiClient.getGitCommits = function (projectId, limit) {
+    return $.get(baseUrl + '/api/projects/' + projectId + '/git/commits', { limit: limit || 30 });
   };
 
   /**
@@ -1214,12 +1262,12 @@
    * );
    * console.log(`Created commit: ${result.hash}`);
    */
-  ApiClient.gitCommit = function (projectId, message) {
+  ApiClient.gitCommit = function (projectId, message, allowEmpty) {
     return $.ajax({
       url: baseUrl + '/api/projects/' + projectId + '/git/commit',
       method: 'POST',
       contentType: 'application/json',
-      data: JSON.stringify({ message: message })
+      data: JSON.stringify({ message: message, allowEmpty: !!allowEmpty })
     });
   };
 
@@ -1306,6 +1354,20 @@
       method: 'POST',
       contentType: 'application/json',
       data: JSON.stringify({ remote: remote, branch: branch, rebase: rebase })
+    });
+  };
+
+  ApiClient.gitMergeToMain = function (projectId, sourceBranch, targetBranch, push, remote) {
+    return $.ajax({
+      url: baseUrl + '/api/projects/' + projectId + '/git/merge-to-main',
+      method: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify({
+        sourceBranch: sourceBranch,
+        targetBranch: targetBranch || 'master',
+        push: push !== false,
+        remote: remote || 'origin'
+      })
     });
   };
 

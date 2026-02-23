@@ -1,7 +1,11 @@
 import simpleGit, { SimpleGit, StatusResult } from 'simple-git';
 import * as fs from 'fs';
 import * as path from 'path';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import { GitError } from '../utils/errors';
+
+const execFileAsync = promisify(execFile);
 
 export interface GitFileEntry {
   path: string;
@@ -32,6 +36,13 @@ export interface FileDiffResult {
   filePath: string;
 }
 
+export interface GitCommitEntry {
+  hash: string;
+  message: string;
+  author: string;
+  date: string;
+}
+
 export interface GitService {
   getStatus(projectPath: string): Promise<GitStatus>;
   getBranches(projectPath: string): Promise<BranchInfo>;
@@ -39,12 +50,20 @@ export interface GitService {
   unstageFiles(projectPath: string, paths: string[]): Promise<void>;
   stageAll(projectPath: string): Promise<void>;
   unstageAll(projectPath: string): Promise<void>;
-  commit(projectPath: string, message: string): Promise<CommitResult>;
+  commit(projectPath: string, message: string, allowEmpty?: boolean): Promise<CommitResult>;
   createBranch(projectPath: string, name: string, checkout?: boolean): Promise<void>;
   checkout(projectPath: string, branch: string): Promise<void>;
   push(projectPath: string, remote?: string, branch?: string, setUpstream?: boolean): Promise<string>;
   pull(projectPath: string, remote?: string, branch?: string, rebase?: boolean): Promise<string>;
+  mergeToMain(
+    projectPath: string,
+    sourceBranch?: string,
+    targetBranch?: string,
+    push?: boolean,
+    remote?: string
+  ): Promise<{ sourceBranch: string; targetBranch: string; pushed: boolean }>;
   getDiff(projectPath: string, staged?: boolean): Promise<string>;
+  listCommits(projectPath: string, limit?: number): Promise<GitCommitEntry[]>;
   getFileDiff(projectPath: string, filePath: string, staged?: boolean): Promise<FileDiffResult>;
   discardChanges(projectPath: string, paths: string[]): Promise<void>;
   isGitRepo(projectPath: string): Promise<boolean>;
@@ -54,6 +73,13 @@ export interface GitService {
   deleteTag(projectPath: string, name: string): Promise<void>;
   getRemoteUrl(projectPath: string, remote?: string): Promise<string | null>;
   getUserName(projectPath: string): Promise<string | null>;
+  getUserEmail(projectPath: string): Promise<string | null>;
+  setUserIdentity(projectPath: string, name: string, email: string): Promise<void>;
+  createGithubRepoRemote(
+    projectPath: string,
+    repoName: string,
+    options?: { remote?: string; isPrivate?: boolean }
+  ): Promise<{ repo: string; remoteUrl: string }>;
 }
 
 export class SimpleGitService implements GitService {
@@ -67,6 +93,196 @@ export class SimpleGitService implements GitService {
 
   private getGit(projectPath: string): SimpleGit {
     return simpleGit(projectPath);
+  }
+
+  private async ensureGitRepo(projectPath: string): Promise<void> {
+    const git = this.getGit(projectPath);
+    const isRepo = await git.checkIsRepo();
+    if (isRepo) return;
+
+    try {
+      await git.init();
+    } catch (error) {
+      throw new GitError(`Failed to initialize git repository: ${this.toGitErrorMessage(error)}`);
+    }
+  }
+
+  private async runGh(args: string[], cwd: string): Promise<{ stdout: string; stderr: string }> {
+    return execFileAsync('gh', args, { cwd, encoding: 'utf-8' });
+  }
+
+  private isNoUpstreamError(errorText: string): boolean {
+    const text = errorText.toLowerCase();
+    return text.includes('has no upstream branch')
+      || text.includes('no upstream branch')
+      || text.includes('--set-upstream');
+  }
+
+  private extractBranchFromNoUpstreamError(errorText: string): string | null {
+    const match = errorText.match(/current branch\s+([^\s]+)\s+has no upstream branch/i);
+    return match?.[1] || null;
+  }
+
+  private async localBranchExists(git: SimpleGit, branch: string): Promise<boolean> {
+    try {
+      const local = await git.branchLocal();
+      return local.all.includes(branch);
+    } catch {
+      return false;
+    }
+  }
+
+  private async hasAnyCommit(git: SimpleGit): Promise<boolean> {
+    try {
+      await git.raw(['rev-parse', '--verify', 'HEAD']);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private async resolveCurrentBranch(git: SimpleGit, errorText?: string): Promise<string | null> {
+    const fromError = errorText ? this.extractBranchFromNoUpstreamError(errorText) : null;
+    if (fromError && await this.localBranchExists(git, fromError)) return fromError;
+
+    try {
+      const current = (await git.branchLocal()).current;
+      if (current) return current;
+    } catch {
+      // fall through
+    }
+
+    try {
+      const raw = await git.raw(['rev-parse', '--abbrev-ref', 'HEAD']);
+      const parsed = raw.trim();
+      if (parsed && parsed !== 'HEAD') return parsed;
+    } catch {
+      // fall through
+    }
+
+    return null;
+  }
+
+  private isNonFastForwardError(errorText: string): boolean {
+    const text = errorText.toLowerCase();
+    return text.includes('fetch first')
+      || text.includes('non-fast-forward')
+      || text.includes('failed to push some refs');
+  }
+
+  private isMissingRemoteRefError(errorText: string): boolean {
+    return errorText.toLowerCase().includes("couldn't find remote ref");
+  }
+
+  private async rebaseAndRetryPush(
+    git: SimpleGit,
+    remote: string,
+    branch: string | undefined,
+    setUpstream: boolean
+  ): Promise<string> {
+    const targetBranch = branch || (await git.branchLocal()).current;
+    if (!targetBranch) {
+      throw new GitError('Failed to determine current branch for rebase/push recovery.');
+    }
+
+    try {
+      await git.raw(['pull', '--rebase', remote, targetBranch]);
+    } catch (error) {
+      const message = this.toGitErrorMessage(error);
+
+      // Remote branch may not exist yet (e.g., remote only has main, local is master).
+      // In that case, skip rebase and attempt first push with upstream.
+      if (!this.isMissingRemoteRefError(message)) {
+        throw new GitError(
+          `Push rejected and automatic rebase failed. Resolve conflicts, then push again: ${message}`
+        );
+      }
+    }
+
+    const retryPushArgs = ['push'];
+    if (setUpstream) {
+      retryPushArgs.push('-u');
+    }
+    retryPushArgs.push(remote, targetBranch);
+    return await git.raw(retryPushArgs);
+  }
+
+  private toRepoSlug(projectPath: string): string {
+    const base = path.basename(projectPath);
+    return base
+      .toLowerCase()
+      .replace(/[^a-z0-9._-]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      || 'project';
+  }
+
+  async createGithubRepoRemote(
+    projectPath: string,
+    repoName: string,
+    options?: { remote?: string; isPrivate?: boolean }
+  ): Promise<{ repo: string; remoteUrl: string }> {
+    await this.ensureGitRepo(projectPath);
+
+    const remote = options?.remote || 'origin';
+    const isPrivate = options?.isPrivate !== false;
+    const repo = this.toRepoSlug(repoName);
+
+    if (!repo) {
+      throw new GitError('Repository name is required');
+    }
+
+    let owner = '';
+    try {
+      const { stdout } = await this.runGh(['api', 'user', '--jq', '.login'], projectPath);
+      owner = stdout.trim();
+    } catch (error) {
+      throw new GitError(
+        `Failed to detect GitHub account. Run "gh auth login" first. ${this.toGitErrorMessage(error)}`
+      );
+    }
+
+    if (!owner) {
+      throw new GitError('Failed to detect GitHub account. Run "gh auth login" first.');
+    }
+
+    try {
+      await this.runGh(['api', 'user/repos', '-f', `name=${repo}`, '-F', `private=${isPrivate ? 'true' : 'false'}`], projectPath);
+    } catch (error) {
+      const msg = this.toGitErrorMessage(error);
+      const lower = msg.toLowerCase();
+      const maybeAlreadyExists = lower.includes('name already exists')
+        || lower.includes('already exists')
+        || lower.includes('unprocessable entity')
+        || lower.includes('http 422')
+        || lower.includes('repository creation failed');
+
+      if (!maybeAlreadyExists) {
+        throw new GitError(`Failed to create GitHub repository "${owner}/${repo}": ${msg}`);
+      }
+
+      try {
+        await this.runGh(['repo', 'view', `${owner}/${repo}`, '--json', 'name'], projectPath);
+      } catch {
+        throw new GitError(`Failed to create GitHub repository "${owner}/${repo}": ${msg}`);
+      }
+    }
+
+    const remoteUrl = `https://github.com/${owner}/${repo}.git`;
+    try {
+      const git = this.getGit(projectPath);
+      const remotes = await git.getRemotes(true);
+      const hasRemote = remotes.some(r => r.name === remote);
+
+      if (hasRemote) {
+        await git.raw(['remote', 'set-url', remote, remoteUrl]);
+      } else {
+        await git.addRemote(remote, remoteUrl);
+      }
+    } catch (error) {
+      throw new GitError(`Failed to configure git remote "${remote}": ${this.toGitErrorMessage(error)}`);
+    }
+
+    return { repo: `${owner}/${repo}`, remoteUrl };
   }
 
   async isGitRepo(projectPath: string): Promise<boolean> {
@@ -212,11 +428,18 @@ export class SimpleGitService implements GitService {
     }
   }
 
-  async commit(projectPath: string, message: string): Promise<CommitResult> {
+  async commit(projectPath: string, message: string, allowEmpty = false): Promise<CommitResult> {
     try {
-      const result = await this.getGit(projectPath).commit(message);
-      const hash = result.commit.substring(0, 7);
+      const git = this.getGit(projectPath);
 
+      if (allowEmpty) {
+        await git.raw(['commit', '--allow-empty', '-m', message]);
+        const hash = (await git.revparse(['--short', 'HEAD'])).trim();
+        return { hash, message };
+      }
+
+      const result = await git.commit(message);
+      const hash = result.commit.substring(0, 7);
       return { hash, message };
     } catch (error) {
       throw new GitError(`Failed to commit: ${this.toGitErrorMessage(error)}`);
@@ -251,22 +474,67 @@ export class SimpleGitService implements GitService {
     branch?: string,
     setUpstream = false
   ): Promise<string> {
+    const args = ['push'];
+    if (setUpstream) {
+      args.push('-u');
+    }
+    args.push(remote);
+    if (branch) {
+      args.push(branch);
+    }
+
     try {
-      const args = ['push'];
-
-      if (setUpstream) {
-        args.push('-u');
-      }
-
-      args.push(remote);
-
-      if (branch) {
-        args.push(branch);
-      }
-
       return await this.getGit(projectPath).raw(args);
     } catch (error) {
-      throw new GitError(`Failed to push: ${this.toGitErrorMessage(error)}`);
+      const message = this.toGitErrorMessage(error);
+      const git = this.getGit(projectPath);
+
+      if (message.toLowerCase().includes('src refspec') && message.toLowerCase().includes('does not match any')) {
+        const hasCommit = await this.hasAnyCommit(git);
+        if (!hasCommit) {
+          throw new GitError('No commits found in this repository. Create a commit first, then push.');
+        }
+      }
+
+      if (this.isNoUpstreamError(message)) {
+        const headRetryArgs = ['push', '-u', remote, 'HEAD'];
+        try {
+          return await git.raw(headRetryArgs);
+        } catch (headRetryError) {
+          const headRetryMessage = this.toGitErrorMessage(headRetryError);
+          const currentBranch = await this.resolveCurrentBranch(git, message);
+          if (currentBranch) {
+            const retryArgs = ['push', '-u', remote, currentBranch];
+            try {
+              return await git.raw(retryArgs);
+            } catch (retryError) {
+              const retryMessage = this.toGitErrorMessage(retryError);
+
+              if (this.isNonFastForwardError(retryMessage)) {
+                try {
+                  return await this.rebaseAndRetryPush(git, remote, currentBranch, true);
+                } catch (rebaseError) {
+                  throw new GitError(`Failed to push with upstream after rebase: ${this.toGitErrorMessage(rebaseError)}`);
+                }
+              }
+
+              throw new GitError(`Failed to push with upstream: ${retryMessage}`);
+            }
+          }
+
+          throw new GitError(`Failed to push with upstream: ${headRetryMessage}`);
+        }
+      }
+
+      if (this.isNonFastForwardError(message)) {
+        try {
+          return await this.rebaseAndRetryPush(git, remote, branch, setUpstream);
+        } catch (rebaseError) {
+          throw new GitError(`Failed to push after rebase: ${this.toGitErrorMessage(rebaseError)}`);
+        }
+      }
+
+      throw new GitError(`Failed to push: ${message}`);
     }
   }
 
@@ -290,9 +558,77 @@ export class SimpleGitService implements GitService {
     }
   }
 
+  async mergeToMain(
+    projectPath: string,
+    sourceBranch?: string,
+    targetBranch = 'master',
+    push = true,
+    remote = 'origin'
+  ): Promise<{ sourceBranch: string; targetBranch: string; pushed: boolean }> {
+    try {
+      const git = this.getGit(projectPath);
+      const localBranches = await git.branchLocal();
+      const current = localBranches.current;
+      const source = sourceBranch || current;
+
+      if (!source) {
+        throw new GitError('Unable to determine current branch for merge.');
+      }
+
+      if (!localBranches.all.includes(source)) {
+        throw new GitError(`Source branch "${source}" does not exist locally.`);
+      }
+
+      if (source === targetBranch) {
+        throw new GitError(`Already on "${targetBranch}". Switch to another branch before merging.`);
+      }
+
+      if (localBranches.all.includes(targetBranch)) {
+        await git.checkout(targetBranch);
+      } else {
+        // Create target branch from source when main doesn't exist yet.
+        await git.checkout(source);
+        await git.checkoutLocalBranch(targetBranch);
+      }
+
+      // Merge source into target only if target existed previously or diverged.
+      try {
+        await git.raw(['merge', source]);
+      } catch (error) {
+        const message = this.toGitErrorMessage(error);
+        if (!message.toLowerCase().includes('already up to date')) {
+          throw new GitError(`Failed to merge "${source}" into "${targetBranch}": ${message}`);
+        }
+      }
+
+      if (push) {
+        await this.push(projectPath, remote, targetBranch, true);
+      }
+
+      return { sourceBranch: source, targetBranch, pushed: push };
+    } catch (error) {
+      if (error instanceof GitError) throw error;
+      throw new GitError(`Failed to merge to main: ${this.toGitErrorMessage(error)}`);
+    }
+  }
+
   async getDiff(projectPath: string, staged = false): Promise<string> {
     const args = staged ? ['--staged'] : [];
     return await this.getGit(projectPath).diff(args);
+  }
+
+  async listCommits(projectPath: string, limit = 30): Promise<GitCommitEntry[]> {
+    try {
+      const result = await this.getGit(projectPath).log({ maxCount: limit });
+      return result.all.map((item) => ({
+        hash: item.hash,
+        message: item.message,
+        author: item.author_name,
+        date: item.date,
+      }));
+    } catch (error) {
+      throw new GitError(`Failed to list commits: ${this.toGitErrorMessage(error)}`);
+    }
   }
 
   async getFileDiff(
@@ -398,6 +734,25 @@ export class SimpleGitService implements GitService {
       return result.value || null;
     } catch {
       return null;
+    }
+  }
+
+  async getUserEmail(projectPath: string): Promise<string | null> {
+    try {
+      const result = await this.getGit(projectPath).getConfig('user.email');
+      return result.value || null;
+    } catch {
+      return null;
+    }
+  }
+
+  async setUserIdentity(projectPath: string, name: string, email: string): Promise<void> {
+    try {
+      const git = this.getGit(projectPath);
+      await git.raw(['config', 'user.name', name]);
+      await git.raw(['config', 'user.email', email]);
+    } catch (error) {
+      throw new GitError(`Failed to set git identity: ${this.toGitErrorMessage(error)}`);
     }
   }
 }
