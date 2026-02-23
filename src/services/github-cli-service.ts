@@ -332,7 +332,7 @@ export class DefaultGitHubCLIService implements GitHubCLIService {
 
     const child = this.commandRunner.spawn(
       'gh',
-      ['auth', 'login', '-w', '-h', 'github.com', '-p', 'https']
+      ['auth', 'login', '-w', '-h', 'github.com']
     );
     this.authFlowProcess = child;
 
