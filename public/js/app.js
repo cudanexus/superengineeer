@@ -2528,6 +2528,29 @@
       }
     });
 
+    // Toggle tool calls button
+    $('#btn-toggle-tools').on('click', function () {
+      var $conv = $('#conversation');
+      var $oneoffConv = $('#oneoff-conversation');
+
+      $conv.toggleClass('hide-tool-calls');
+      $oneoffConv.toggleClass('hide-tool-calls');
+
+      var isHidden = $conv.hasClass('hide-tool-calls');
+      var $btnText = $('#toggle-tools-text');
+
+      if (isHidden) {
+        $btnText.text('Show Tools');
+      } else {
+        $btnText.text('Hide Tools');
+      }
+
+      // Auto-scroll to bottom if needed
+      if (!state.agentOutputScrollLock) {
+        scrollToBottom();
+      }
+    });
+
     // MCP Servers button
     $('#btn-project-mcp').on('click', function () {
       if (state.selectedProjectId) {
