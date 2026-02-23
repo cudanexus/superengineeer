@@ -365,6 +365,10 @@ export class DefaultGitHubCLIService implements GitHubCLIService {
       if (code === 0) {
         this.authFlowState.phase = 'completed';
         this.authFlowState.error = null;
+        void this.configureGlobalGitCredentialHelper().catch((err) => {
+          const message = extractErrorMessage(err);
+          this.appendAuthOutput(`\nWarning: failed to configure global git credential helper: ${message}\n`);
+        });
       } else {
         this.authFlowState.phase = 'error';
         this.authFlowState.error = this.authFlowState.error || `gh auth login failed with exit code ${String(code)}`;
@@ -721,6 +725,27 @@ export class DefaultGitHubCLIService implements GitHubCLIService {
     if (this.authFlowState.output.length > 8000) {
       this.authFlowState.output = this.authFlowState.output.slice(-8000);
     }
+  }
+
+  private async configureGlobalGitCredentialHelper(): Promise<void> {
+    let ghPath = 'gh';
+
+    try {
+      const { stdout } = await this.commandRunner.exec('sh', ['-lc', 'command -v gh']);
+      const detectedPath = stdout.trim();
+      if (detectedPath) {
+        ghPath = detectedPath;
+      }
+    } catch {
+      // Fallback to plain gh in PATH.
+    }
+
+    await this.commandRunner.exec('git', [
+      'config',
+      '--global',
+      'credential.helper',
+      `${ghPath} auth git-credential`,
+    ]);
   }
 
   private parseAuthOutput(text: string): void {

@@ -191,6 +191,58 @@ export class SimpleGitService implements GitService {
     }
   }
 
+  private async getGitHubAuthToken(projectPath: string): Promise<string> {
+    try {
+      const { stdout } = await this.runGh(['auth', 'token'], projectPath);
+      const token = stdout.trim();
+      if (!token) {
+        throw new Error('empty token');
+      }
+      return token;
+    } catch (error) {
+      throw new GitError(`Failed to get GitHub auth token from gh: ${this.toGitErrorMessage(error)}`);
+    }
+  }
+
+  private buildTokenRemoteUrl(remoteUrl: string, token: string): string | null {
+    if (!remoteUrl.startsWith('https://github.com/')) {
+      return null;
+    }
+
+    const encodedToken = encodeURIComponent(token);
+    return remoteUrl.replace('https://', `https://x-access-token:${encodedToken}@`);
+  }
+
+  private async pushWithTemporaryTokenRemote(
+    projectPath: string,
+    remote: string,
+    args: string[]
+  ): Promise<string> {
+    const git = this.getGit(projectPath);
+    const remotes = await git.getRemotes(true);
+    const targetRemote = remotes.find(r => r.name === remote);
+    const originalUrl = targetRemote?.refs?.push || targetRemote?.refs?.fetch || null;
+
+    if (!originalUrl) {
+      throw new GitError(`Remote "${remote}" not found.`);
+    }
+
+    const token = await this.getGitHubAuthToken(projectPath);
+    const tokenRemoteUrl = this.buildTokenRemoteUrl(originalUrl, token);
+    if (!tokenRemoteUrl) {
+      throw new GitError(
+        `Remote "${remote}" is not an HTTPS GitHub URL. Use HTTPS remote or configure SSH keys.`
+      );
+    }
+
+    await git.raw(['remote', 'set-url', remote, tokenRemoteUrl]);
+    try {
+      return await git.raw(args);
+    } finally {
+      await git.raw(['remote', 'set-url', remote, originalUrl]);
+    }
+  }
+
   private async rebaseAndRetryPush(
     git: SimpleGit,
     remote: string,
@@ -511,7 +563,14 @@ export class SimpleGitService implements GitService {
         try {
           return await git.raw(args);
         } catch (retryAuthError) {
-          throw new GitError(`Failed to push after configuring gh git auth: ${this.toGitErrorMessage(retryAuthError)}`);
+          try {
+            return await this.pushWithTemporaryTokenRemote(projectPath, remote, args);
+          } catch (tokenAuthError) {
+            throw new GitError(
+              `Failed to push after configuring gh git auth: ${this.toGitErrorMessage(retryAuthError)}`
+              + ` | Token fallback failed: ${this.toGitErrorMessage(tokenAuthError)}`
+            );
+          }
         }
       }
 
