@@ -386,7 +386,17 @@ export class DefaultGitHubCLIService implements GitHubCLIService {
     }
 
     try {
+      // Older gh CLI flows may prompt for Enter twice:
+      // 1) "Press Enter to open github.com in your browser..."
+      // 2) "Authentication complete. Press Enter to continue..."
+      // Send twice so UI action only needs one click.
       this.authFlowProcess.stdin?.write('\n');
+      setTimeout(() => {
+        if (this.authFlowProcess && this.authFlowState.active) {
+          this.authFlowProcess.stdin?.write('\n');
+        }
+      }, 350);
+
       if (this.authFlowState.phase === 'awaiting_code_confirmation' || this.authFlowState.phase === 'starting') {
         this.authFlowState.phase = 'waiting_for_browser_auth';
       }
@@ -682,10 +692,11 @@ export class DefaultGitHubCLIService implements GitHubCLIService {
 
   private async detectAuth(): Promise<{ authenticated: boolean; username: string | null; error: string | null }> {
     try {
-      const { stdout } = await this.commandRunner.exec('gh', ['auth', 'status']);
+      const { stdout, stderr } = await this.commandRunner.exec('gh', ['auth', 'status']);
+      const combinedOutput = [stdout, stderr].filter(Boolean).join('\n');
       return {
         authenticated: true,
-        username: parseUsername(stdout),
+        username: parseUsername(combinedOutput),
         error: null,
       };
     } catch (err) {
@@ -902,8 +913,20 @@ function parseVersion(output: string): string | null {
 }
 
 function parseUsername(output: string): string | null {
-  const match = output.match(/account\s+(\S+)/);
-  return match ? match[1]! : null;
+  const patterns = [
+    /account\s+(\S+)/i,
+    /logged in to [^\s]+ as (\S+)/i,
+    /as (\S+)\s+\(/i, // e.g. "as username (keyring)"
+  ];
+
+  for (const pattern of patterns) {
+    const match = output.match(pattern);
+    if (match?.[1]) {
+      return match[1];
+    }
+  }
+
+  return null;
 }
 
 interface GhRepoListItem {

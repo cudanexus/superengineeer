@@ -174,6 +174,23 @@ export class SimpleGitService implements GitService {
     return errorText.toLowerCase().includes("couldn't find remote ref");
   }
 
+  private isGithubHttpsAuthError(errorText: string): boolean {
+    const text = errorText.toLowerCase();
+    return text.includes("could not read username for 'https://github.com'")
+      || text.includes('authentication failed for')
+      || text.includes('fatal: credential');
+  }
+
+  private async setupGitHubCredentialHelper(projectPath: string): Promise<void> {
+    try {
+      await this.runGh(['auth', 'setup-git'], projectPath);
+    } catch (error) {
+      throw new GitError(
+        `Failed to configure git credential helper via gh. Run "gh auth login" and "gh auth setup-git". ${this.toGitErrorMessage(error)}`
+      );
+    }
+  }
+
   private async rebaseAndRetryPush(
     git: SimpleGit,
     remote: string,
@@ -488,6 +505,15 @@ export class SimpleGitService implements GitService {
     } catch (error) {
       const message = this.toGitErrorMessage(error);
       const git = this.getGit(projectPath);
+
+      if (this.isGithubHttpsAuthError(message)) {
+        await this.setupGitHubCredentialHelper(projectPath);
+        try {
+          return await git.raw(args);
+        } catch (retryAuthError) {
+          throw new GitError(`Failed to push after configuring gh git auth: ${this.toGitErrorMessage(retryAuthError)}`);
+        }
+      }
 
       if (message.toLowerCase().includes('src refspec') && message.toLowerCase().includes('does not match any')) {
         const hasCommit = await this.hasAnyCommit(git);
