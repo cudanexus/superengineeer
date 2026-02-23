@@ -113,9 +113,7 @@ describe('ClaudeCommandsModule', function() {
 
       expect(html).toContain('command-selector-item');
       expect(html).toContain('/compact');
-      expect(html).toContain('/cost');
       expect(html).toContain('Compact context to save tokens');
-      expect(html).toContain('Show Claude session token cost');
     });
 
     it('should open the correct modal', function() {
@@ -130,9 +128,6 @@ describe('ClaudeCommandsModule', function() {
       expect(mockDeps.escapeHtml).toHaveBeenCalledWith('compact');
       expect(mockDeps.escapeHtml).toHaveBeenCalledWith('/compact');
       expect(mockDeps.escapeHtml).toHaveBeenCalledWith('Compact context to save tokens');
-      expect(mockDeps.escapeHtml).toHaveBeenCalledWith('cost');
-      expect(mockDeps.escapeHtml).toHaveBeenCalledWith('/cost');
-      expect(mockDeps.escapeHtml).toHaveBeenCalledWith('Show Claude session token cost');
     });
 
     it('should include command selector items with data attributes', function() {
@@ -142,7 +137,6 @@ describe('ClaudeCommandsModule', function() {
       var html = htmlMock.mock.calls[htmlMock.mock.calls.length - 1][0];
 
       expect(html).toContain('data-id="compact"');
-      expect(html).toContain('data-id="cost"');
     });
 
     it('should handle commands that require arguments', function() {
@@ -240,33 +234,6 @@ describe('ClaudeCommandsModule', function() {
 
       // Should not send command for invalid command ID
       expect(mockDeps.sendCommand).not.toHaveBeenCalled();
-
-      // Restore original implementation
-      $ = originalImplementation;
-      window.$ = $;
-      global.$ = $;
-    });
-
-    it('should handle /cost command selection', function() {
-      var mockElement = {
-        data: jest.fn().mockReturnValue('cost')
-      };
-
-      // Temporarily override $ to handle $(this)
-      var originalImplementation = $;
-      $ = jest.fn().mockImplementation(function(selector) {
-        if (selector === mockElement) {
-          return mockElement;
-        }
-        return originalImplementation(selector);
-      });
-      window.$ = $;
-      global.$ = $;
-
-      commandSelectorClickHandler.call(mockElement);
-
-      expect(mockDeps.closeAllModals).toHaveBeenCalled();
-      expect(mockDeps.sendCommand).toHaveBeenCalledWith('/cost');
 
       // Restore original implementation
       $ = originalImplementation;

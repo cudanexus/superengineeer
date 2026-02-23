@@ -534,7 +534,7 @@
     }
   }
 
-  var TOOLBAR_DROPDOWNS = ['optimizations-dropdown', 'github-dropdown'];
+  var TOOLBAR_DROPDOWNS = ['optimizations-dropdown', 'github-dropdown', 'usage-dropdown'];
 
   function toggleToolbarDropdown(dropdownId, $btn) {
     var $dropdown = $('#' + dropdownId);
@@ -2514,7 +2514,7 @@
         QuickActionsModule.closeQuickActions();
       }
 
-      if (!$(e.target).closest('#optimizations-dropdown, #btn-optimizations-menu, #github-dropdown, #btn-github-menu').length) {
+      if (!$(e.target).closest('#optimizations-dropdown, #btn-optimizations-menu, #github-dropdown, #btn-github-menu, #usage-dropdown, #btn-usage').length) {
         closeAllToolbarDropdowns();
       }
     });
@@ -2526,6 +2526,17 @@
       } else {
         SearchModule.open();
       }
+    });
+
+    // Usage button
+    $('#btn-usage').on('click', function (e) {
+      e.stopPropagation();
+      if (!state.selectedProjectId) return;
+      openUsageDropdown(state.selectedProjectId, $(this));
+    });
+
+    $('#btn-close-usage').on('click', function () {
+      $('#usage-dropdown').addClass('hidden');
     });
 
     // Toggle tool calls button
@@ -3339,11 +3350,6 @@
 
     if (!project) return;
 
-    // Handle commands that are terminal-only and don't produce API output
-    if (handleClientOnlySlashCommand(message, project.id)) {
-      return;
-    }
-
     // If agent is not running, start it first (always interactive mode)
     if (project.status !== 'running') {
       startInteractiveAgentWithMessage(message);
@@ -3355,67 +3361,36 @@
     doSendMessage(message);
   }
 
-  function handleClientOnlySlashCommand(message, projectId) {
-    if (!message || message.charAt(0) !== '/') return false;
+  function openUsageDropdown(projectId, $btn) {
+    var $dropdown = $('#usage-dropdown');
+    var wasOpen = !$dropdown.hasClass('hidden');
 
-    var normalized = message.split(/\s+/)[0].toLowerCase();
-    if (normalized !== '/cost') {
-      return false;
+    toggleToolbarDropdown('usage-dropdown', $btn);
+
+    if (wasOpen) {
+      return;
     }
 
-    runCostCommand(projectId, message);
-    $('#input-message').val('');
-    return true;
+    loadUsageDropdown(projectId);
   }
 
-  function runCostCommand(projectId, commandText) {
-    try {
-      var timestamp = new Date().toISOString();
-      appendMessage(projectId, {
-        type: 'user',
-        content: commandText,
-        timestamp: timestamp
-      });
+  function loadUsageDropdown(projectId) {
+    var $content = $('#usage-dropdown-content');
+    $content.html('<div class="text-gray-400">Loading usage...</div>');
 
-      $.get('/api/projects/' + projectId + '/agent/cost')
-        .done(function (data) {
-          appendAgentCostResult(projectId, data);
-        })
-        .fail(function () {
-          appendMessage(projectId, {
-            type: 'result',
-            content: 'Unable to load project cost summary right now.',
-            timestamp: new Date().toISOString(),
-            resultInfo: {
-              result: 'Cost calculation failed',
-              isError: true
-            }
-          });
-        });
-    } catch (err) {
-      appendMessage(projectId, {
-        type: 'result',
-        content: 'Failed to compute /cost due to a frontend error. Please refresh and try again.',
-        timestamp: new Date().toISOString(),
-        resultInfo: {
-          result: 'Cost calculation failed',
-          isError: true
-        }
+    $.get('/api/projects/' + projectId + '/agent/cost')
+      .done(function (data) {
+        renderUsageDropdown(projectId, data);
+      })
+      .fail(function () {
+        $content.html('<div class="text-red-400">Unable to load usage summary.</div>');
       });
-    }
   }
 
-  function appendAgentCostResult(projectId, data) {
+  function renderUsageDropdown(projectId, data) {
+    var $content = $('#usage-dropdown-content');
     if (!data) {
-      appendMessage(projectId, {
-        type: 'result',
-        content: 'No cost data found.',
-        timestamp: new Date().toISOString(),
-        resultInfo: {
-          result: 'No cost data',
-          isError: true
-        }
-      });
+      $content.html('<div class="text-gray-400">No usage data found.</div>');
       return;
     }
 
@@ -3429,36 +3404,36 @@
     var projectTotals = data.projectTotals || {};
     var currentCost = current ? (current.cost || {}) : null;
     var currentTotals = current ? (current.totals || {}) : null;
+    var sessionId = current ? current.sessionId : 'none';
 
-    var lines = [
-      'Project cost summary',
-      'Project: ' + projectName,
-      '',
-      'Project total cost: $' + Number(projectCost.totalUsd || 0).toFixed(4),
-      'Project total tokens: ' + formatNumber(projectTotals.totalTokens || 0),
-      ''
-    ];
+    var html = '' +
+      '<div class="text-gray-400">Project</div>' +
+      '<div class="text-white font-medium truncate" title="' + escapeHtml(projectName) + '">' + escapeHtml(projectName) + '</div>' +
+      '<div class="grid grid-cols-2 gap-2 pt-1">' +
+      '<div class="bg-gray-900 rounded p-2 border border-gray-700">' +
+      '<div class="text-gray-400 text-[11px]">Project Cost</div>' +
+      '<div class="text-green-400 font-mono">$' + Number(projectCost.totalUsd || 0).toFixed(4) + '</div>' +
+      '</div>' +
+      '<div class="bg-gray-900 rounded p-2 border border-gray-700">' +
+      '<div class="text-gray-400 text-[11px]">Project Tokens</div>' +
+      '<div class="text-white font-mono">' + formatNumber(projectTotals.totalTokens || 0) + '</div>' +
+      '</div>' +
+      '<div class="bg-gray-900 rounded p-2 border border-gray-700 col-span-2">' +
+      '<div class="text-gray-400 text-[11px]">Current Session</div>' +
+      '<div class="text-white font-mono truncate" title="' + escapeHtml(sessionId) + '">' + escapeHtml(sessionId) + '</div>' +
+      '</div>' +
+      '<div class="bg-gray-900 rounded p-2 border border-gray-700">' +
+      '<div class="text-gray-400 text-[11px]">Session Cost</div>' +
+      '<div class="text-green-400 font-mono">$' + Number(currentCost ? currentCost.totalUsd : 0).toFixed(4) + '</div>' +
+      '</div>' +
+      '<div class="bg-gray-900 rounded p-2 border border-gray-700">' +
+      '<div class="text-gray-400 text-[11px]">Session Tokens</div>' +
+      '<div class="text-white font-mono">' + formatNumber(currentTotals ? currentTotals.totalTokens : 0) + '</div>' +
+      '</div>' +
+      '</div>';
 
-    if (current) {
-      lines.push('Current session: ' + current.sessionId);
-      lines.push('Session cost: $' + Number(currentCost.totalUsd || 0).toFixed(4));
-      lines.push('Session tokens: ' + formatNumber(currentTotals.totalTokens || 0));
-    } else {
-      lines.push('Current session: none');
-    }
-
-    appendMessage(projectId, {
-      type: 'result',
-      content: lines.join('\n'),
-      timestamp: new Date().toISOString(),
-      resultInfo: {
-        result: 'Project/session cost',
-        isError: false
-      }
-    });
+    $content.html(html);
   }
-
-  // formatNumber is already defined above using Formatters.formatNumberCompact
 
   function doSendMessage(message) {
     if (state.messageSending) return;
