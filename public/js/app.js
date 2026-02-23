@@ -3435,6 +3435,63 @@
     $content.html(html);
   }
 
+  function postUsageSummaryToParent(targetOrigin, requestedProjectId) {
+    if (!window.parent || window.parent === window) return;
+
+    var origin = targetOrigin && targetOrigin !== 'null' ? targetOrigin : '*';
+    var requestedExists = false;
+    if (requestedProjectId) {
+      for (var i = 0; i < state.projects.length; i++) {
+        if (state.projects[i] && state.projects[i].id === requestedProjectId) {
+          requestedExists = true;
+          break;
+        }
+      }
+    }
+
+    var projectId = (requestedExists ? requestedProjectId : null)
+      || state.selectedProjectId
+      || (state.projects[0] && state.projects[0].id)
+      || null;
+    if (!projectId) {
+      window.parent.postMessage({
+        type: 'superengineer_usage_cost',
+        source: 'superengineer',
+        projectId: null,
+        totalCostUsd: 0
+      }, origin);
+      return;
+    }
+
+    $.get('/api/projects/' + projectId + '/agent/cost')
+      .done(function (data) {
+        var totalCostUsd = Number((data && data.projectCost && data.projectCost.totalUsd) || 0);
+        window.parent.postMessage({
+          type: 'superengineer_usage_cost',
+          source: 'superengineer',
+          projectId: projectId,
+          totalCostUsd: Number.isFinite(totalCostUsd) ? totalCostUsd : 0
+        }, origin);
+      })
+      .fail(function () {
+        window.parent.postMessage({
+          type: 'superengineer_usage_cost',
+          source: 'superengineer',
+          projectId: projectId,
+          totalCostUsd: 0,
+          error: true
+        }, origin);
+      });
+  }
+
+  function setupParentUsageSyncBridge() {
+    window.addEventListener('message', function (event) {
+      var data = event.data || {};
+      if (!data || data.type !== 'superweb_request_usage_cost') return;
+      postUsageSummaryToParent(event.origin, data.projectId || null);
+    });
+  }
+
   function doSendMessage(message) {
     if (state.messageSending) return;
 
@@ -6358,6 +6415,7 @@
     });
 
     setupEventHandlers();
+    setupParentUsageSyncBridge();
     setupTabHandlers();
     FileBrowser.setupHandlers();
     FileBrowser.setupDragAndDrop();
