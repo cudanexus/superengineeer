@@ -16,6 +16,26 @@ export interface GitHubCLIStatus {
   error: string | null;
 }
 
+export type GitHubAuthPhase =
+  | 'idle'
+  | 'starting'
+  | 'awaiting_code_confirmation'
+  | 'waiting_for_browser_auth'
+  | 'completed'
+  | 'error'
+  | 'cancelled';
+
+export interface GitHubDeviceAuthStatus {
+  active: boolean;
+  phase: GitHubAuthPhase;
+  oneTimeCode: string | null;
+  verificationUri: string;
+  instructions: string;
+  output: string;
+  error: string | null;
+  exitCode: number | null;
+}
+
 export interface GitHubRepo {
   name: string;
   fullName: string;
@@ -211,6 +231,10 @@ export class DefaultCommandRunner implements CommandRunner {
 export interface GitHubCLIService {
   getStatus(): Promise<GitHubCLIStatus>;
   isAvailable(): Promise<boolean>;
+  startDeviceAuthFlow(): Promise<GitHubDeviceAuthStatus>;
+  getDeviceAuthFlowStatus(): GitHubDeviceAuthStatus;
+  confirmDeviceAuthFlow(): Promise<GitHubDeviceAuthStatus>;
+  cancelDeviceAuthFlow(): Promise<GitHubDeviceAuthStatus>;
   listRepos(options?: RepoListOptions): Promise<GitHubRepo[]>;
   searchRepos(options: RepoSearchOptions): Promise<GitHubRepo[]>;
   cloneRepo(options: CloneOptions, onProgress?: (progress: CloneProgress) => void): Promise<void>;
@@ -240,6 +264,17 @@ const PR_JSON_FIELDS = 'number,title,body,state,isDraft,url,author,headRefName,b
 
 export class DefaultGitHubCLIService implements GitHubCLIService {
   private readonly commandRunner: CommandRunner;
+  private authFlowProcess: ChildProcess | null = null;
+  private authFlowState: GitHubDeviceAuthStatus = {
+    active: false,
+    phase: 'idle',
+    oneTimeCode: null,
+    verificationUri: 'https://github.com/login/device',
+    instructions: 'Run GitHub device auth and enter the shown code on github.com/login/device.',
+    output: '',
+    error: null,
+    exitCode: null,
+  };
 
   constructor(commandRunner?: CommandRunner) {
     this.commandRunner = commandRunner || new DefaultCommandRunner();
@@ -272,6 +307,109 @@ export class DefaultGitHubCLIService implements GitHubCLIService {
   async isAvailable(): Promise<boolean> {
     const version = await this.detectVersion();
     return version !== null;
+  }
+
+  async startDeviceAuthFlow(): Promise<GitHubDeviceAuthStatus> {
+    const available = await this.isAvailable();
+    if (!available) {
+      throw new GitHubCLIError('GitHub CLI is not installed');
+    }
+
+    if (this.authFlowProcess && this.authFlowState.active) {
+      throw new GitHubCLIError('GitHub auth flow is already running');
+    }
+
+    this.authFlowState = {
+      active: true,
+      phase: 'starting',
+      oneTimeCode: null,
+      verificationUri: 'https://github.com/login/device',
+      instructions: 'Go to https://github.com/login/device and enter the one-time code.',
+      output: '',
+      error: null,
+      exitCode: null,
+    };
+
+    const child = this.commandRunner.spawn(
+      'gh',
+      ['auth', 'login', '-w', '-h', 'github.com', '-p', 'https']
+    );
+    this.authFlowProcess = child;
+
+    const handleChunk = (chunk: Buffer): void => {
+      const text = chunk.toString('utf-8');
+      this.appendAuthOutput(text);
+      this.parseAuthOutput(text);
+    };
+
+    child.stdout?.on('data', handleChunk);
+    child.stderr?.on('data', handleChunk);
+
+    child.on('error', (err: Error) => {
+      this.authFlowState.active = false;
+      this.authFlowState.phase = 'error';
+      this.authFlowState.error = err.message;
+      this.authFlowState.exitCode = -1;
+      this.authFlowProcess = null;
+    });
+
+    child.on('close', (code: number | null) => {
+      this.authFlowState.active = false;
+      this.authFlowState.exitCode = code;
+
+      if (this.authFlowState.phase === 'cancelled') {
+        this.authFlowProcess = null;
+        return;
+      }
+
+      if (code === 0) {
+        this.authFlowState.phase = 'completed';
+        this.authFlowState.error = null;
+      } else {
+        this.authFlowState.phase = 'error';
+        this.authFlowState.error = this.authFlowState.error || `gh auth login failed with exit code ${String(code)}`;
+      }
+
+      this.authFlowProcess = null;
+    });
+
+    return this.getDeviceAuthFlowStatus();
+  }
+
+  getDeviceAuthFlowStatus(): GitHubDeviceAuthStatus {
+    return { ...this.authFlowState };
+  }
+
+  async confirmDeviceAuthFlow(): Promise<GitHubDeviceAuthStatus> {
+    if (!this.authFlowProcess || !this.authFlowState.active) {
+      return this.getDeviceAuthFlowStatus();
+    }
+
+    try {
+      this.authFlowProcess.stdin?.write('\n');
+      if (this.authFlowState.phase === 'awaiting_code_confirmation' || this.authFlowState.phase === 'starting') {
+        this.authFlowState.phase = 'waiting_for_browser_auth';
+      }
+    } catch (error) {
+      const message = extractErrorMessage(error);
+      this.authFlowState.phase = 'error';
+      this.authFlowState.error = message;
+    }
+
+    return this.getDeviceAuthFlowStatus();
+  }
+
+  async cancelDeviceAuthFlow(): Promise<GitHubDeviceAuthStatus> {
+    if (this.authFlowProcess && this.authFlowState.active) {
+      this.authFlowState.phase = 'cancelled';
+      this.authFlowState.active = false;
+      this.authFlowState.error = null;
+      this.authFlowState.exitCode = null;
+      this.authFlowProcess.kill('SIGTERM');
+      this.authFlowProcess = null;
+    }
+
+    return this.getDeviceAuthFlowStatus();
   }
 
   async listRepos(options: RepoListOptions = {}): Promise<GitHubRepo[]> {
@@ -564,6 +702,30 @@ export class DefaultGitHubCLIService implements GitHubCLIService {
         username: null,
         error: new GitHubCLIError(`Auth check failed: ${message}`).message,
       };
+    }
+  }
+
+  private appendAuthOutput(text: string): void {
+    this.authFlowState.output += text;
+    if (this.authFlowState.output.length > 8000) {
+      this.authFlowState.output = this.authFlowState.output.slice(-8000);
+    }
+  }
+
+  private parseAuthOutput(text: string): void {
+    const codeMatch = text.match(/\b([A-Z0-9]{4}-[A-Z0-9]{4})\b/);
+    if (codeMatch?.[1]) {
+      this.authFlowState.oneTimeCode = codeMatch[1];
+      this.authFlowState.phase = 'awaiting_code_confirmation';
+    }
+
+    const urlMatch = text.match(/https?:\/\/github\.com\/login\/device/);
+    if (urlMatch?.[0]) {
+      this.authFlowState.verificationUri = urlMatch[0];
+    }
+
+    if (text.toLowerCase().includes('waiting for authentication')) {
+      this.authFlowState.phase = 'waiting_for_browser_auth';
     }
   }
 }

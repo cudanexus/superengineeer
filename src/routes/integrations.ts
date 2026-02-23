@@ -29,6 +29,26 @@ export function createIntegrationsRouter(deps: IntegrationsRouterDependencies): 
     res.json(status);
   }));
 
+  router.post('/github/auth/device/start', asyncHandler(async (_req, res) => {
+    const status = await githubCLIService.startDeviceAuthFlow();
+    res.json(status);
+  }));
+
+  router.get('/github/auth/device/status', asyncHandler(async (_req, res) => {
+    const status = githubCLIService.getDeviceAuthFlowStatus();
+    res.json(status);
+  }));
+
+  router.post('/github/auth/device/confirm', asyncHandler(async (_req, res) => {
+    const status = await githubCLIService.confirmDeviceAuthFlow();
+    res.json(status);
+  }));
+
+  router.post('/github/auth/device/cancel', asyncHandler(async (_req, res) => {
+    const status = await githubCLIService.cancelDeviceAuthFlow();
+    res.json(status);
+  }));
+
   router.get('/github/repos', asyncHandler(async (req, res) => {
     const options: RepoListOptions = {
       owner: req.query['owner'] as string | undefined,

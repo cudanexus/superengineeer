@@ -19,6 +19,7 @@
   // Module state
   var gitOperationInProgress = false;
   var lastGitStatus = null;
+  var gitAuthPollTimer = null;
 
   /**
    * Initialize the module with dependencies
@@ -964,6 +965,65 @@
         });
     });
 
+    $('#btn-git-connect-auth').on('click', function() {
+      openGitHubAuthDeviceModal();
+    });
+
+    $('#btn-git-auth-copy').on('click', function() {
+      var $codeInput = $('#git-auth-device-code');
+      var code = String($codeInput.val() || '').trim();
+      if (!code || code === '---- ----') return;
+
+      var copied = false;
+      var inputEl = $codeInput.get(0);
+
+      if (inputEl && inputEl.select) {
+        inputEl.select();
+        inputEl.setSelectionRange(0, 99999);
+      }
+
+      try {
+        copied = document.execCommand('copy');
+      } catch (_err) {
+        copied = false;
+      }
+
+      if (copied) {
+        showToast('Code copied', 'success');
+        return;
+      }
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(code)
+          .then(function() {
+            showToast('Code copied', 'success');
+          })
+          .catch(function() {
+            showToast('Could not copy code', 'error');
+          });
+      } else {
+        showToast('Could not copy code', 'error');
+      }
+    });
+
+    $('#btn-git-auth-confirm').on('click', function() {
+      api.confirmGitHubDeviceAuth()
+        .done(function(status) {
+          renderGitHubAuthDeviceStatus(status);
+        })
+        .fail(function(xhr) {
+          showToast('Failed to continue auth: ' + getErrorMessage(xhr), 'error');
+        });
+    });
+
+    $('#btn-git-auth-cancel').on('click', function() {
+      closeGitHubAuthDeviceModal(true);
+    });
+
+    $('#modal-git-auth-device .modal-close, #modal-git-auth-device .modal-backdrop').on('click', function() {
+      closeGitHubAuthDeviceModal(true);
+    });
+
     $('#git-mobile-back-btn').on('click', function() {
       hideMobileGitDiff();
     });
@@ -1044,6 +1104,100 @@
           setGitOperationState(false);
         });
     });
+  }
+
+  function openGitHubAuthDeviceModal() {
+    $('#git-auth-device-code').val('---- ----');
+    $('#git-auth-device-phase').text('Starting GitHub auth flow...');
+    $('#git-auth-device-output').text('');
+    $('#git-auth-device-link').attr('href', 'https://github.com/login/device').text('https://github.com/login/device');
+    $('#modal-git-auth-device').removeClass('hidden');
+
+    api.startGitHubDeviceAuth()
+      .done(function(status) {
+        renderGitHubAuthDeviceStatus(status);
+        startGitHubAuthPolling();
+      })
+      .fail(function(xhr) {
+        $('#git-auth-device-phase').text('Failed to start auth flow.');
+        showToast('Failed to start GitHub auth: ' + getErrorMessage(xhr), 'error');
+      });
+  }
+
+  function startGitHubAuthPolling() {
+    stopGitHubAuthPolling();
+
+    gitAuthPollTimer = setInterval(function() {
+      api.getGitHubDeviceAuthStatus()
+        .done(function(status) {
+          renderGitHubAuthDeviceStatus(status);
+
+          if (!status || !status.active) {
+            stopGitHubAuthPolling();
+            if (status && status.phase === 'completed') {
+              showToast('GitHub connected successfully', 'success');
+              closeGitHubAuthDeviceModal(false);
+            } else if (status && status.phase === 'error') {
+              showToast('GitHub auth failed', 'error');
+            }
+          }
+        });
+    }, 1000);
+  }
+
+  function stopGitHubAuthPolling() {
+    if (gitAuthPollTimer) {
+      clearInterval(gitAuthPollTimer);
+      gitAuthPollTimer = null;
+    }
+  }
+
+  function closeGitHubAuthDeviceModal(cancelFlow) {
+    stopGitHubAuthPolling();
+
+    if (cancelFlow) {
+      api.cancelGitHubDeviceAuth()
+        .always(function() {
+          $('#modal-git-auth-device').addClass('hidden');
+        });
+      return;
+    }
+
+    $('#modal-git-auth-device').addClass('hidden');
+  }
+
+  function renderGitHubAuthDeviceStatus(status) {
+    if (!status) return;
+
+    $('#git-auth-device-code').val(status.oneTimeCode || '---- ----');
+    if (status.verificationUri) {
+      $('#git-auth-device-link').attr('href', status.verificationUri).text(status.verificationUri);
+    }
+
+    var phaseText = '';
+    if (status.phase === 'starting') {
+      phaseText = 'Preparing GitHub login flow...';
+    } else if (status.phase === 'awaiting_code_confirmation') {
+      phaseText = 'Step 1: Open https://github.com/login/device and enter code. Then click "I Connected, Continue".';
+    } else if (status.phase === 'waiting_for_browser_auth') {
+      phaseText = 'Waiting for GitHub authorization to finish...';
+    } else if (status.phase === 'completed') {
+      phaseText = 'GitHub authentication completed.';
+    } else if (status.phase === 'cancelled') {
+      phaseText = 'GitHub authentication was cancelled.';
+    } else if (status.phase === 'error') {
+      phaseText = 'GitHub authentication failed: ' + (status.error || 'unknown error');
+    } else {
+      phaseText = 'GitHub authentication status: ' + status.phase;
+    }
+
+    $('#git-auth-device-phase').text(phaseText);
+    $('#git-auth-device-output').text(status.output || '');
+
+    if (status.phase === 'completed') {
+      stopGitHubAuthPolling();
+      closeGitHubAuthDeviceModal(false);
+    }
   }
 
   function generateCommitMessage() {

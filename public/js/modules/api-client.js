@@ -1758,6 +1758,31 @@
     return $.get(baseUrl + '/api/integrations/github/status');
   };
 
+  ApiClient.startGitHubDeviceAuth = function () {
+    return $.ajax({
+      url: baseUrl + '/api/integrations/github/auth/device/start',
+      method: 'POST',
+    });
+  };
+
+  ApiClient.getGitHubDeviceAuthStatus = function () {
+    return $.get(baseUrl + '/api/integrations/github/auth/device/status');
+  };
+
+  ApiClient.confirmGitHubDeviceAuth = function () {
+    return $.ajax({
+      url: baseUrl + '/api/integrations/github/auth/device/confirm',
+      method: 'POST',
+    });
+  };
+
+  ApiClient.cancelGitHubDeviceAuth = function () {
+    return $.ajax({
+      url: baseUrl + '/api/integrations/github/auth/device/cancel',
+      method: 'POST',
+    });
+  };
+
   ApiClient.getGitHubRepos = function (params) {
     return $.get(baseUrl + '/api/integrations/github/repos', params);
   };

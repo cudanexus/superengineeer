@@ -57,6 +57,14 @@ export interface GitService {
 }
 
 export class SimpleGitService implements GitService {
+  private toGitErrorMessage(error: unknown): string {
+    if (error instanceof Error && error.message) {
+      return error.message;
+    }
+
+    return String(error);
+  }
+
   private getGit(projectPath: string): SimpleGit {
     return simpleGit(projectPath);
   }
@@ -205,24 +213,36 @@ export class SimpleGitService implements GitService {
   }
 
   async commit(projectPath: string, message: string): Promise<CommitResult> {
-    const result = await this.getGit(projectPath).commit(message);
-    const hash = result.commit.substring(0, 7);
+    try {
+      const result = await this.getGit(projectPath).commit(message);
+      const hash = result.commit.substring(0, 7);
 
-    return { hash, message };
+      return { hash, message };
+    } catch (error) {
+      throw new GitError(`Failed to commit: ${this.toGitErrorMessage(error)}`);
+    }
   }
 
   async createBranch(projectPath: string, name: string, checkout = false): Promise<void> {
-    const git = this.getGit(projectPath);
+    try {
+      const git = this.getGit(projectPath);
 
-    if (checkout) {
-      await git.checkoutLocalBranch(name);
-    } else {
-      await git.branch([name]);
+      if (checkout) {
+        await git.checkoutLocalBranch(name);
+      } else {
+        await git.branch([name]);
+      }
+    } catch (error) {
+      throw new GitError(`Failed to create branch: ${this.toGitErrorMessage(error)}`);
     }
   }
 
   async checkout(projectPath: string, branch: string): Promise<void> {
-    await this.getGit(projectPath).checkout(branch);
+    try {
+      await this.getGit(projectPath).checkout(branch);
+    } catch (error) {
+      throw new GitError(`Failed to checkout branch: ${this.toGitErrorMessage(error)}`);
+    }
   }
 
   async push(
@@ -231,35 +251,43 @@ export class SimpleGitService implements GitService {
     branch?: string,
     setUpstream = false
   ): Promise<string> {
-    const args = ['push'];
+    try {
+      const args = ['push'];
 
-    if (setUpstream) {
-      args.push('-u');
+      if (setUpstream) {
+        args.push('-u');
+      }
+
+      args.push(remote);
+
+      if (branch) {
+        args.push(branch);
+      }
+
+      return await this.getGit(projectPath).raw(args);
+    } catch (error) {
+      throw new GitError(`Failed to push: ${this.toGitErrorMessage(error)}`);
     }
-
-    args.push(remote);
-
-    if (branch) {
-      args.push(branch);
-    }
-
-    return await this.getGit(projectPath).raw(args);
   }
 
   async pull(projectPath: string, remote = 'origin', branch?: string, rebase = false): Promise<string> {
-    const args = ['pull'];
+    try {
+      const args = ['pull'];
 
-    if (rebase) {
-      args.push('--rebase');
+      if (rebase) {
+        args.push('--rebase');
+      }
+
+      args.push(remote);
+
+      if (branch) {
+        args.push(branch);
+      }
+
+      return await this.getGit(projectPath).raw(args);
+    } catch (error) {
+      throw new GitError(`Failed to pull: ${this.toGitErrorMessage(error)}`);
     }
-
-    args.push(remote);
-
-    if (branch) {
-      args.push(branch);
-    }
-
-    return await this.getGit(projectPath).raw(args);
   }
 
   async getDiff(projectPath: string, staged = false): Promise<string> {
@@ -305,7 +333,12 @@ export class SimpleGitService implements GitService {
 
   async discardChanges(projectPath: string, paths: string[]): Promise<void> {
     if (paths.length === 0) return;
-    await this.getGit(projectPath).checkout(['--', ...paths]);
+
+    try {
+      await this.getGit(projectPath).checkout(['--', ...paths]);
+    } catch (error) {
+      throw new GitError(`Failed to discard changes: ${this.toGitErrorMessage(error)}`);
+    }
   }
 
   async listTags(projectPath: string): Promise<string[]> {

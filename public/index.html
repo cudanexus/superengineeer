@@ -1016,6 +1016,14 @@
                   </div>
 
                   <!-- Push/Pull Section -->
+                  <div class="px-3 pb-2">
+                    <button id="btn-git-connect-auth"
+                      class="w-full bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded text-xs transition-colors">
+                      Connect Git
+                    </button>
+                  </div>
+
+                  <!-- Push/Pull Section -->
                   <div class="flex gap-2 px-3 pb-2">
                     <button id="btn-git-push"
                       class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-xs flex-1 transition-colors">
@@ -2842,6 +2850,45 @@
               class="px-3 py-1.5 text-sm bg-purple-600 hover:bg-purple-700 text-white rounded transition-colors">Create</button>
           </div>
         </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- GitHub Device Auth Modal -->
+  <div id="modal-git-auth-device" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-md">
+        <div class="p-3 border-b border-gray-700 flex items-center justify-between">
+          <h3 class="font-semibold text-white">Connect GitHub</h3>
+          <button class="modal-close text-gray-400 hover:text-white">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div class="p-3 space-y-3">
+          <p class="text-sm text-gray-300">Go to <a id="git-auth-device-link" href="https://github.com/login/device"
+              target="_blank" rel="noopener noreferrer"
+              class="text-indigo-400 hover:text-indigo-300 underline">https://github.com/login/device</a> and enter this code:</p>
+          <div class="flex items-center gap-2">
+            <input id="git-auth-device-code" type="text" readonly value="---- ----"
+              class="flex-1 bg-gray-900 border border-gray-700 rounded px-3 py-2 text-center text-xl tracking-wider font-mono text-green-400" />
+            <button type="button" id="btn-git-auth-copy"
+              class="px-2 py-2 text-xs bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors">Copy</button>
+          </div>
+          <p id="git-auth-device-phase" class="text-xs text-gray-400">Starting GitHub auth flow...</p>
+          <pre id="git-auth-device-output"
+            class="bg-gray-900 border border-gray-700 rounded p-2 text-xs text-gray-300 overflow-auto max-h-40 whitespace-pre-wrap"></pre>
+        </div>
+        <div class="p-3 border-t border-gray-700 flex justify-end gap-2">
+          <button type="button" id="btn-git-auth-cancel"
+            class="px-3 py-1.5 text-sm text-gray-300 hover:text-white transition-colors">Cancel</button>
+          <button type="button" id="btn-git-auth-confirm"
+            class="px-3 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded transition-colors">
+            I Connected, Continue
+          </button>
+        </div>
       </div>
     </div>
   </div>
