@@ -91,6 +91,13 @@ export function createAgentRouter(deps: ProjectRouterDependencies): Router {
     res.json({ contextUsage });
   }));
 
+  // Get accumulated token/cost summary from Claude result events
+  router.get('/cost', validateProjectExists(projectRepository), asyncHandler((req: Request, res: Response) => {
+    const id = req.params['id'] as string;
+    const summary = agentManager.getProjectCostSummary(id);
+    res.json(summary);
+  }));
+
   // Get queued messages for running agent
   router.get('/queue', validateProjectExists(projectRepository), asyncHandler((req: Request, res: Response) => {
     const id = req.params['id'] as string;

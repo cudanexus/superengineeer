@@ -10,6 +10,7 @@ import {
   StatusChangeInfo,
   ContextUsage,
   WaitingStatus,
+  TurnUsageEvent,
 } from './types';
 
 export interface ContentBlock {
@@ -55,15 +56,19 @@ export interface StreamEvent {
   conversation_id?: string;
   timestamp?: string;
   usage?: StreamEventUsage;
+  session_id?: string;
+  model?: string;
   message_limit_type?: string;
   tool_use_id?: string;
   content?: string;
+  uuid?: string;
 }
 
 export interface StreamHandlerEvents {
   message: (message: AgentMessage) => void;
   waitingForInput: (status: WaitingStatus) => void;
   contextUsage: (usage: ContextUsage) => void;
+  usageUpdate: (usage: TurnUsageEvent) => void;
   error: (error: Error) => void;
   sessionNotFound: (sessionId: string) => void;
   permissionRequest: (request: PermissionRequest) => void;
@@ -89,6 +94,8 @@ export class StreamHandler extends EventEmitter {
   private hasEmittedAskUserQuestion = false;
   private askUserQuestionToolIds = new Set<string>();
   private lastEmittedQuestion = '';
+  private currentModel: string | null = null;
+  private emittedResultIds = new Set<string>();
 
   constructor(
     private readonly logger: Logger,
@@ -215,6 +222,7 @@ export class StreamHandler extends EventEmitter {
         this.logger.info('Superengineer agent initialized', {
           sessionId: cliEvent.session_id,
         });
+        this.currentModel = event.model || null;
         // Reset tracking for new session
         this.resetEmittedTracking();
 
@@ -260,6 +268,7 @@ export class StreamHandler extends EventEmitter {
     this.hasEmittedAskUserQuestion = false;
     this.askUserQuestionToolIds.clear();
     this.lastEmittedQuestion = '';
+    this.emittedResultIds.clear();
   }
 
   /**
@@ -763,7 +772,12 @@ export class StreamHandler extends EventEmitter {
       is_error?: boolean;
       subtype?: string;
       errors?: string[];
+      usage?: StreamEventUsage;
+      session_id?: string;
+      uuid?: string;
     };
+
+    this.emitUsageUpdate(event, cliEvent);
 
     if (cliEvent.is_error) {
       // Check for session not found error
@@ -789,6 +803,34 @@ export class StreamHandler extends EventEmitter {
         version: this.waitingVersion,
       });
     }
+  }
+
+  private emitUsageUpdate(event: StreamEvent, cliEvent: {
+    usage?: StreamEventUsage;
+    session_id?: string;
+    uuid?: string;
+  }): void {
+    const usage = cliEvent.usage || event.usage;
+    if (!usage) return;
+
+    const resultId = cliEvent.uuid || event.uuid || `${Date.now()}-${Math.random()}`;
+    if (this.emittedResultIds.has(resultId)) return;
+    this.emittedResultIds.add(resultId);
+
+    const inputTokens = usage.input_tokens || 0;
+    const outputTokens = usage.output_tokens || 0;
+    const cacheCreationInputTokens = usage.cache_creation_input_tokens || 0;
+    const cacheReadInputTokens = usage.cache_read_input_tokens || 0;
+
+    this.emit('usageUpdate', {
+      resultId,
+      sessionId: cliEvent.session_id || event.session_id || this.sessionId || null,
+      model: this.currentModel,
+      inputTokens,
+      outputTokens,
+      cacheCreationInputTokens,
+      cacheReadInputTokens,
+    });
   }
 
   private handleResultErrors(errors: string[]): void {

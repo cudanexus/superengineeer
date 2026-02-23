@@ -931,6 +931,7 @@ import {
   AgentLoopState,
   QueuedProject,
   FullAgentStatus,
+  ProjectCostSummary,
 } from '../../../src/agents/agent-manager';
 
 export function createMockAgentManager(): jest.Mocked<AgentManager> {
@@ -1005,6 +1006,29 @@ export function createMockAgentManager(): jest.Mocked<AgentManager> {
     getQueuedMessages: jest.fn().mockReturnValue([]),
     removeQueuedMessage: jest.fn().mockReturnValue(true),
     getSessionId: jest.fn().mockReturnValue(null),
+    getProjectCostSummary: jest.fn().mockImplementation((projectId: string) => {
+      const summary: ProjectCostSummary = {
+        projectId,
+        currentSessionId: null,
+        projectTotals: {
+          inputTokens: 0,
+          outputTokens: 0,
+          cacheCreationInputTokens: 0,
+          cacheReadInputTokens: 0,
+          totalTokens: 0,
+        },
+        projectCost: {
+          inputUsd: 0,
+          outputUsd: 0,
+          cacheWriteUsd: 0,
+          cacheReadUsd: 0,
+          totalUsd: 0,
+        },
+        currentSession: null,
+        sessions: [],
+      };
+      return summary;
+    }),
     getFullStatus: jest.fn().mockImplementation((projectId: string) => {
       const isRunning = runningAgents.has(projectId);
       const fullStatus: FullAgentStatus = {

@@ -554,6 +554,63 @@ describe('DefaultAgentManager', () => {
     });
   });
 
+  describe('getProjectCostSummary', () => {
+    it('should aggregate event usage by project/session and dedupe result ids', async () => {
+      await agentManager.startInteractiveAgent('test-project');
+      (mockAgent as unknown as { _setSessionId: (id: string) => void })._setSessionId('sess-current');
+
+      (mockAgent as unknown as { _emit: (event: string, usage: unknown) => void })._emit('usageUpdate', {
+        resultId: 'result-1',
+        sessionId: 'sess-current',
+        model: 'claude-haiku-4-5-20251001',
+        inputTokens: 10,
+        outputTokens: 3,
+        cacheCreationInputTokens: 2515,
+        cacheReadInputTokens: 18069,
+      });
+      (mockAgent as unknown as { _emit: (event: string, usage: unknown) => void })._emit('usageUpdate', {
+        resultId: 'result-1',
+        sessionId: 'sess-current',
+        model: 'claude-haiku-4-5-20251001',
+        inputTokens: 10,
+        outputTokens: 3,
+        cacheCreationInputTokens: 2515,
+        cacheReadInputTokens: 18069,
+      });
+      (mockAgent as unknown as { _emit: (event: string, usage: unknown) => void })._emit('usageUpdate', {
+        resultId: 'result-2',
+        sessionId: 'sess-old',
+        model: 'claude-sonnet-4-5-20250929',
+        inputTokens: 100,
+        outputTokens: 20,
+        cacheCreationInputTokens: 1000,
+        cacheReadInputTokens: 2000,
+      });
+
+      const summary = agentManager.getProjectCostSummary('test-project');
+
+      expect(summary.currentSessionId).toBe('sess-current');
+      expect(summary.sessions).toHaveLength(2);
+      expect(summary.projectTotals).toEqual({
+        inputTokens: 110,
+        outputTokens: 23,
+        cacheCreationInputTokens: 3515,
+        cacheReadInputTokens: 20069,
+        totalTokens: 133,
+      });
+      expect(summary.currentSession?.sessionId).toBe('sess-current');
+      expect(summary.currentSession?.totals).toEqual({
+        inputTokens: 10,
+        outputTokens: 3,
+        cacheCreationInputTokens: 2515,
+        cacheReadInputTokens: 18069,
+        totalTokens: 13,
+      });
+      expect(summary.currentSession?.cost.totalUsd).toBeCloseTo(0.00497565, 8);
+      expect(summary.projectCost.totalUsd).toBeCloseTo(0.00992565, 8);
+    });
+  });
+
   describe('getFullStatus', () => {
     it('should return complete status object', () => {
       const status = agentManager.getFullStatus('test-project');

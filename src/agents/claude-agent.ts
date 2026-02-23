@@ -15,6 +15,7 @@ import {
   ContextUsage,
   ProcessInfo,
   PermissionRequest,
+  TurnUsageEvent,
 } from './types';
 
 // Re-export types from types file that are part of the public API
@@ -31,6 +32,7 @@ export {
   WaitingStatus,
   ContextUsage,
   ProcessInfo,
+  TurnUsageEvent,
 } from './types';
 
 // Export ProcessSpawner type for testing
@@ -65,6 +67,7 @@ export interface ClaudeAgentEvents {
   status: (status: AgentStatus) => void;
   exit: (code: number | null) => void;
   waitingForInput: (status: WaitingStatus) => void;
+  usageUpdate: (usage: TurnUsageEvent) => void;
   sessionNotFound: (sessionId: string) => void;
   exitPlanMode: (planContent: string) => void;
   enterPlanMode: () => void;
@@ -497,6 +500,10 @@ export class DefaultClaudeAgent implements ClaudeAgent {
       // Set max context tokens
       const maxTokens = this._limits.contextTokens || DEFAULT_MAX_CONTEXT_TOKENS;
       this.streamHandler.setMaxContextTokens(maxTokens);
+    });
+
+    this.streamHandler.on('usageUpdate', (usage: TurnUsageEvent) => {
+      this.emitter.emit('usageUpdate', usage);
     });
 
     this.streamHandler.on('error', (error: Error) => {

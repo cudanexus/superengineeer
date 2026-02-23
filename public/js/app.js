@@ -3339,6 +3339,11 @@
 
     if (!project) return;
 
+    // Handle commands that are terminal-only and don't produce API output
+    if (handleClientOnlySlashCommand(message, project.id)) {
+      return;
+    }
+
     // If agent is not running, start it first (always interactive mode)
     if (project.status !== 'running') {
       startInteractiveAgentWithMessage(message);
@@ -3348,6 +3353,109 @@
     if (project.status !== 'running') return;
 
     doSendMessage(message);
+  }
+
+  function handleClientOnlySlashCommand(message, projectId) {
+    if (!message || message.charAt(0) !== '/') return false;
+
+    var normalized = message.split(/\s+/)[0].toLowerCase();
+    if (normalized !== '/cost') {
+      return false;
+    }
+
+    runCostCommand(projectId, message);
+    $('#input-message').val('');
+    return true;
+  }
+
+  function runCostCommand(projectId, commandText) {
+    try {
+      var timestamp = new Date().toISOString();
+      appendMessage(projectId, {
+        type: 'user',
+        content: commandText,
+        timestamp: timestamp
+      });
+
+      $.get('/api/projects/' + projectId + '/agent/cost')
+        .done(function (data) {
+          appendAgentCostResult(projectId, data);
+        })
+        .fail(function () {
+          appendMessage(projectId, {
+            type: 'result',
+            content: 'Unable to load project cost summary right now.',
+            timestamp: new Date().toISOString(),
+            resultInfo: {
+              result: 'Cost calculation failed',
+              isError: true
+            }
+          });
+        });
+    } catch (err) {
+      appendMessage(projectId, {
+        type: 'result',
+        content: 'Failed to compute /cost due to a frontend error. Please refresh and try again.',
+        timestamp: new Date().toISOString(),
+        resultInfo: {
+          result: 'Cost calculation failed',
+          isError: true
+        }
+      });
+    }
+  }
+
+  function appendAgentCostResult(projectId, data) {
+    if (!data) {
+      appendMessage(projectId, {
+        type: 'result',
+        content: 'No cost data found.',
+        timestamp: new Date().toISOString(),
+        resultInfo: {
+          result: 'No cost data',
+          isError: true
+        }
+      });
+      return;
+    }
+
+    var formatNumber = (Formatters && typeof Formatters.formatNumberWithCommas === 'function')
+      ? Formatters.formatNumberWithCommas
+      : function (n) { return String(n || 0); };
+    var project = findProjectById(projectId);
+    var projectName = project ? project.name : projectId;
+    var current = data.currentSession;
+    var projectCost = data.projectCost || {};
+    var projectTotals = data.projectTotals || {};
+    var currentCost = current ? (current.cost || {}) : null;
+    var currentTotals = current ? (current.totals || {}) : null;
+
+    var lines = [
+      'Project cost summary',
+      'Project: ' + projectName,
+      '',
+      'Project total cost: $' + Number(projectCost.totalUsd || 0).toFixed(4),
+      'Project total tokens: ' + formatNumber(projectTotals.totalTokens || 0),
+      ''
+    ];
+
+    if (current) {
+      lines.push('Current session: ' + current.sessionId);
+      lines.push('Session cost: $' + Number(currentCost.totalUsd || 0).toFixed(4));
+      lines.push('Session tokens: ' + formatNumber(currentTotals.totalTokens || 0));
+    } else {
+      lines.push('Current session: none');
+    }
+
+    appendMessage(projectId, {
+      type: 'result',
+      content: lines.join('\n'),
+      timestamp: new Date().toISOString(),
+      resultInfo: {
+        result: 'Project/session cost',
+        isError: false
+      }
+    });
   }
 
   // formatNumber is already defined above using Formatters.formatNumberCompact

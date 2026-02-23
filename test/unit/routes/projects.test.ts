@@ -628,6 +628,38 @@ describe('Projects Routes', () => {
     });
   });
 
+  describe('GET /:id/agent/cost', () => {
+    it('should return project/session cost summary', async () => {
+      deps.agentManager.getProjectCostSummary = jest.fn().mockReturnValue({
+        projectId: sampleProject.id,
+        currentSessionId: 'sess-1',
+        projectTotals: {
+          inputTokens: 10,
+          outputTokens: 3,
+          cacheCreationInputTokens: 2515,
+          cacheReadInputTokens: 18069,
+          totalTokens: 13,
+        },
+        projectCost: {
+          inputUsd: 0.00001,
+          outputUsd: 0.000015,
+          cacheWriteUsd: 0.00314375,
+          cacheReadUsd: 0.0018069,
+          totalUsd: 0.00497565,
+        },
+        currentSession: null,
+        sessions: [],
+      });
+
+      const response = await request(app)
+        .get(`/api/projects/${sampleProject.id}/agent/cost`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.projectId).toBe(sampleProject.id);
+      expect(deps.agentManager.getProjectCostSummary).toHaveBeenCalledWith(sampleProject.id);
+    });
+  });
+
   describe('GET /:id/agent/queue', () => {
     it('should return queued messages', async () => {
       deps.agentManager.getQueuedMessages = jest.fn().mockReturnValue(['msg1', 'msg2']);

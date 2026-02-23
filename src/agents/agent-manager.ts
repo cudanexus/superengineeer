@@ -13,6 +13,7 @@ import {
   AgentLimits,
   AgentStreamingOptions,
   WaitingStatus,
+  TurnUsageEvent,
 } from './claude-agent';
 import { DefaultPermissionGenerator, PermissionGenerator } from '../services/permission-generator';
 import {
@@ -102,6 +103,38 @@ export interface FullAgentStatus {
   permissionMode: 'acceptEdits' | 'plan' | null;
 }
 
+export interface TokenTotals {
+  inputTokens: number;
+  outputTokens: number;
+  cacheCreationInputTokens: number;
+  cacheReadInputTokens: number;
+  totalTokens: number;
+}
+
+export interface CostTotals {
+  inputUsd: number;
+  outputUsd: number;
+  cacheWriteUsd: number;
+  cacheReadUsd: number;
+  totalUsd: number;
+}
+
+export interface SessionCostSummary {
+  sessionId: string;
+  modelBreakdown: Record<string, TokenTotals>;
+  totals: TokenTotals;
+  cost: CostTotals;
+}
+
+export interface ProjectCostSummary {
+  projectId: string;
+  currentSessionId: string | null;
+  projectTotals: TokenTotals;
+  projectCost: CostTotals;
+  currentSession: SessionCostSummary | null;
+  sessions: SessionCostSummary[];
+}
+
 export interface AgentManager {
   startAgent(projectId: string, instructions: string): Promise<void>;
   startInteractiveAgent(projectId: string, options?: StartInteractiveAgentOptions): Promise<void>;
@@ -128,6 +161,7 @@ export interface AgentManager {
   getQueuedMessages(projectId: string): string[];
   removeQueuedMessage(projectId: string, index: number): boolean;
   getSessionId(projectId: string): string | null;
+  getProjectCostSummary(projectId: string): ProjectCostSummary;
   getFullStatus(projectId: string): FullAgentStatus;
   getTrackedProcesses(): TrackedProcessInfo[];
   cleanupOrphanProcesses(): Promise<OrphanCleanupResult>;
@@ -185,6 +219,53 @@ type EventListeners = {
   [K in keyof AgentManagerEvents]: Set<AgentManagerEvents[K]>;
 };
 
+interface SessionUsageAggregate {
+  modelBreakdown: Map<string, TokenTotals>;
+  totals: TokenTotals;
+  resultIds: Set<string>;
+}
+
+interface ModelPricing {
+  inputPerMTok: number;
+  outputPerMTok: number;
+  cacheWritePerMTok: number;
+  cacheReadPerMTok: number;
+}
+
+const ZERO_TOKENS: TokenTotals = {
+  inputTokens: 0,
+  outputTokens: 0,
+  cacheCreationInputTokens: 0,
+  cacheReadInputTokens: 0,
+  totalTokens: 0,
+};
+
+const ZERO_COST: CostTotals = {
+  inputUsd: 0,
+  outputUsd: 0,
+  cacheWriteUsd: 0,
+  cacheReadUsd: 0,
+  totalUsd: 0,
+};
+
+const MODEL_PRICING: Record<string, ModelPricing> = {
+  'claude-opus-4-6': { inputPerMTok: 5, outputPerMTok: 25, cacheWritePerMTok: 6.25, cacheReadPerMTok: 0.5 },
+  'claude-opus-4-5': { inputPerMTok: 5, outputPerMTok: 25, cacheWritePerMTok: 6.25, cacheReadPerMTok: 0.5 },
+  'claude-opus-4-5-20250929': { inputPerMTok: 5, outputPerMTok: 25, cacheWritePerMTok: 6.25, cacheReadPerMTok: 0.5 },
+  'claude-opus-4-1': { inputPerMTok: 15, outputPerMTok: 75, cacheWritePerMTok: 18.75, cacheReadPerMTok: 1.5 },
+  'claude-opus-4': { inputPerMTok: 15, outputPerMTok: 75, cacheWritePerMTok: 18.75, cacheReadPerMTok: 1.5 },
+  'claude-opus-3': { inputPerMTok: 15, outputPerMTok: 75, cacheWritePerMTok: 18.75, cacheReadPerMTok: 1.5 },
+  'claude-sonnet-4-6': { inputPerMTok: 3, outputPerMTok: 15, cacheWritePerMTok: 3.75, cacheReadPerMTok: 0.3 },
+  'claude-sonnet-4-5': { inputPerMTok: 3, outputPerMTok: 15, cacheWritePerMTok: 3.75, cacheReadPerMTok: 0.3 },
+  'claude-sonnet-4-5-20250929': { inputPerMTok: 3, outputPerMTok: 15, cacheWritePerMTok: 3.75, cacheReadPerMTok: 0.3 },
+  'claude-sonnet-4': { inputPerMTok: 3, outputPerMTok: 15, cacheWritePerMTok: 3.75, cacheReadPerMTok: 0.3 },
+  'claude-sonnet-3.7': { inputPerMTok: 3, outputPerMTok: 15, cacheWritePerMTok: 3.75, cacheReadPerMTok: 0.3 },
+  'claude-haiku-4-5': { inputPerMTok: 1, outputPerMTok: 5, cacheWritePerMTok: 1.25, cacheReadPerMTok: 0.1 },
+  'claude-haiku-4-5-20251001': { inputPerMTok: 1, outputPerMTok: 5, cacheWritePerMTok: 1.25, cacheReadPerMTok: 0.1 },
+  'claude-haiku-3-5': { inputPerMTok: 0.8, outputPerMTok: 4, cacheWritePerMTok: 1, cacheReadPerMTok: 0.08 },
+  'claude-haiku-3': { inputPerMTok: 0.25, outputPerMTok: 1.25, cacheWritePerMTok: 0.3, cacheReadPerMTok: 0.03 },
+};
+
 /**
  * Manages Claude agents across multiple projects.
  * Refactored to use focused modules for queue, session, loop, and process management.
@@ -225,6 +306,7 @@ export class DefaultAgentManager implements AgentManager {
   private oneOffWaitingVersions: Map<string, number> = new Map();
   private queuedMessages: Map<string, string[]> = new Map();
   private pendingPlans: Map<string, { planContent: string; sessionId: string | null }> = new Map();
+  private readonly usageByProject: Map<string, Map<string, SessionUsageAggregate>> = new Map();
   private _maxConcurrentAgents: number;
 
   constructor({
@@ -648,6 +730,43 @@ export class DefaultAgentManager implements AgentManager {
     return agent ? agent.sessionId : null;
   }
 
+  getProjectCostSummary(projectId: string): ProjectCostSummary {
+    const sessionsMap = this.usageByProject.get(projectId) || new Map<string, SessionUsageAggregate>();
+    const sessions: SessionCostSummary[] = [];
+    let projectTotals: TokenTotals = { ...ZERO_TOKENS };
+
+    for (const [sessionId, aggregate] of sessionsMap.entries()) {
+      const modelBreakdown: Record<string, TokenTotals> = {};
+      for (const [model, totals] of aggregate.modelBreakdown.entries()) {
+        modelBreakdown[model] = { ...totals };
+      }
+
+      const totals = { ...aggregate.totals };
+      this.addTokenTotals(projectTotals, totals);
+
+      sessions.push({
+        sessionId,
+        modelBreakdown,
+        totals,
+        cost: this.calculateCostFromModelBreakdown(modelBreakdown),
+      });
+    }
+
+    const currentSessionId = this.getSessionId(projectId);
+    const currentSession = currentSessionId
+      ? sessions.find((s) => s.sessionId === currentSessionId) || null
+      : null;
+
+    return {
+      projectId,
+      currentSessionId,
+      projectTotals,
+      projectCost: this.calculateCostFromSessions(sessions),
+      currentSession,
+      sessions,
+    };
+  }
+
   getFullStatus(projectId: string): FullAgentStatus {
     const agent = this.agents.get(projectId);
 
@@ -661,6 +780,100 @@ export class DefaultAgentManager implements AgentManager {
       sessionId: this.getSessionId(projectId),
       permissionMode: agent?.permissionMode || null,
     };
+  }
+
+  private recordUsage(projectId: string, usage: TurnUsageEvent): void {
+    const sessionId = usage.sessionId;
+    if (!sessionId) return;
+
+    let projectSessions = this.usageByProject.get(projectId);
+    if (!projectSessions) {
+      projectSessions = new Map<string, SessionUsageAggregate>();
+      this.usageByProject.set(projectId, projectSessions);
+    }
+
+    let sessionAgg = projectSessions.get(sessionId);
+    if (!sessionAgg) {
+      sessionAgg = {
+        modelBreakdown: new Map<string, TokenTotals>(),
+        totals: { ...ZERO_TOKENS },
+        resultIds: new Set<string>(),
+      };
+      projectSessions.set(sessionId, sessionAgg);
+    }
+
+    if (sessionAgg.resultIds.has(usage.resultId)) {
+      return;
+    }
+    sessionAgg.resultIds.add(usage.resultId);
+
+    const modelKey = usage.model || 'unknown';
+    let modelTotals = sessionAgg.modelBreakdown.get(modelKey);
+    if (!modelTotals) {
+      modelTotals = { ...ZERO_TOKENS };
+      sessionAgg.modelBreakdown.set(modelKey, modelTotals);
+    }
+
+    const delta: TokenTotals = {
+      inputTokens: usage.inputTokens || 0,
+      outputTokens: usage.outputTokens || 0,
+      cacheCreationInputTokens: usage.cacheCreationInputTokens || 0,
+      cacheReadInputTokens: usage.cacheReadInputTokens || 0,
+      totalTokens: (usage.inputTokens || 0) + (usage.outputTokens || 0),
+    };
+
+    this.addTokenTotals(modelTotals, delta);
+    this.addTokenTotals(sessionAgg.totals, delta);
+  }
+
+  private addTokenTotals(target: TokenTotals, add: TokenTotals): void {
+    target.inputTokens += add.inputTokens;
+    target.outputTokens += add.outputTokens;
+    target.cacheCreationInputTokens += add.cacheCreationInputTokens;
+    target.cacheReadInputTokens += add.cacheReadInputTokens;
+    target.totalTokens += add.totalTokens;
+  }
+
+  private calculateCostFromSessions(sessions: SessionCostSummary[]): CostTotals {
+    const total: CostTotals = { ...ZERO_COST };
+    for (const session of sessions) {
+      total.inputUsd += session.cost.inputUsd;
+      total.outputUsd += session.cost.outputUsd;
+      total.cacheWriteUsd += session.cost.cacheWriteUsd;
+      total.cacheReadUsd += session.cost.cacheReadUsd;
+      total.totalUsd += session.cost.totalUsd;
+    }
+    return total;
+  }
+
+  private calculateCostFromModelBreakdown(modelBreakdown: Record<string, TokenTotals>): CostTotals {
+    const total: CostTotals = { ...ZERO_COST };
+
+    for (const [model, tokens] of Object.entries(modelBreakdown)) {
+      const pricing = this.getPricingForModel(model);
+      total.inputUsd += (tokens.inputTokens / 1_000_000) * pricing.inputPerMTok;
+      total.outputUsd += (tokens.outputTokens / 1_000_000) * pricing.outputPerMTok;
+      total.cacheWriteUsd += (tokens.cacheCreationInputTokens / 1_000_000) * pricing.cacheWritePerMTok;
+      total.cacheReadUsd += (tokens.cacheReadInputTokens / 1_000_000) * pricing.cacheReadPerMTok;
+    }
+
+    total.totalUsd = total.inputUsd + total.outputUsd + total.cacheWriteUsd + total.cacheReadUsd;
+    return total;
+  }
+
+  private getPricingForModel(model: string): ModelPricing {
+    const normalized = model.toLowerCase();
+    if (MODEL_PRICING[normalized]) {
+      return MODEL_PRICING[normalized];
+    }
+
+    if (normalized.includes('opus')) {
+      return MODEL_PRICING['claude-opus-4-6']!;
+    }
+    if (normalized.includes('haiku')) {
+      return MODEL_PRICING['claude-haiku-4-5']!;
+    }
+    return MODEL_PRICING['claude-sonnet-4-6']!;
   }
 
   getTrackedProcesses(): TrackedProcessInfo[] {
@@ -1170,6 +1383,10 @@ export class DefaultAgentManager implements AgentManager {
       this.emit('waitingForInput', projectId, status);
     };
 
+    const usageListener = (usage: TurnUsageEvent): void => {
+      this.recordUsage(projectId, usage);
+    };
+
     const exitListener = (code: number | null): void => {
       void this.handleAgentExit(agent, code);
     };
@@ -1189,6 +1406,7 @@ export class DefaultAgentManager implements AgentManager {
     agent.on('message', messageListener);
     agent.on('status', statusListener);
     agent.on('waitingForInput', waitingListener);
+    agent.on('usageUpdate', usageListener);
     agent.on('exit', exitListener);
     agent.on('sessionNotFound', sessionNotFoundListener);
     agent.on('exitPlanMode', exitPlanModeListener);

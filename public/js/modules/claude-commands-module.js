@@ -19,7 +19,8 @@
 
   // Available commands
   var commands = [
-    { id: 'compact', name: '/compact', description: 'Compact context to save tokens', requiresArgs: false }
+    { id: 'compact', name: '/compact', description: 'Compact context to save tokens', requiresArgs: false },
+    { id: 'cost', name: '/cost', description: 'Show Claude session token cost', requiresArgs: false }
   ];
 
   // Currently selected command (for args modal)

@@ -51,6 +51,16 @@ export interface ContextUsage {
   percentUsed: number;
 }
 
+export interface TurnUsageEvent {
+  resultId: string;
+  sessionId: string | null;
+  model: string | null;
+  inputTokens: number;
+  outputTokens: number;
+  cacheCreationInputTokens: number;
+  cacheReadInputTokens: number;
+}
+
 export interface AskUserQuestionData {
   toolId: string;
   questions: Array<{

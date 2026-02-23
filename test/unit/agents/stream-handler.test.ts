@@ -1,5 +1,5 @@
 import { StreamHandler } from '../../../src/agents/stream-handler';
-import { AgentMessage, ContextUsage, WaitingStatus, PermissionRequest } from '../../../src/agents/types';
+import { AgentMessage, ContextUsage, WaitingStatus, PermissionRequest, TurnUsageEvent } from '../../../src/agents/types';
 import { getLogger } from '../../../src/utils';
 
 jest.mock('../../../src/utils/logger', () => ({
@@ -16,6 +16,7 @@ describe('StreamHandler', () => {
   let messages: AgentMessage[];
   let waitingStatuses: WaitingStatus[];
   let contextUsages: ContextUsage[];
+  let usageEvents: TurnUsageEvent[];
   let errors: Error[];
 
   beforeEach(() => {
@@ -25,11 +26,13 @@ describe('StreamHandler', () => {
     messages = [];
     waitingStatuses = [];
     contextUsages = [];
+    usageEvents = [];
     errors = [];
 
     handler.on('message', (msg: AgentMessage) => messages.push(msg));
     handler.on('waitingForInput', (status: WaitingStatus) => waitingStatuses.push(status));
     handler.on('contextUsage', (usage: ContextUsage) => contextUsages.push(usage));
+    handler.on('usageUpdate', (usage: TurnUsageEvent) => usageEvents.push(usage));
     handler.on('error', (err: Error) => errors.push(err));
   });
 
@@ -674,6 +677,46 @@ describe('StreamHandler', () => {
 
       const resultMsgs = messages.filter(m => m.type === 'result');
       expect(resultMsgs).toHaveLength(1);
+    });
+
+    it('should emit usageUpdate from result usage once per uuid', () => {
+      handler.processLine(JSON.stringify({
+        type: 'system',
+        subtype: 'init',
+        session_id: 'sess-1',
+        model: 'claude-haiku-4-5-20251001',
+      }));
+
+      handler.processLine(JSON.stringify({
+        type: 'result',
+        uuid: 'result-1',
+        usage: {
+          input_tokens: 10,
+          output_tokens: 3,
+          cache_creation_input_tokens: 2515,
+          cache_read_input_tokens: 18069,
+        },
+      }));
+
+      handler.processLine(JSON.stringify({
+        type: 'result',
+        uuid: 'result-1',
+        usage: {
+          input_tokens: 10,
+          output_tokens: 3,
+        },
+      }));
+
+      expect(usageEvents).toHaveLength(1);
+      expect(usageEvents[0]).toEqual({
+        resultId: 'result-1',
+        sessionId: 'test-session',
+        model: 'claude-haiku-4-5-20251001',
+        inputTokens: 10,
+        outputTokens: 3,
+        cacheCreationInputTokens: 2515,
+        cacheReadInputTokens: 18069,
+      });
     });
   });
 
