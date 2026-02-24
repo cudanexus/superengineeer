@@ -3631,14 +3631,14 @@
 
   function postChatCompletionToParent(projectId, message, targetOrigin, completionVersion) {
     if (!window.parent || window.parent === window) return;
-    if (!projectId || !message) return;
+    if (!projectId) return;
 
     var origin = targetOrigin && targetOrigin !== 'null' ? targetOrigin : '*';
     window.parent.postMessage({
       type: 'superengineer_chat_submitted',
       source: 'superengineer',
       projectId: projectId,
-      message: message,
+      message: message || '',
       generatorProjectId: projectId,
       completionVersion: Number(completionVersion || 0),
       completedAt: new Date().toISOString()
@@ -5811,6 +5811,19 @@
       var pendingCommit = state.pendingChatCommitByProject[projectId];
       if (pendingCommit) {
         pendingCommit.sawAssistantResponse = true;
+
+        // Handle out-of-order events: if waiting state arrived before assistant output,
+        // emit completion now once we have both conditions.
+        var projectForCommit = findProjectById(projectId);
+        if (projectForCommit && projectForCommit.isWaitingForInput) {
+          postChatCompletionToParent(
+            projectId,
+            pendingCommit.message,
+            undefined,
+            projectForCommit.waitingVersion || 0
+          );
+          delete state.pendingChatCommitByProject[projectId];
+        }
       }
     }
 
