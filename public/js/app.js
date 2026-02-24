@@ -5703,11 +5703,13 @@
 
     // data is now { isWaiting, version }
     var isWaiting = data.isWaiting;
-    var serverVersion = data.version || 0;
+    var hasServerVersion = typeof data.version === 'number' && isFinite(data.version);
+    var serverVersion = hasServerVersion ? data.version : 0;
     var projectVersion = (project && project.waitingVersion) || 0;
 
-    // Skip update if server version is not newer than this project's version
-    if (serverVersion <= projectVersion) {
+    // Skip update only when server explicitly provides a non-newer version.
+    // Some payloads may omit version; those should still update waiting UI instantly.
+    if (hasServerVersion && serverVersion <= projectVersion) {
       return;
     }
 
@@ -5893,11 +5895,12 @@
       var serverVersion = fullStatus.waitingVersion || 0;
       var project = findProjectById(projectId);
       var projectVersion = (project && project.waitingVersion) || 0;
+      var waitingChanged = project && project.isWaitingForInput !== fullStatus.isWaitingForInput;
 
       // Update if server version is newer than this project's tracked version
-      if (serverVersion > projectVersion || serverVersion === 0) {
+      if (serverVersion > projectVersion || serverVersion === 0 || waitingChanged) {
         if (project) {
-          var waitingChanged = project.isWaitingForInput !== fullStatus.isWaitingForInput;
+          waitingChanged = project.isWaitingForInput !== fullStatus.isWaitingForInput;
           project.isWaitingForInput = fullStatus.isWaitingForInput;
           project.waitingVersion = serverVersion;
 
@@ -5937,8 +5940,12 @@
       // Update waiting indicator in main panel
       if (fullStatus && status === 'running') {
         var serverVersion = fullStatus.waitingVersion || 0;
+        var selectedProject = findProjectById(projectId);
+        var selectedWaitingChanged = selectedProject
+          ? selectedProject.isWaitingForInput !== fullStatus.isWaitingForInput
+          : false;
 
-        if (serverVersion > state.waitingVersion || serverVersion === 0) {
+        if (serverVersion > state.waitingVersion || serverVersion === 0 || selectedWaitingChanged) {
           updateWaitingIndicator(fullStatus.isWaitingForInput);
           state.waitingVersion = serverVersion;
         }

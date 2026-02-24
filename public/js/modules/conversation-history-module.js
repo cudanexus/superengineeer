@@ -122,8 +122,9 @@
     });
   }
 
-  function loadConversation(conversationId) {
+  function loadConversation(conversationId, retryAttempt) {
     if (!state.selectedProjectId) return;
+    var attempt = retryAttempt || 0;
 
     // Clear search when switching conversations
     if (state.search.isOpen && SearchModule) {
@@ -143,6 +144,21 @@
         // Fetch the conversation messages
         api.getConversation(state.selectedProjectId, conversationId)
           .done(function(data) {
+            // If backend cannot resolve this conversation after resume, refresh list
+            // and retry once before surfacing an error.
+            if (!data || !Array.isArray(data.messages)) {
+              if (attempt < 1) {
+                setTimeout(function() {
+                  loadConversation(conversationId, attempt + 1);
+                }, 400);
+                return;
+              }
+
+              loadConversationHistoryList();
+              showToast('Conversation is not available anymore. History list refreshed.', 'warning');
+              return;
+            }
+
             state.conversations[state.selectedProjectId] = data.messages || [];
             state.currentConversationStats = data.stats || null;
             state.currentConversationMetadata = data.metadata || null;
@@ -155,11 +171,25 @@
             }
           })
           .fail(function(xhr) {
+            if (attempt < 1) {
+              setTimeout(function() {
+                loadConversation(conversationId, attempt + 1);
+              }, 400);
+              return;
+            }
             showErrorToast(xhr, 'Failed to load conversation');
+            loadConversationHistoryList();
           });
       })
       .fail(function(xhr) {
+        if (attempt < 1) {
+          setTimeout(function() {
+            loadConversation(conversationId, attempt + 1);
+          }, 400);
+          return;
+        }
         showErrorToast(xhr, 'Failed to switch conversation');
+        loadConversationHistoryList();
       });
   }
 
