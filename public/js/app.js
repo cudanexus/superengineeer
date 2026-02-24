@@ -168,7 +168,8 @@
     deferredPlanMessage: null, // Stores ExitPlanMode message when questions are pending
     settings: null, // Global settings object
     selectedGitHubRepo: null, // Selected repo full name for GitHub clone
-    submittedQuestionToolIds: {} // Track toolIds already submitted to prevent duplicates
+    submittedQuestionToolIds: {}, // Track toolIds already submitted to prevent duplicates
+    pendingChatCommitByProject: {} // { [projectId]: { message, sawAssistantResponse } }
   };
 
   // Local storage keys - use module's KEYS
@@ -3628,6 +3629,22 @@
       });
   }
 
+  function postChatCompletionToParent(projectId, message, targetOrigin, completionVersion) {
+    if (!window.parent || window.parent === window) return;
+    if (!projectId || !message) return;
+
+    var origin = targetOrigin && targetOrigin !== 'null' ? targetOrigin : '*';
+    window.parent.postMessage({
+      type: 'superengineer_chat_submitted',
+      source: 'superengineer',
+      projectId: projectId,
+      message: message,
+      generatorProjectId: projectId,
+      completionVersion: Number(completionVersion || 0),
+      completedAt: new Date().toISOString()
+    }, origin);
+  }
+
   function setupParentUsageSyncBridge() {
     window.addEventListener('message', function (event) {
       var data = event.data || {};
@@ -3639,10 +3656,11 @@
   function doSendMessage(message) {
     if (state.messageSending) return;
 
+    var projectId = state.selectedProjectId;
     var $input = $('#input-message');
     var images = state.pendingImages.slice(); // Copy the array
     var files = state.pendingFiles.slice();
-    var project = findProjectById(state.selectedProjectId);
+    var project = findProjectById(projectId);
 
     state.messageSending = true;
 
@@ -3672,13 +3690,17 @@
     }
 
     // Add user message to conversation
-    appendMessage(state.selectedProjectId, userMessage);
+    appendMessage(projectId, userMessage);
+    state.pendingChatCommitByProject[projectId] = {
+      message: message,
+      sawAssistantResponse: false
+    };
 
     // Show waiting indicator
     ImageAttachmentModule.showWaitingIndicator();
     updateCancelButton();
 
-    api.sendAgentMessage(state.selectedProjectId, message, images, files)
+    api.sendAgentMessage(projectId, message, images, files)
       .done(function () {
         $input.val('').trigger('input');
         ImageAttachmentModule.clearAll();
@@ -3687,6 +3709,7 @@
       .fail(function (xhr) {
         showErrorToast(xhr, 'Failed to send message');
         ImageAttachmentModule.removeWaitingIndicator();
+        delete state.pendingChatCommitByProject[projectId];
       })
       .always(function () {
         state.messageSending = false;
@@ -3759,6 +3782,10 @@
 
         // Add user message to conversation
         appendMessage(projectId, userMessage);
+        state.pendingChatCommitByProject[projectId] = {
+          message: message,
+          sawAssistantResponse: false
+        };
 
         // Clear input and images, show waiting
         $input.val('').trigger('input');
@@ -3770,6 +3797,7 @@
       })
       .fail(function (xhr) {
         showErrorToast(xhr, 'Failed to start agent');
+        delete state.pendingChatCommitByProject[projectId];
       })
       .always(function () {
         state.agentStarting = false;
@@ -5689,6 +5717,15 @@
       project.isWaitingForInput = isWaiting;
       renderProjectList();
 
+      // Emit chat completion for parent integration when a sent turn reaches waiting state.
+      if (isWaiting) {
+        var pendingCommit = state.pendingChatCommitByProject[projectId];
+        if (pendingCommit && pendingCommit.sawAssistantResponse) {
+          postChatCompletionToParent(projectId, pendingCommit.message, undefined, serverVersion);
+          delete state.pendingChatCommitByProject[projectId];
+        }
+      }
+
       if (state.selectedProjectId === projectId) {
         // Also update global state for selected project
         state.waitingVersion = serverVersion;
@@ -5769,6 +5806,13 @@
 
   function handleAgentMessage(projectId, message) {
     appendMessage(projectId, message);
+
+    if (message && (message.type === 'assistant' || message.type === 'stdout' || message.type === 'result')) {
+      var pendingCommit = state.pendingChatCommitByProject[projectId];
+      if (pendingCommit) {
+        pendingCommit.sawAssistantResponse = true;
+      }
+    }
 
     // Auto-load preview URL if one is detected in the AI's response
     if ((message.type === 'assistant' || message.type === 'stdout') && message.content) {
