@@ -169,7 +169,7 @@
     settings: null, // Global settings object
     selectedGitHubRepo: null, // Selected repo full name for GitHub clone
     submittedQuestionToolIds: {}, // Track toolIds already submitted to prevent duplicates
-    pendingChatCommitByProject: {} // { [projectId]: { message, sawAssistantResponse } }
+    pendingChatCommitByProject: {} // { [projectId]: { message, sawAssistantResponse, recoveryRetried } }
   };
 
   // Local storage keys - use module's KEYS
@@ -3693,7 +3693,8 @@
     appendMessage(projectId, userMessage);
     state.pendingChatCommitByProject[projectId] = {
       message: message,
-      sawAssistantResponse: false
+      sawAssistantResponse: false,
+      recoveryRetried: false
     };
 
     // Show waiting indicator
@@ -3784,7 +3785,8 @@
         appendMessage(projectId, userMessage);
         state.pendingChatCommitByProject[projectId] = {
           message: message,
-          sawAssistantResponse: false
+          sawAssistantResponse: false,
+          recoveryRetried: false
         };
 
         // Clear input and images, show waiting
@@ -3796,6 +3798,17 @@
         updateCancelButton();
       })
       .fail(function (xhr) {
+        var pendingCommit = state.pendingChatCommitByProject[projectId];
+        var responseError = (xhr && xhr.responseJSON && (xhr.responseJSON.error || xhr.responseJSON.message)) || '';
+        var isAlreadyRunningError = typeof responseError === 'string' && responseError.toLowerCase().indexOf('already running') !== -1;
+        if (pendingCommit && pendingCommit.recoveryRetried && isAlreadyRunningError) {
+          // Session recovery can race with old process shutdown; retry once it fully stops.
+          setTimeout(function () {
+            retryRecoveredMessageWhenReady(projectId);
+          }, 400);
+          return;
+        }
+
         showErrorToast(xhr, 'Failed to start agent');
         delete state.pendingChatCommitByProject[projectId];
       })
@@ -3808,6 +3821,32 @@
           $('#btn-send-message').prop('disabled', false);
           $input.focus();
         }
+      });
+  }
+
+  function retryRecoveredMessageWhenReady(projectId, remainingAttempts) {
+    var attemptsLeft = typeof remainingAttempts === 'number' ? remainingAttempts : 15;
+    var pendingCommit = state.pendingChatCommitByProject[projectId];
+    if (!pendingCommit || !pendingCommit.message) {
+      return;
+    }
+    if (attemptsLeft <= 0) {
+      return;
+    }
+
+    api.getAgentStatus(projectId)
+      .done(function (status) {
+        if (status && status.status === 'running') {
+          setTimeout(function () {
+            retryRecoveredMessageWhenReady(projectId, attemptsLeft - 1);
+          }, 400);
+          return;
+        }
+        startInteractiveAgentWithMessage(pendingCommit.message);
+      })
+      .fail(function () {
+        // If status endpoint is temporarily unavailable, still attempt restart.
+        startInteractiveAgentWithMessage(pendingCommit.message);
       });
   }
 
@@ -4127,7 +4166,13 @@
     // Also get current conversation from project
     $.get('/api/projects/' + projectId)
       .done(function (project) {
-        state.currentConversationId = project.currentConversationId || null;
+        // Avoid clobbering a conversation manually selected from history while this request was in-flight.
+        if (state.selectedProjectId !== projectId) {
+          return;
+        }
+        if (!state.currentConversationId) {
+          state.currentConversationId = project.currentConversationId || null;
+        }
         // Stats will be updated when loadConversationHistory completes
       });
 
@@ -4816,14 +4861,15 @@
         if (project && typeof response.isWaitingForInput === 'boolean') {
           var serverVersion = response.waitingVersion || 0;
           var projectVersion = project.waitingVersion || 0;
+          var waitingChanged = project.isWaitingForInput !== response.isWaitingForInput;
 
-          if (serverVersion > projectVersion) {
+          if (serverVersion > projectVersion || serverVersion === 0 || waitingChanged) {
             project.waitingVersion = serverVersion;
             var wasWaiting = project.isWaitingForInput;
             project.isWaitingForInput = response.isWaitingForInput;
 
             // Update global state for selected project
-            if (state.selectedProjectId === projectId && serverVersion > state.waitingVersion) {
+            if (state.selectedProjectId === projectId && (serverVersion > state.waitingVersion || waitingChanged)) {
               state.waitingVersion = serverVersion;
             }
 
@@ -5979,36 +6025,40 @@
       return;
     }
 
+    var pendingCommit = state.pendingChatCommitByProject[projectId];
+    var shouldRetryPendingMessage = !!(
+      pendingCommit &&
+      pendingCommit.message &&
+      !pendingCommit.recoveryRetried
+    );
+
     // Update the current conversation ID to the new one
     state.currentConversationId = data.newConversationId;
     state.currentSessionId = data.newConversationId;
 
-    // Clear the output screen
-    $('#agent-output').empty();
-
     // Show a system message explaining what happened
     appendMessage(projectId, {
       type: 'system',
-      content: data.reason,
+      content: data.reason + '. Previous conversation history is preserved.',
       timestamp: new Date().toISOString()
     });
 
     // Show a toast notification
     showToast(data.reason, 'warning');
 
-    // Reset conversation stats for the new conversation
-    state.currentConversationStats = {
-      messageCount: 0,
-      toolCallCount: 0,
-      userMessageCount: 0,
-      durationMs: 0,
-      startedAt: new Date().toISOString()
-    };
-    state.currentConversationMetadata = null;
-    ConversationHistoryModule.updateStats();
+    // Preserve visible history in UI; only refresh list metadata.
+    if (ConversationHistoryModule && ConversationHistoryModule.loadList) {
+      ConversationHistoryModule.loadList();
+    }
 
-    // Reload conversation history dropdown
-    loadConversationHistory(projectId);
+    // Auto-retry the pending user message once after session recovery so users don't lose their last turn.
+    if (shouldRetryPendingMessage) {
+      pendingCommit.recoveryRetried = true;
+      showToast('Session recovered. Resending your last message...', 'info');
+      setTimeout(function () {
+        retryRecoveredMessageWhenReady(projectId);
+      }, 250);
+    }
   }
 
   function updateAgentOutputHeader(projectId, status) {

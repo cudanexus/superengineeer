@@ -1,6 +1,7 @@
 import { EventEmitter } from 'events';
 import { ChildProcess } from 'child_process';
 import * as fs from 'fs';
+import * as path from 'path';
 
 import { getLogger, Logger } from '../utils/logger';
 import { McpServerConfig } from '../repositories/settings';
@@ -723,7 +724,16 @@ export class DefaultClaudeAgent implements ClaudeAgent {
   }
 
   private buildEnvironment(): Record<string, string> {
-    const env: Record<string, string> = MessageBuilder.buildEnvironment();
+    const claudeConfigDir = path.join(this.projectPath, '.superengineer-v5', '.claude');
+    try {
+      fs.mkdirSync(claudeConfigDir, { recursive: true });
+    } catch {
+      // If this fails, Claude falls back to its default config location.
+    }
+
+    const env: Record<string, string> = MessageBuilder.buildEnvironment({
+      CLAUDE_CONFIG_DIR: claudeConfigDir,
+    });
 
     // MCP servers are now passed via CLI flags, not environment variables
 

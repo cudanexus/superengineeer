@@ -141,6 +141,12 @@
     // Set this as the current conversation on the backend so new messages go there
     api.setCurrentConversation(state.selectedProjectId, conversationId)
       .done(function(result) {
+        if (result && result.sessionId) {
+          state.currentSessionId = result.sessionId;
+        } else {
+          state.currentSessionId = conversationId;
+        }
+
         // Fetch the conversation messages
         api.getConversation(state.selectedProjectId, conversationId)
           .done(function(data) {

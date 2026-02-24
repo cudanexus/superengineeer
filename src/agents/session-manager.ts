@@ -136,17 +136,6 @@ export class SessionManager {
           requestedSessionId,
         });
 
-        // Delete the invalid conversation since it was explicitly requested
-        try {
-          await this.conversationRepository.deleteConversation(projectId, requestedSessionId);
-        } catch (error) {
-          this.logger.error('Failed to delete invalid conversation', {
-            projectId,
-            conversationId: requestedSessionId,
-            error: error instanceof Error ? error.message : 'Unknown error',
-          });
-        }
-
         // Treat invalid UUID as session recovery case
         return await this.recoverSession(projectId, requestedSessionId);
       }
@@ -156,10 +145,12 @@ export class SessionManager {
 
       if (conversation && conversation.projectId === projectId) {
         await this.projectRepository.setCurrentConversation(projectId, requestedSessionId);
+        const isLikelyFreshConversation = !conversation.messages || conversation.messages.length === 0;
         return {
           conversationId: requestedSessionId,
           sessionId: requestedSessionId,
-          isNewSession: false,
+          // Empty conversations should start a new Claude session with this ID, not resume.
+          isNewSession: isLikelyFreshConversation,
         };
       }
 
@@ -181,10 +172,13 @@ export class SessionManager {
       const isValid = await this.validateSession(projectId, project.currentConversationId);
 
       if (isValid) {
+        const conversation = await this.conversationRepository.findById(projectId, project.currentConversationId);
+        const isLikelyFreshConversation = !!conversation && (!conversation.messages || conversation.messages.length === 0);
         return {
           conversationId: project.currentConversationId,
           sessionId: project.currentConversationId,
-          isNewSession: false,
+          // If current conversation is empty, initialize a new Claude session for it.
+          isNewSession: isLikelyFreshConversation,
         };
       }
 
@@ -209,16 +203,12 @@ export class SessionManager {
       missingSessionId,
     });
 
-    // Try to delete the old conversation
-    try {
-      await this.conversationRepository.deleteConversation(projectId, missingSessionId);
-      this.logger.info('Deleted missing conversation', { conversationId: missingSessionId });
-    } catch (error) {
-      this.logger.debug('Could not delete conversation (may not exist)', {
-        conversationId: missingSessionId,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-    }
+    // Preserve old conversation history. A missing Claude session does not mean
+    // local conversation data should be deleted.
+    this.logger.info('Preserving old conversation history during session recovery', {
+      projectId,
+      missingSessionId,
+    });
 
     // Create new session
     const result = await this.createNewSession(projectId);

@@ -203,6 +203,10 @@ export class MessageBuilder {
   static buildDisallowedTools(userDisallowed?: string[]): string[] {
     const tools = new Set(userDisallowed || []);
     tools.add('AskUserQuestion');
+    // Hard-block reading project.txt files.
+    tools.add('Read(project.txt)');
+    tools.add('Read(./project.txt)');
+    tools.add('Read(**/project.txt)');
     return Array.from(tools);
   }
 
