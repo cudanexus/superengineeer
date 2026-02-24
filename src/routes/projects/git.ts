@@ -39,20 +39,13 @@ const ONE_OFF_TIMEOUT_MS = 120000;
 const MAX_DIFF_LENGTH = 15000;
 const logger = getLogger('git-routes');
 
-function buildCommitMessagePrompt(stagedFiles: string, diff: string): string {
-  const truncatedDiff = diff.length > MAX_DIFF_LENGTH
-    ? diff.substring(0, MAX_DIFF_LENGTH) + '\n... (truncated)'
-    : diff;
+function buildCommitMessagePrompt(userMessage: string): string {
+  const compactUserMessage = String(userMessage || '').trim();
 
-  return `Generate a concise git commit message for the following staged changes.
+  return `Generate a concise git commit message based ONLY on the user's request below.
 
-Staged files:
-${stagedFiles}
-
-Staged diff:
-\`\`\`
-${truncatedDiff}
-\`\`\`
+User request:
+${compactUserMessage || 'workspace update'}
 
 Rules:
 - Follow conventional commit format: type(scope): description
@@ -60,9 +53,10 @@ Rules:
 - Keep the first line under 72 characters
 - Be specific about what changed
 - Use present tense ("add" not "added")
-- If there are multiple significant changes, add a blank line followed by bullet points
+- Output a SINGLE line only
+- Do not include footers (e.g., Co-Authored-By, Signed-off-by)
 
-Output ONLY the commit message, nothing else. Do not wrap it in quotes or backticks. No explanation.`;
+Output ONLY the commit message, nothing else.`;
 }
 
 function buildPRDescriptionPrompt(diff: string, conversationSummary: string): string {
@@ -424,23 +418,9 @@ export function createGitRouter(deps: ProjectRouterDependencies): Router {
 
   // Generate commit message using one-off agent
   router.post('/generate-commit-message', validateProjectExists(projectRepository), asyncHandler(async (req: Request, res: Response) => {
-    const project = req.project!;
-    const projectPath = (project).path;
     const projectId = req.params['id'] as string;
-
-    const status = await gitService.getStatus(projectPath);
-
-    if (!status.staged || status.staged.length === 0) {
-      res.status(400).json({ error: 'No staged files to generate commit message for' });
-      return;
-    }
-
-    const stagedFiles = status.staged.map(
-      (f: { status: string; path: string }) => `${f.status}: ${f.path}`
-    ).join('\n');
-
-    const diff = await gitService.getDiff(projectPath, true);
-    const prompt = buildCommitMessagePrompt(stagedFiles, diff);
+    const userMessage = String((req.body as { message?: unknown } | undefined)?.message || '').trim();
+    const prompt = buildCommitMessagePrompt(userMessage);
 
     try {
       const rawOutput = await collectOneOffOutput(agentManager, {
@@ -569,21 +549,26 @@ function extractGitHubRepo(remoteUrl: string): string | null {
 }
 
 function extractCommitMessage(rawOutput: string): string {
-  // Remove common wrapping artifacts from Claude's output
-  let message = rawOutput.trim();
+  let message = String(rawOutput || '').trim();
+  if (!message) return 'chore: update workspace';
 
-  // Remove wrapping backticks if present
-  if (message.startsWith('```') && message.endsWith('```')) {
-    message = message.slice(3, -3).trim();
-  }
+  // Remove fenced blocks if present
+  message = message.replace(/^```[\w-]*\s*/m, '').replace(/```$/m, '').trim();
+  // Normalize lines and drop noisy trailer/footer lines
+  const lines = message
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .filter((line) => !/^co-authored-by:/i.test(line))
+    .filter((line) => !/^signed-off-by:/i.test(line))
+    .filter((line) => !/^\[pair:[^\]]+\]$/i.test(line));
 
-  // Remove wrapping quotes if present
-  if ((message.startsWith('"') && message.endsWith('"')) ||
-      (message.startsWith("'") && message.endsWith("'"))) {
-    message = message.slice(1, -1).trim();
-  }
+  const firstLine = (lines[0] || '').trim();
+  const unquoted = firstLine.replace(/^["'`]+|["'`]+$/g, '').trim();
+  const withoutPairSuffix = unquoted.replace(/\s*\[pair:[^\]]+\]\s*$/i, '').trim();
+  const compact = withoutPairSuffix.replace(/\s+/g, ' ');
 
-  return message;
+  return compact || 'chore: update workspace';
 }
 
 async function buildDiffForPR(
