@@ -15,6 +15,10 @@
   var state;
   var showToast;
   var scrollConversationToBottom;
+  var MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+  var MAX_IMAGE_PAYLOAD_BYTES = 900 * 1024;
+  var MAX_IMAGE_DIMENSION = 1568;
+  var TARGET_IMAGE_PAYLOAD_BYTES = 700 * 1024;
 
   /**
    * Initialize the module with dependencies
@@ -54,34 +58,117 @@
    * @param {File} file - Image file to process
    */
   function processFile(file) {
-    // Limit file size to 5MB
-    var maxSize = 5 * 1024 * 1024;
-
-    if (file.size > maxSize) {
+    // Limit original file size to 5MB before processing
+    if (file.size > MAX_FILE_SIZE_BYTES) {
       showToast('Image too large (max 5MB)', 'error');
       return;
     }
 
+    optimizeImage(file, function(result) {
+      if (!result || !result.dataUrl) {
+        showToast('Failed to process image', 'error');
+        return;
+      }
+
+      if (result.size > MAX_IMAGE_PAYLOAD_BYTES) {
+        showToast('Image is still too large after compression. Try a smaller screenshot.', 'error');
+        return;
+      }
+
+      var imageId = 'img-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+      state.pendingImages.push({
+        id: imageId,
+        dataUrl: result.dataUrl,
+        mimeType: result.mimeType,
+        size: result.size
+      });
+      renderPreviews();
+    }, function() {
+      showToast('Failed to read image', 'error');
+    });
+  }
+
+  function estimateDataUrlSize(dataUrl) {
+    var payload = (dataUrl || '').split(',')[1] || '';
+    return Math.floor((payload.length * 3) / 4);
+  }
+
+  function loadImageFromDataUrl(dataUrl, onSuccess, onError) {
+    var img = new Image();
+    img.onload = function() {
+      onSuccess(img);
+    };
+    img.onerror = onError;
+    img.src = dataUrl;
+  }
+
+  function drawToCanvas(img, width, height) {
+    var canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    var ctx = canvas.getContext('2d');
+    if (!ctx) {
+      return null;
+    }
+    ctx.drawImage(img, 0, 0, width, height);
+    return canvas;
+  }
+
+  function optimizeImage(file, onSuccess, onError) {
     var reader = new FileReader();
 
     reader.onload = function(e) {
-      var dataUrl = e.target.result;
-      var imageId = 'img-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+      var originalDataUrl = e.target.result;
+      loadImageFromDataUrl(originalDataUrl, function(img) {
+        var width = img.width || 1;
+        var height = img.height || 1;
+        var scale = Math.min(1, MAX_IMAGE_DIMENSION / Math.max(width, height));
+        var targetWidth = Math.max(1, Math.floor(width * scale));
+        var targetHeight = Math.max(1, Math.floor(height * scale));
+        var canvas = drawToCanvas(img, targetWidth, targetHeight);
 
-      state.pendingImages.push({
-        id: imageId,
-        dataUrl: dataUrl,
-        mimeType: file.type,
-        size: file.size
-      });
+        if (!canvas) {
+          onError();
+          return;
+        }
 
-      renderPreviews();
+        var workingType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+        var bestDataUrl = canvas.toDataURL(workingType, 0.9);
+        var bestSize = estimateDataUrlSize(bestDataUrl);
+
+        if (bestSize > TARGET_IMAGE_PAYLOAD_BYTES || workingType !== 'image/jpeg') {
+          // JPEG is much smaller for screenshots/photos and avoids prompt overflow.
+          var quality = 0.88;
+          bestDataUrl = canvas.toDataURL('image/jpeg', quality);
+          bestSize = estimateDataUrlSize(bestDataUrl);
+
+          while (bestSize > TARGET_IMAGE_PAYLOAD_BYTES && quality > 0.5) {
+            quality -= 0.08;
+            bestDataUrl = canvas.toDataURL('image/jpeg', quality);
+            bestSize = estimateDataUrlSize(bestDataUrl);
+          }
+        }
+
+        while (bestSize > TARGET_IMAGE_PAYLOAD_BYTES && targetWidth > 640 && targetHeight > 640) {
+          targetWidth = Math.max(640, Math.floor(targetWidth * 0.85));
+          targetHeight = Math.max(640, Math.floor(targetHeight * 0.85));
+          canvas = drawToCanvas(img, targetWidth, targetHeight);
+          if (!canvas) {
+            break;
+          }
+          bestDataUrl = canvas.toDataURL('image/jpeg', 0.72);
+          bestSize = estimateDataUrlSize(bestDataUrl);
+        }
+
+        onSuccess({
+          dataUrl: bestDataUrl,
+          mimeType: bestDataUrl.indexOf('data:image/jpeg') === 0 ? 'image/jpeg' : file.type,
+          size: bestSize
+        });
+      }, onError);
     };
 
-    reader.onerror = function() {
-      showToast('Failed to read image', 'error');
-    };
-
+    reader.onerror = onError;
     reader.readAsDataURL(file);
   }
 

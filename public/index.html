@@ -1193,12 +1193,18 @@
 
         <!-- Input Area for Interactive Mode -->
         <div id="interactive-input-area" class="bg-gray-800 border-t border-gray-700 p-2">
-          <!-- Hidden file input for image upload -->
-          <input type="file" id="image-upload-input" accept="image/*" class="hidden" multiple />
+          <!-- Hidden file input for generic file upload -->
+          <input type="file" id="file-upload-input" class="hidden" multiple />
           <!-- Image Preview Area (hidden by default) -->
           <div id="image-preview-container" class="hidden mb-2">
             <div class="flex flex-wrap gap-2" id="image-previews">
               <!-- Image previews will be added here -->
+            </div>
+          </div>
+          <!-- File Attachment Area (hidden by default) -->
+          <div id="file-attachment-container" class="hidden mb-2">
+            <div class="flex flex-wrap gap-2" id="file-attachments">
+              <!-- File attachment chips will be added here -->
             </div>
           </div>
           <form id="form-send-message" class="flex gap-2 items-stretch">
@@ -1225,7 +1231,7 @@
           <div id="input-hint" class="text-xs text-gray-500 mt-1 flex items-center">
             <span id="input-hint-text">Ctrl+Enter to send, Enter for new line</span>
             <span id="input-hint-image" class="text-gray-600 ml-2">• Paste images with Ctrl+V or <a href="#"
-                id="btn-attach-image" class="text-purple-400 hover:text-purple-300">attach</a></span>
+                id="btn-attach-file" class="text-purple-400 hover:text-purple-300">attach file</a></span>
             <span class="text-gray-600 ml-2">•</span>
             <button type="button" id="btn-open-commands"
               class="ml-1 text-purple-400 hover:text-purple-300 flex items-center gap-1" title="AI Commands">

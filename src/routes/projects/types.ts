@@ -90,6 +90,10 @@ export interface NextItemBody {
 export interface AgentMessageBody {
   message?: string;
   images?: ImageData[];
+  files?: Array<{
+    url: string;
+    fileName?: string;
+  }>;
   sessionId?: string;
   permissionMode?: 'acceptEdits' | 'plan';
   currentUrl?: string;

@@ -81,9 +81,15 @@ const imageSchema = z.object({
   data: z.string(),
 });
 
+const attachedFileSchema = z.object({
+  url: z.string().url('Invalid file URL'),
+  fileName: z.string().optional(),
+});
+
 export const agentMessageSchema = z.object({
   message: z.string().optional(),
   images: z.array(imageSchema).optional(),
+  files: z.array(attachedFileSchema).optional(),
   sessionId: z.string().optional(),
   permissionMode: z.enum(['acceptEdits', 'plan']).optional(),
   currentUrl: z.string().optional(),
@@ -92,8 +98,9 @@ export const agentMessageSchema = z.object({
 export const agentSendMessageSchema = z.object({
   message: z.string().min(1, 'Message is required').optional(),
   images: z.array(imageSchema).optional(),
-}).refine((data) => data.message || (data.images && data.images.length > 0), {
-  message: 'Either message or images must be provided',
+  files: z.array(attachedFileSchema).optional(),
+}).refine((data) => data.message || (data.images && data.images.length > 0) || (data.files && data.files.length > 0), {
+  message: 'Either message, images, or files must be provided',
 });
 
 // Conversation schemas

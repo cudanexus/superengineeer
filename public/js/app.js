@@ -36,6 +36,7 @@
 
   // Alias for backward compatibility within this file
   var api = ApiClient;
+  var FILE_UPLOAD_API_URL = '/api/attachments/upload';
 
   // Generate unique client ID for this session
   var clientId = sessionStorage.getItem('superengineer-client-id');
@@ -92,6 +93,7 @@
     projectSearchQuery: '', // Search filter for project list
     contextMenuTarget: null, // { path, isDir, name } for context menu actions
     pendingImages: [], // Array of { id, dataUrl, mimeType, size } for images to send with message
+    pendingFiles: [], // Array of { id, fileName, url } uploaded via attach-file
     currentSessionId: null, // Claude session ID for session resumption
     currentPlanFile: null, // Path to current plan file from ExitPlanMode
     allClientResources: {}, // Resources from all clients { clientId: { resources: [], stats: {} } }
@@ -2102,14 +2104,154 @@
       }
     }
 
-    // Update image hint with attach link
-    var attachLink = '<a href="#" id="btn-attach-image" class="text-purple-400 hover:text-purple-300">attach</a>';
+    // Update image/file hint with attach link
+    var attachLink = '<a href="#" id="btn-attach-file" class="text-purple-400 hover:text-purple-300">attach file</a>';
 
     if (isMobile) {
       $('#input-hint-image').html('• Long-press to paste or ' + attachLink);
     } else {
       $('#input-hint-image').html('• Paste images with Ctrl+V or ' + attachLink);
     }
+  }
+
+  function renderPendingFiles() {
+    var $container = $('#file-attachment-container');
+    var $chips = $('#file-attachments');
+
+    if (!state.pendingFiles || state.pendingFiles.length === 0) {
+      $container.addClass('hidden');
+      $chips.empty();
+      return;
+    }
+
+    $container.removeClass('hidden');
+    $chips.empty();
+
+    state.pendingFiles.forEach(function (file) {
+      var safeName = escapeHtml(file.fileName || 'file');
+      var html = ''
+        + '<div class="flex items-center gap-2 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs" data-file-id="' + file.id + '">'
+        + '  <svg class="w-3.5 h-3.5 text-purple-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">'
+        + '    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828L18 9.828a4 4 0 10-5.656-5.656L5.757 10.757a6 6 0 108.486 8.486L20.5 13" />'
+        + '  </svg>'
+        + '  <span class="max-w-[200px] truncate" title="' + safeName + '">' + safeName + '</span>'
+        + '  <button type="button" class="text-gray-400 hover:text-red-400 file-attachment-remove" data-file-id="' + file.id + '" title="Remove">'
+        + '    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">'
+        + '      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />'
+        + '    </svg>'
+        + '  </button>'
+        + '</div>';
+      $chips.append(html);
+    });
+  }
+
+  function clearPendingFiles() {
+    state.pendingFiles = [];
+    renderPendingFiles();
+  }
+
+  function uploadFileToSharedStorage(file) {
+    return new Promise(function (resolve, reject) {
+      function sanitizeClientFileName(name) {
+        var safe = String(name || '')
+          .replace(/[<>:"|?*\u0000-\u001F]/g, '_')
+          .trim();
+        return safe || 'attachment.bin';
+      }
+
+      var reader = new FileReader();
+
+      reader.onload = function (e) {
+        var dataUrl = String((e && e.target && e.target.result) || '');
+        var base64 = dataUrl.split(',')[1];
+
+        if (!base64) {
+          reject(new Error('Failed to read file data'));
+          return;
+        }
+
+        $.ajax({
+          url: FILE_UPLOAD_API_URL,
+          method: 'POST',
+          contentType: 'application/json',
+          dataType: 'json',
+          timeout: 120000,
+          data: JSON.stringify({
+            fileData: base64,
+            fileName: sanitizeClientFileName(file.name)
+          })
+        })
+          .done(function (response) {
+            if (response && response.url) {
+              resolve(response);
+            } else {
+              reject(new Error('Upload API did not return a file URL'));
+            }
+          })
+          .fail(function (xhr) {
+            var msg = 'Upload failed';
+            if (xhr && xhr.responseJSON && xhr.responseJSON.error) {
+              msg = xhr.responseJSON.error;
+            } else if (xhr && xhr.responseText) {
+              try {
+                var parsed = JSON.parse(xhr.responseText);
+                msg = parsed.error || parsed.message || xhr.responseText;
+              } catch (_) {
+                msg = xhr.responseText;
+              }
+            } else if (xhr && xhr.responseText) {
+              msg = xhr.responseText;
+            }
+            reject(new Error(msg));
+          });
+      };
+
+      reader.onerror = function () {
+        reject(new Error('Failed to read file'));
+      };
+
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function handleFileAttachments(files) {
+    if (!files || files.length === 0) {
+      return;
+    }
+
+    var selectedFiles = Array.prototype.slice.call(files);
+    var uploadedCount = 0;
+    var failedCount = 0;
+    var chain = Promise.resolve();
+
+    showToast('Uploading ' + selectedFiles.length + ' file(s)...', 'info');
+
+    selectedFiles.forEach(function (file) {
+      chain = chain.then(function () {
+        return uploadFileToSharedStorage(file)
+          .then(function (result) {
+            state.pendingFiles.push({
+              id: 'file-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
+              fileName: file.name,
+              url: result.url
+            });
+            renderPendingFiles();
+            uploadedCount += 1;
+          })
+          .catch(function (error) {
+            failedCount += 1;
+            showToast('Failed to upload ' + file.name + ': ' + (error && error.message ? error.message : 'Unknown error'), 'error');
+          });
+      });
+    });
+
+    chain.then(function () {
+      if (uploadedCount > 0 && failedCount === 0) {
+        showToast('Attached ' + uploadedCount + ' file(s)', 'success');
+      } else if (uploadedCount > 0) {
+        showToast('Attached ' + uploadedCount + ' file(s), failed ' + failedCount, 'warning');
+      }
+    });
   }
 
   function updateChromeToggleButton() {
@@ -2732,24 +2874,25 @@
       }
     });
 
-    // Image upload link handler (using event delegation since link is dynamically created)
-    $(document).on('click', '#btn-attach-image', function (e) {
+    // File upload link handler (using event delegation since link is dynamically created)
+    $(document).on('click', '#btn-attach-file, #btn-attach-image', function (e) {
       e.preventDefault();
-      $('#image-upload-input').click();
+      $('#file-upload-input').click();
     });
 
-    // Image file input change handler
-    $('#image-upload-input').on('change', function (e) {
-      var files = e.target.files;
-
-      for (var i = 0; i < files.length; i++) {
-        if (files[i].type.indexOf('image') !== -1) {
-          ImageAttachmentModule.processFile(files[i]);
-        }
-      }
-
-      // Reset input so same file can be selected again
+    // Generic file input change handler
+    $('#file-upload-input').on('change', function (e) {
+      handleFileAttachments(e.target.files);
       $(this).val('');
+    });
+
+    $(document).on('click', '.file-attachment-remove', function (e) {
+      e.preventDefault();
+      var fileId = String($(this).data('file-id') || '');
+      state.pendingFiles = state.pendingFiles.filter(function (f) {
+        return f.id !== fileId;
+      });
+      renderPendingFiles();
     });
 
     // Permission button click handler
@@ -3338,8 +3481,9 @@
     var $input = $('#input-message');
     var message = $input.val().trim();
     var hasImages = state.pendingImages.length > 0;
+    var hasFiles = state.pendingFiles.length > 0;
 
-    if (!message && !hasImages) return;
+    if (!message && !hasImages && !hasFiles) return;
 
     // All messages (including slash commands) are sent to Claude agent
     if (state.messageSending || state.agentStarting) return;
@@ -3497,6 +3641,7 @@
 
     var $input = $('#input-message');
     var images = state.pendingImages.slice(); // Copy the array
+    var files = state.pendingFiles.slice();
     var project = findProjectById(state.selectedProjectId);
 
     state.messageSending = true;
@@ -3533,10 +3678,11 @@
     ImageAttachmentModule.showWaitingIndicator();
     updateCancelButton();
 
-    api.sendAgentMessage(state.selectedProjectId, message, images)
+    api.sendAgentMessage(state.selectedProjectId, message, images, files)
       .done(function () {
         $input.val('').trigger('input');
         ImageAttachmentModule.clearAll();
+        clearPendingFiles();
       })
       .fail(function (xhr) {
         showErrorToast(xhr, 'Failed to send message');
@@ -3562,6 +3708,7 @@
     var $input = $('#input-message');
     var projectId = state.selectedProjectId;
     var images = state.pendingImages.slice(); // Copy the array
+    var files = state.pendingFiles.slice();
     var project = findProjectById(projectId);
 
     // Use conversation ID as session ID to resume Claude session
@@ -3583,7 +3730,7 @@
     $('#btn-send-message').prop('disabled', true);
     showContentLoading(sessionId ? 'Resuming session...' : 'Starting agent...');
 
-    api.startInteractiveAgent(projectId, message, images, sessionId, state.permissionMode)
+    api.startInteractiveAgent(projectId, message, images, files, sessionId, state.permissionMode)
       .done(function (response) {
         state.currentAgentMode = 'interactive';
         updateProjectStatusById(projectId, 'running');
@@ -3616,6 +3763,7 @@
         // Clear input and images, show waiting
         $input.val('').trigger('input');
         ImageAttachmentModule.clearAll();
+        clearPendingFiles();
         ImageAttachmentModule.showWaitingIndicator();
         updateInputArea();
         updateCancelButton();
@@ -3803,6 +3951,7 @@
       FileCache.clear(); // Clear read file cache when switching projects
       // Clear tasks when switching projects
       state.currentTodos = [];
+      clearPendingFiles();
       TaskDisplayModule.updateButtonBadge();
       // Hide any loading overlay from previous project's operations
       hideContentLoading();
@@ -4437,7 +4586,7 @@
     var startPromise;
 
     if (mode === 'interactive') {
-      startPromise = api.startInteractiveAgent(projectId, null, null, null, state.permissionMode);
+      startPromise = api.startInteractiveAgent(projectId, null, null, null, null, state.permissionMode);
     } else {
       startPromise = api.startAgent(projectId);
     }
@@ -4516,7 +4665,7 @@
 
     // Helper function to start agent with delay
     function startAgentWithDelay() {
-      api.startInteractiveAgent(projectId, '', [], sessionId, permissionMode)
+      api.startInteractiveAgent(projectId, '', [], [], sessionId, permissionMode)
         .done(function (response) {
           state.currentAgentMode = 'interactive';
           updateProjectStatusById(projectId, 'running');

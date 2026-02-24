@@ -146,7 +146,7 @@
         updateProjectStatusById(projectId, 'stopped');
 
         setTimeout(function() {
-          api.startInteractiveAgent(projectId, continueMessage, [], sessionId, targetMode)
+          api.startInteractiveAgent(projectId, continueMessage, [], [], sessionId, targetMode)
             .done(function(response) {
               state.currentAgentMode = 'interactive';
               updateProjectStatusById(projectId, 'running');

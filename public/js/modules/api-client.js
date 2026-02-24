@@ -379,6 +379,7 @@
    * @param {string} id - Project UUID
    * @param {string} [message=''] - Initial message to send
    * @param {Array<{dataUrl: string, mimeType: string}>} [images] - Images to include
+   * @param {Array<{url: string, fileName?: string}>} [files] - Uploaded file references
    * @param {string} [sessionId] - Session ID for resumption
    * @param {('acceptEdits'|'plan')} [permissionMode] - Permission mode
    * @returns {Promise<{sessionId: string}>} Session information
@@ -393,7 +394,7 @@
    *   'plan' // plan mode
    * );
    */
-  ApiClient.startInteractiveAgent = function (id, message, images, sessionId, permissionMode) {
+  ApiClient.startInteractiveAgent = function (id, message, images, files, sessionId, permissionMode) {
     var payload = { message: message || '' };
 
     if (images && images.length > 0) {
@@ -401,6 +402,15 @@
         return {
           type: img.mimeType,
           data: img.dataUrl.split(',')[1] // Remove data:image/xxx;base64, prefix
+        };
+      });
+    }
+
+    if (files && files.length > 0) {
+      payload.files = files.map(function (file) {
+        return {
+          url: file.url,
+          fileName: file.fileName
         };
       });
     }
@@ -430,6 +440,7 @@
    * @param {string} id - Project UUID
    * @param {string} message - Message text
    * @param {Array<{dataUrl: string, mimeType: string}>} [images] - Images to include
+   * @param {Array<{url: string, fileName?: string}>} [files] - Uploaded file references
    * @returns {Promise<void>} Resolves when message is sent
    * @throws {Error} If no agent is running
    * @example
@@ -441,7 +452,7 @@
    *   { dataUrl: 'data:image/png;base64,...', mimeType: 'image/png' }
    * ]);
    */
-  ApiClient.sendAgentMessage = function (id, message, images) {
+  ApiClient.sendAgentMessage = function (id, message, images, files) {
     var payload = { message: message };
 
     if (images && images.length > 0) {
@@ -449,6 +460,15 @@
         return {
           type: img.mimeType,
           data: img.dataUrl.split(',')[1] // Remove data:image/xxx;base64, prefix
+        };
+      });
+    }
+
+    if (files && files.length > 0) {
+      payload.files = files.map(function (file) {
+        return {
+          url: file.url,
+          fileName: file.fileName
         };
       });
     }

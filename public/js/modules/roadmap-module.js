@@ -344,7 +344,7 @@
         setTimeout(function() {
           ensureAcceptEditsMode();
 
-          api.startInteractiveAgent(projectId, prompt, [], sessionId, 'acceptEdits')
+          api.startInteractiveAgent(projectId, prompt, [], [], sessionId, 'acceptEdits')
             .done(function(response) {
               state.currentAgentMode = 'interactive';
               updateProjectStatusById(projectId, 'running');

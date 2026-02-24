@@ -64,13 +64,15 @@ declare module 'api-client' {
     id: string,
     message?: string,
     images?: Array<{ dataUrl: string; mimeType: string }>,
+    files?: Array<{ url: string; fileName?: string }>,
     sessionId?: string,
     permissionMode?: 'acceptEdits' | 'plan'
   ): JQuery.Promise<{ sessionId: string }>;
   export function sendAgentMessage(
     id: string,
     message: string,
-    images?: Array<{ dataUrl: string; mimeType: string }>
+    images?: Array<{ dataUrl: string; mimeType: string }>,
+    files?: Array<{ url: string; fileName?: string }>
   ): JQuery.Promise<void>;
 
   // Queue

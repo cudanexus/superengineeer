@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import * as https from 'https';
 import { createFilesystemRouter, createFilesystemService } from './filesystem';
 import { createProjectsRouter } from './projects';
 import { createSettingsRouter } from './settings';
@@ -52,6 +53,19 @@ let sharedGitHubCLIService: GitHubCLIService | null = null;
 let sharedRunConfigurationService: RunConfigurationService | null = null;
 let sharedRunProcessManager: RunProcessManager | null = null;
 let sharedInventifyService: InventifyService | null = null;
+const FILE_UPLOAD_LAMBDA_URL = 'https://n3uzo744vw6qsk6iv2kqclkqdq0ylgqp.lambda-url.ap-southeast-1.on.aws/';
+
+function sanitizeUploadFileName(input: string): string {
+  const trimmed = (input || '').trim();
+  const fallback = 'attachment.bin';
+  const candidate = trimmed.length > 0 ? trimmed : fallback;
+  const base = candidate.split(/[\\/]/).pop() || fallback;
+  const cleaned = base
+    .replace(/[<>:"|?*\u0000-\u001F]/g, '_')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return cleaned.length > 0 ? cleaned : fallback;
+}
 
 export interface ApiRouterDependencies {
   agentManager?: AgentManager;
@@ -137,6 +151,65 @@ export function createApiRouter(deps: ApiRouterDependencies = {}): Router {
     });
 
     res.json({ success: true });
+  });
+
+  // File upload proxy (avoids browser CORS issues for direct Lambda calls)
+  router.post('/attachments/upload', (req, res) => {
+    const body = req.body as { fileData?: string; fileName?: string };
+    const fileData = body.fileData;
+    const fileName = body.fileName;
+
+    if (!fileData || !fileName) {
+      res.status(400).json({ error: 'fileData and fileName are required' });
+      return;
+    }
+
+    const safeFileName = sanitizeUploadFileName(fileName);
+    const payload = JSON.stringify({ fileData, fileName: safeFileName });
+    const upstreamReq = https.request(FILE_UPLOAD_LAMBDA_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(payload),
+      },
+    }, (upstreamRes) => {
+      const chunks: Buffer[] = [];
+
+      upstreamRes.on('data', (chunk) => {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      });
+
+      upstreamRes.on('end', () => {
+        const raw = Buffer.concat(chunks).toString('utf-8');
+        let parsed: { message?: string; url?: string; error?: string } | null = null;
+
+        try {
+          parsed = raw ? JSON.parse(raw) : null;
+        } catch {
+          parsed = null;
+        }
+
+        const statusCode = upstreamRes.statusCode || 502;
+        if (statusCode >= 200 && statusCode < 300 && parsed && parsed.url) {
+          res.json({
+            message: parsed.message || 'File uploaded successfully',
+            url: parsed.url,
+          });
+          return;
+        }
+
+        res.status(502).json({
+          error: (parsed && parsed.error) || 'Failed to upload file',
+        });
+      });
+    });
+
+    upstreamReq.on('error', () => {
+      res.status(502).json({ error: 'Upload service unavailable' });
+    });
+
+    upstreamReq.write(payload);
+    upstreamReq.end();
   });
 
   // Dev mode status
