@@ -101,12 +101,28 @@ async function collectOneOffOutput(
 
   return new Promise<string>((resolve, reject) => {
     let fullContent = '';
+    let finished = false;
 
     const timeout = setTimeout(() => {
       cleanup();
       agentManager.stopOneOffAgent(oneOffId).catch(() => {});
       reject(new Error(`${label || 'Generation'} timed out`));
     }, ONE_OFF_TIMEOUT_MS);
+
+    const getFinalOutput = (): string => {
+      const streamingOutput = fullContent.trim();
+      if (streamingOutput.length > 0) {
+        return streamingOutput;
+      }
+      return String(agentManager.getOneOffCollectedOutput(oneOffId) || '').trim();
+    };
+
+    const finish = (output: string): void => {
+      if (finished) return;
+      finished = true;
+      cleanup();
+      resolve(output.trim());
+    };
 
     const cleanup = (): void => {
       clearTimeout(timeout);
@@ -127,9 +143,9 @@ async function collectOneOffOutput(
       if (msgOneOffId !== oneOffId) return;
 
       if (status === 'stopped') {
-        cleanup();
-        resolve(fullContent.trim());
+        finish(getFinalOutput());
       } else if (status === 'error') {
+        if (finished) return;
         cleanup();
         reject(new Error('Agent encountered an error'));
       }
@@ -140,8 +156,8 @@ async function collectOneOffOutput(
     ) => {
       if (msgOneOffId !== oneOffId || !isWaiting) return;
 
-      cleanup();
-      resolve(fullContent.trim());
+      // Allow trailing stream chunks to arrive before finalizing.
+      setTimeout(() => finish(getFinalOutput()), 150);
       agentManager.stopOneOffAgent(oneOffId).catch(() => {});
     };
 
@@ -426,7 +442,10 @@ export function createGitRouter(deps: ProjectRouterDependencies): Router {
       const rawOutput = await collectOneOffOutput(agentManager, {
         projectId, message: prompt, label: 'Commit message generation',
       });
-      const commitMessage = extractCommitMessage(rawOutput);
+      const extracted = extractCommitMessage(rawOutput);
+      const commitMessage = extracted === 'chore: update workspace' && userMessage
+        ? fallbackCommitMessageFromUserMessage(userMessage)
+        : extracted;
       res.json({ message: commitMessage });
     } catch (err) {
       logger.error('Failed to generate commit message', {
@@ -569,6 +588,39 @@ function extractCommitMessage(rawOutput: string): string {
   const compact = withoutPairSuffix.replace(/\s+/g, ' ');
 
   return compact || 'chore: update workspace';
+}
+
+function fallbackCommitMessageFromUserMessage(userMessage: string): string {
+  const cleaned = String(userMessage || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/[.?!]+$/g, '');
+
+  if (!cleaned) {
+    return 'chore: update workspace';
+  }
+
+  const lower = cleaned.toLowerCase();
+  const type = (
+    /(bug|fix|error|issue|broken|fails?)/.test(lower) ? 'fix' :
+    /(refactor|cleanup|clean up|restructure)/.test(lower) ? 'refactor' :
+    /(test|spec)/.test(lower) ? 'test' :
+    /(docs?|readme|documentation)/.test(lower) ? 'docs' :
+    /(style|css|ui|ux)/.test(lower) ? 'style' :
+    /(perf|performance|optimi[sz]e)/.test(lower) ? 'perf' :
+    'feat'
+  );
+
+  const description = cleaned
+    .replace(/^please\s+/i, '')
+    .replace(/^can you\s+/i, '')
+    .replace(/^could you\s+/i, '')
+    .replace(/^i need\s+/i, '')
+    .trim()
+    .slice(0, 60)
+    .replace(/\s+$/g, '');
+
+  return `${type}: ${description || 'update workspace'}`;
 }
 
 async function buildDiffForPR(
