@@ -1219,6 +1219,14 @@
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
+              <button type="button" id="btn-rewind-agent"
+                class="flex-1 bg-amber-600 hover:bg-amber-700 text-white px-4 rounded text-sm transition-colors flex items-center justify-center gap-1.5 hidden"
+                title="Rewind last Claude step">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M3 10h10a8 8 0 1 1-8 8M3 10l4-4M3 10l4 4" />
+                </svg>
+              </button>
               <button type="submit" id="btn-send-message"
                 class="flex-1 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-4 rounded text-sm transition-colors flex items-center justify-center gap-1.5"
                 title="Send">
@@ -3007,6 +3015,38 @@
               class="px-3 py-1.5 text-sm bg-purple-600 hover:bg-purple-700 text-white rounded transition-colors">OK</button>
           </div>
         </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rewind Commit Modal -->
+  <div id="modal-rewind-commit" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl">
+        <div class="p-3 border-b border-gray-700 flex items-center justify-between">
+          <h3 class="font-semibold text-white">Rewind To Commit</h3>
+          <button class="modal-close text-gray-400 hover:text-white">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div class="p-3 space-y-3">
+          <p class="text-sm text-gray-300">Select a commit and rewind workspace files to that exact snapshot.</p>
+          <div class="space-y-1">
+            <label for="rewind-commit-select" class="block text-sm font-medium text-gray-300">Commit</label>
+            <select id="rewind-commit-select"
+              class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-purple-500"></select>
+            <p id="rewind-commit-help" class="text-xs text-gray-400"></p>
+          </div>
+        </div>
+        <div class="p-3 border-t border-gray-700 flex justify-end gap-2">
+          <button type="button" id="btn-cancel-rewind-commit"
+            class="modal-close px-3 py-1.5 text-sm text-gray-300 hover:text-white transition-colors">Cancel</button>
+          <button type="button" id="btn-confirm-rewind-commit"
+            class="px-3 py-1.5 text-sm bg-amber-600 hover:bg-amber-700 text-white rounded transition-colors">Rewind</button>
+        </div>
       </div>
     </div>
   </div>

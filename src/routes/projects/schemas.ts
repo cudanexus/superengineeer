@@ -103,6 +103,11 @@ export const agentSendMessageSchema = z.object({
   message: 'Either message, images, or files must be provided',
 });
 
+export const agentRewindSchema = z.object({
+  steps: z.number().int().min(1).max(10).optional(),
+  commitHash: z.string().regex(/^[0-9a-fA-F]{7,40}$/, 'Invalid commit hash').optional(),
+});
+
 // Conversation schemas
 export const renameConversationSchema = z.object({
   label: z.string().min(1, 'Label is required').max(255),

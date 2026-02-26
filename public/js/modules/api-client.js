@@ -482,6 +482,35 @@
   };
 
   /**
+   * Request Claude rewind in interactive mode.
+   * @function rewindAgent
+   * @memberof module:ApiClient
+   * @param {string} id - Project UUID
+   * @param {number} [steps=1] - Number of steps to rewind
+   * @returns {Promise<{success: boolean, command: string, steps: number}>}
+   */
+  ApiClient.rewindAgent = function (id, payloadOrSteps) {
+    var payload = {};
+    if (typeof payloadOrSteps === 'object' && payloadOrSteps !== null) {
+      if (payloadOrSteps.steps) payload.steps = Number(payloadOrSteps.steps);
+      if (payloadOrSteps.commitHash) payload.commitHash = String(payloadOrSteps.commitHash);
+    } else {
+      payload.steps = Number(payloadOrSteps || 1);
+    }
+
+    if (!payload.steps && !payload.commitHash) {
+      payload.steps = 1;
+    }
+
+    return $.ajax({
+      url: baseUrl + '/api/projects/' + id + '/agent/rewind',
+      method: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify(payload)
+    });
+  };
+
+  /**
    * Stop a one-off agent
    * @function stopOneOffAgent
    * @memberof module:ApiClient

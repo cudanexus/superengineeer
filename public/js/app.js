@@ -74,6 +74,7 @@
     fontSize: 14, // Font size for Claude output (10-24px)
     agentStarting: false, // Prevents concurrent agent starts
     messageSending: false, // Prevents concurrent message sends
+    rewindSending: false, // Prevents concurrent rewind requests
     permissionMode: 'plan', // 'acceptEdits' or 'plan'
     pendingPermissionMode: null, // Mode to apply when agent finishes current operation
     currentAgentMode: null, // mode of currently running agent
@@ -2589,6 +2590,14 @@
       cancelAgentOperation();
     });
 
+    $('#btn-rewind-agent').on('click', function () {
+      openRewindCommitModal();
+    });
+
+    $('#btn-confirm-rewind-commit').on('click', function () {
+      confirmRewindCommitSelection();
+    });
+
 
     // Message form handler
     $('#form-send-message').on('submit', function (e) {
@@ -3485,6 +3494,17 @@
     var hasFiles = state.pendingFiles.length > 0;
 
     if (!message && !hasImages && !hasFiles) return;
+
+    // Route /rewind commands to backend rewind endpoint instead of normal chat send.
+    if (message && !hasImages && !hasFiles) {
+      var rewindMatch = message.match(/^\/rewind(?:\s+(\d+))?$/i);
+      if (rewindMatch) {
+        var rewindSteps = rewindMatch[1] ? parseInt(rewindMatch[1], 10) : 1;
+        $input.val('').trigger('input');
+        requestRewindOperation(Number.isFinite(rewindSteps) && rewindSteps > 0 ? rewindSteps : 1);
+        return;
+      }
+    }
 
     // All messages (including slash commands) are sent to Claude agent
     if (state.messageSending || state.agentStarting) return;
@@ -4818,6 +4838,175 @@
       });
   }
 
+  function formatRewindCommitOption(commit) {
+    var hash = String(commit.hash || '').trim();
+    var shortHash = hash ? hash.slice(0, 8) : 'unknown';
+    var message = String(commit.message || '').trim() || 'No message';
+    var author = String(commit.author || '').trim() || 'unknown';
+    var date = String(commit.date || '').trim();
+    var dateLabel = date ? new Date(date).toLocaleString() : '';
+    var title = shortHash + '  ' + message;
+    var meta = [author, dateLabel].filter(Boolean).join(' • ');
+    return {
+      value: hash,
+      label: title + (meta ? ' (' + meta + ')' : ''),
+      help: meta
+    };
+  }
+
+  function openRewindCommitModal() {
+    var projectId = state.selectedProjectId;
+    if (!projectId) return;
+
+    var project = findProjectById(projectId);
+    var isRunning = project && project.status === 'running';
+    var isWaiting = project && project.isWaitingForInput;
+    if (!isRunning || !isWaiting) {
+      showToast('Rewind is available only when waiting for input', 'warning');
+      return;
+    }
+
+    var $select = $('#rewind-commit-select');
+    var $help = $('#rewind-commit-help');
+    var $confirm = $('#btn-confirm-rewind-commit');
+
+    $select.html('<option value="">Loading commits...</option>');
+    $help.text('Loading commit history...');
+    $confirm.prop('disabled', true);
+    openModal('modal-rewind-commit');
+
+    api.getGitCommits(projectId, 50)
+      .done(function (data) {
+        var commits = (data && data.commits) || [];
+        if (!Array.isArray(commits) || commits.length === 0) {
+          $select.html('<option value="">No commits found</option>');
+          $help.text('No commits available to rewind.');
+          $confirm.prop('disabled', true);
+          return;
+        }
+
+        var optionsHtml = commits.map(function (commit) {
+          var option = formatRewindCommitOption(commit);
+          return '<option value="' + escapeHtml(option.value) + '">' + escapeHtml(option.label) + '</option>';
+        }).join('');
+        $select.html(optionsHtml);
+        $help.text('Select a commit and confirm. Workspace files will reset to that snapshot.');
+        $confirm.prop('disabled', false);
+      })
+      .fail(function (xhr) {
+        $select.html('<option value="">Failed to load commits</option>');
+        $help.text('Unable to load commit history.');
+        $confirm.prop('disabled', true);
+        showErrorToast(xhr, 'Failed to load commit history');
+      });
+  }
+
+  function confirmRewindCommitSelection() {
+    var selectedHash = String($('#rewind-commit-select').val() || '').trim();
+    if (!selectedHash) {
+      showToast('Select a commit first', 'warning');
+      return;
+    }
+    closeModal('modal-rewind-commit');
+    requestRewindOperation(1, selectedHash);
+  }
+
+  function trimRecentConversationTurnsLocally(projectId, turns) {
+    var count = Number(turns || 0);
+    if (!projectId || count <= 0) return;
+
+    var messages = state.conversations[projectId] || [];
+    if (!Array.isArray(messages) || messages.length === 0) return;
+
+    var cutoffIndex = messages.length;
+    var searchIndex = messages.length - 1;
+
+    for (var t = 0; t < count; t++) {
+      var userIndex = -1;
+      for (var i = searchIndex; i >= 0; i--) {
+        if (messages[i] && messages[i].type === 'user') {
+          userIndex = i;
+          break;
+        }
+      }
+      if (userIndex === -1) {
+        cutoffIndex = 0;
+        break;
+      }
+      cutoffIndex = userIndex;
+      searchIndex = userIndex - 1;
+      if (searchIndex < 0) break;
+    }
+
+    if (cutoffIndex < messages.length) {
+      state.conversations[projectId] = messages.slice(0, Math.max(0, cutoffIndex));
+      if (state.selectedProjectId === projectId) {
+        renderConversation(projectId);
+        ConversationHistoryModule.updateStats();
+      }
+    }
+  }
+
+  function requestRewindOperation(steps, commitHash) {
+    var projectId = state.selectedProjectId;
+
+    if (!projectId || state.rewindSending) return;
+
+    var project = findProjectById(projectId);
+    var isRunning = project && project.status === 'running';
+    var isWaiting = project && project.isWaitingForInput;
+
+    if (!isRunning || !isWaiting) {
+      showToast('Rewind is available only when waiting for input', 'warning');
+      return;
+    }
+
+    state.rewindSending = true;
+    $('#btn-rewind-agent').prop('disabled', true);
+
+    var payload = commitHash
+      ? { commitHash: commitHash }
+      : { steps: steps || 1 };
+    var previouslyActiveFilePath = state.activeFilePath;
+
+    api.rewindAgent(projectId, payload)
+      .done(function (response) {
+        // The rewind command is now being processed by Claude.
+        if (project) {
+          project.isWaitingForInput = false;
+          state.waitingVersion++;
+          renderProjectList();
+        }
+        updateWaitingIndicator(false);
+        updateCancelButton();
+        // Update chat UI immediately: trim local tail by rewound turns.
+        trimRecentConversationTurnsLocally(projectId, Number((response && response.rewoundCommits) || 0));
+
+        // Refresh from server only when backend confirms persisted trim.
+        if (response && response.conversationTrimmed) {
+          loadConversationHistory(projectId);
+        }
+
+        // Refresh visible UI state so files/git panels reflect rewound snapshot.
+        refreshCurrentTabContent();
+        GitModule.loadGitStatus();
+
+        if (previouslyActiveFilePath && typeof FileBrowser !== 'undefined' && FileBrowser && typeof FileBrowser.openFile === 'function') {
+          var fileName = previouslyActiveFilePath.split('/').pop() || previouslyActiveFilePath;
+          FileBrowser.openFile(previouslyActiveFilePath, fileName);
+        }
+
+        showToast('Rewind completed', 'success');
+      })
+      .fail(function (xhr) {
+        showErrorToast(xhr, 'Failed to rewind');
+      })
+      .always(function () {
+        state.rewindSending = false;
+        updateRewindButton();
+      });
+  }
+
   function updateCancelButton() {
     var project = findProjectById(state.selectedProjectId);
     var isRunning = project && project.status === 'running';
@@ -4829,6 +5018,23 @@
     } else {
       $('#btn-cancel-agent').addClass('hidden');
     }
+
+    updateRewindButton();
+  }
+
+  function updateRewindButton() {
+    var project = findProjectById(state.selectedProjectId);
+    var isRunning = project && project.status === 'running';
+    var isWaiting = project && project.isWaitingForInput;
+    var isVisible = !!(isRunning && isWaiting);
+
+    if (isVisible) {
+      $('#btn-rewind-agent').removeClass('hidden');
+    } else {
+      $('#btn-rewind-agent').addClass('hidden');
+    }
+
+    $('#btn-rewind-agent').prop('disabled', !!state.rewindSending || !isVisible);
   }
 
   // Agent status polling - reduced to 10 seconds as fallback (WebSocket is primary)
@@ -5805,6 +6011,8 @@
     } else {
       $waitingBadge.remove();
     }
+
+    updateRewindButton();
   }
 
   function handleResourceEvent(data) {
