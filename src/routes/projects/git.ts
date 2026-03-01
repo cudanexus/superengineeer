@@ -204,9 +204,22 @@ export function createGitRouter(deps: ProjectRouterDependencies): Router {
   // Get recent commits
   router.get('/commits', validateProjectExists(projectRepository), asyncHandler(async (req: Request, res: Response) => {
     const project = req.project!;
-    const limit = Math.max(1, Math.min(100, Number(req.query['limit'] || 30)));
-    const commits = await gitService.listCommits((project).path, limit);
-    res.json({ commits });
+    const perPage = Math.max(1, Math.min(100, Number(req.query['limit'] || 50)));
+    const page = Math.max(1, Number(req.query['page'] || 1));
+    const offset = (page - 1) * perPage;
+    const { commits, total } = await gitService.listCommits((project).path, perPage, offset);
+    const totalPages = Math.max(1, Math.ceil(total / perPage));
+    res.json({
+      commits,
+      pagination: {
+        page,
+        perPage,
+        total,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+      },
+    });
   }));
 
   // Stage specific files
@@ -443,7 +456,7 @@ export function createGitRouter(deps: ProjectRouterDependencies): Router {
         projectId, message: prompt, label: 'Commit message generation',
       });
       const extracted = extractCommitMessage(rawOutput);
-      const commitMessage = extracted === 'chore: update workspace' && userMessage
+      const commitMessage = extracted === 'chore: conversation update' && userMessage
         ? fallbackCommitMessageFromUserMessage(userMessage)
         : extracted;
       res.json({ message: commitMessage });
@@ -569,7 +582,7 @@ function extractGitHubRepo(remoteUrl: string): string | null {
 
 function extractCommitMessage(rawOutput: string): string {
   let message = String(rawOutput || '').trim();
-  if (!message) return 'chore: update workspace';
+  if (!message) return 'chore: conversation update';
 
   // Remove fenced blocks if present
   message = message.replace(/^```[\w-]*\s*/m, '').replace(/```$/m, '').trim();
@@ -587,7 +600,11 @@ function extractCommitMessage(rawOutput: string): string {
   const withoutPairSuffix = unquoted.replace(/\s*\[pair:[^\]]+\]\s*$/i, '').trim();
   const compact = withoutPairSuffix.replace(/\s+/g, ' ');
 
-  return compact || 'chore: update workspace';
+  if (!compact || looksLikeCommitMessageRefusal(compact)) {
+    return 'chore: conversation update';
+  }
+
+  return compact;
 }
 
 function fallbackCommitMessageFromUserMessage(userMessage: string): string {
@@ -597,7 +614,7 @@ function fallbackCommitMessageFromUserMessage(userMessage: string): string {
     .replace(/[.?!]+$/g, '');
 
   if (!cleaned) {
-    return 'chore: update workspace';
+    return 'chore: conversation update';
   }
 
   const lower = cleaned.toLowerCase();
@@ -620,7 +637,19 @@ function fallbackCommitMessageFromUserMessage(userMessage: string): string {
     .slice(0, 60)
     .replace(/\s+$/g, '');
 
-  return `${type}: ${description || 'update workspace'}`;
+  return `${type}: ${description || 'conversation update'}`;
+}
+
+function looksLikeCommitMessageRefusal(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("i cannot generate a commit message") ||
+    normalized.includes("i can't generate a commit message") ||
+    normalized.includes("not a clear code change") ||
+    normalized.includes("isn't a clear code change") ||
+    normalized.includes("not a code change") ||
+    normalized.includes("isn't a code change")
+  );
 }
 
 async function buildDiffForPR(

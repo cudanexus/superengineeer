@@ -63,7 +63,7 @@ export interface GitService {
     remote?: string
   ): Promise<{ sourceBranch: string; targetBranch: string; pushed: boolean }>;
   getDiff(projectPath: string, staged?: boolean): Promise<string>;
-  listCommits(projectPath: string, limit?: number): Promise<GitCommitEntry[]>;
+  listCommits(projectPath: string, limit?: number, offset?: number): Promise<{ commits: GitCommitEntry[]; total: number }>;
   getFileDiff(projectPath: string, filePath: string, staged?: boolean): Promise<FileDiffResult>;
   discardChanges(projectPath: string, paths: string[]): Promise<void>;
   isGitRepo(projectPath: string): Promise<boolean>;
@@ -702,15 +702,47 @@ export class SimpleGitService implements GitService {
     return await this.getGit(projectPath).diff(args);
   }
 
-  async listCommits(projectPath: string, limit = 30): Promise<GitCommitEntry[]> {
+  async listCommits(projectPath: string, limit = 200, offset = 0): Promise<{ commits: GitCommitEntry[]; total: number }> {
     try {
-      const result = await this.getGit(projectPath).log({ maxCount: limit });
-      return result.all.map((item) => ({
+      const git = this.getGit(projectPath);
+      // Best effort: refresh refs so rewind picker can show complete history.
+      try {
+        await git.raw(['fetch', '--all', '--tags', '--prune', '--unshallow']);
+      } catch {
+        try {
+          await git.fetch(['--all', '--tags', '--prune']);
+        } catch {
+          // Ignore fetch failures (e.g. offline/auth) and use local refs.
+        }
+      }
+      try {
+        await git.fetch(['--all', '--tags', '--prune']);
+      } catch {
+        // Ignore fetch failures (e.g. offline/auth) and use local refs.
+      }
+      let total = 0;
+      try {
+        const countRaw = await git.raw(['rev-list', '--count', '--all']);
+        total = Number(String(countRaw || '').trim()) || 0;
+      } catch {
+        total = 0;
+      }
+
+      const result = await git.log({
+        maxCount: limit,
+        '--skip': Math.max(0, offset),
+        '--all': null,
+      });
+      const commits = result.all.map((item) => ({
         hash: item.hash,
         message: item.message,
         author: item.author_name,
         date: item.date,
       }));
+      if (!total) {
+        total = commits.length;
+      }
+      return { commits, total };
     } catch (error) {
       throw new GitError(`Failed to list commits: ${this.toGitErrorMessage(error)}`);
     }

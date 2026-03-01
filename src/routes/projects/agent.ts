@@ -515,6 +515,28 @@ export function createAgentRouter(deps: ProjectRouterDependencies): Router {
     await execFileAsync('git', ['reset', '--hard', resetTarget], gitExecOptions);
     await execFileAsync('git', ['clean', '-fd'], gitExecOptions);
 
+    // Force-push to remote so it matches the rewound local state.
+    // Without this the remote still has the rewound commits, causing Claude's
+    // subsequent pushes to be rejected with "pull required / conflicts".
+    // --force-with-lease fails safely if the remote state isn't what we expect.
+    let remoteForceUpdated = false;
+    try {
+      const currentBranch = (
+        await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], gitExecOptions)
+      ).stdout.trim();
+      if (currentBranch && currentBranch !== 'HEAD') {
+        await execFileAsync(
+          'git',
+          ['push', '--force-with-lease', 'origin', currentBranch],
+          gitExecOptions
+        );
+        remoteForceUpdated = true;
+      }
+    } catch {
+      // No remote, or push not configured — safe to ignore.
+      // Claude will still be able to make local commits fine.
+    }
+
     // Trim only the most recent rewound user/assistant turns from persisted conversation
     // instead of clearing whole history.
     const conversationId = project.currentConversationId;
@@ -610,6 +632,7 @@ export function createAgentRouter(deps: ProjectRouterDependencies): Router {
       conversationTrimmed,
       sessionFileTruncated,
       sessionFileRemovedLines,
+      remoteForceUpdated,
     });
   }));
 

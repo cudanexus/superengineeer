@@ -202,29 +202,12 @@
   function updateConversationStats() {
     var $stats = $('#conversation-stats');
     var stats = state.currentConversationStats;
-    var metadata = state.currentConversationMetadata;
-
     if (!stats || stats.messageCount === 0) {
       $stats.html('<span class="text-gray-600">New session</span>');
       return;
     }
-
-    var parts = [];
-
-    // Duration
-    if (stats.durationMs && stats.durationMs > 0) {
-      parts.push('<span title="Duration">' + formatDuration(stats.durationMs) + '</span>');
-    }
-
-    // Message count
-    parts.push('<span title="Messages">' + stats.messageCount + ' msgs</span>');
-
-    // Tool calls
-    if (stats.toolCallCount > 0) {
-      parts.push('<span title="Tool calls">' + stats.toolCallCount + ' tools</span>');
-    }
-
-    $stats.html(parts.join('<span class="text-gray-600 mx-1">|</span>'));
+    // Keep header clean: hide duration/message/tool counters.
+    $stats.empty();
   }
 
   function setupHandlers() {

@@ -170,7 +170,14 @@
     settings: null, // Global settings object
     selectedGitHubRepo: null, // Selected repo full name for GitHub clone
     submittedQuestionToolIds: {}, // Track toolIds already submitted to prevent duplicates
-    pendingChatCommitByProject: {} // { [projectId]: { message, sawAssistantResponse, recoveryRetried } }
+    pendingChatCommitByProject: {}, // { [projectId]: { message, sawAssistantResponse, recoveryRetried } }
+    rewindCommitPicker: {
+      page: 1,
+      perPage: 50,
+      totalPages: 1,
+      total: 0,
+      loading: false
+    }
   };
 
   // Local storage keys - use module's KEYS
@@ -2597,6 +2604,12 @@
     $('#btn-confirm-rewind-commit').on('click', function () {
       confirmRewindCommitSelection();
     });
+    $('#btn-rewind-commit-prev').on('click', function () {
+      loadRewindCommitPage(state.rewindCommitPicker.page - 1);
+    });
+    $('#btn-rewind-commit-next').on('click', function () {
+      loadRewindCommitPage(state.rewindCommitPicker.page + 1);
+    });
 
 
     // Message form handler
@@ -4869,19 +4882,59 @@
     var $select = $('#rewind-commit-select');
     var $help = $('#rewind-commit-help');
     var $confirm = $('#btn-confirm-rewind-commit');
+    var $pageInfo = $('#rewind-commit-page-info');
 
     $select.html('<option value="">Loading commits...</option>');
     $help.text('Loading commit history...');
+    $pageInfo.text('');
     $confirm.prop('disabled', true);
+    $('#btn-rewind-commit-prev').prop('disabled', true);
+    $('#btn-rewind-commit-next').prop('disabled', true);
+    state.rewindCommitPicker.page = 1;
+    state.rewindCommitPicker.totalPages = 1;
+    state.rewindCommitPicker.total = 0;
+    state.rewindCommitPicker.loading = false;
     openModal('modal-rewind-commit');
+    loadRewindCommitPage(1);
+  }
 
-    api.getGitCommits(projectId, 50)
+  function loadRewindCommitPage(page) {
+    var projectId = state.selectedProjectId;
+    if (!projectId) return;
+    if (state.rewindCommitPicker.loading) return;
+
+    var targetPage = Number(page || 1);
+    if (!Number.isFinite(targetPage) || targetPage < 1) return;
+    if (targetPage > state.rewindCommitPicker.totalPages && state.rewindCommitPicker.totalPages > 0) return;
+
+    var $select = $('#rewind-commit-select');
+    var $help = $('#rewind-commit-help');
+    var $confirm = $('#btn-confirm-rewind-commit');
+    var $pageInfo = $('#rewind-commit-page-info');
+
+    state.rewindCommitPicker.loading = true;
+    $select.prop('disabled', true).html('<option value="">Loading commits...</option>');
+    $help.text('Loading commit history...');
+    $confirm.prop('disabled', true);
+    $pageInfo.text('Loading page ' + targetPage + '...');
+    $('#btn-rewind-commit-prev').prop('disabled', true);
+    $('#btn-rewind-commit-next').prop('disabled', true);
+
+    api.getGitCommits(projectId, state.rewindCommitPicker.perPage, targetPage)
       .done(function (data) {
         var commits = (data && data.commits) || [];
+        var pagination = (data && data.pagination) || {};
+        state.rewindCommitPicker.page = Number(pagination.page || targetPage);
+        state.rewindCommitPicker.totalPages = Math.max(1, Number(pagination.totalPages || 1));
+        state.rewindCommitPicker.total = Math.max(0, Number(pagination.total || commits.length || 0));
+
         if (!Array.isArray(commits) || commits.length === 0) {
           $select.html('<option value="">No commits found</option>');
           $help.text('No commits available to rewind.');
+          $pageInfo.text('No commits');
           $confirm.prop('disabled', true);
+          $('#btn-rewind-commit-prev').prop('disabled', true);
+          $('#btn-rewind-commit-next').prop('disabled', true);
           return;
         }
 
@@ -4889,15 +4942,28 @@
           var option = formatRewindCommitOption(commit);
           return '<option value="' + escapeHtml(option.value) + '">' + escapeHtml(option.label) + '</option>';
         }).join('');
-        $select.html(optionsHtml);
+        $select.prop('disabled', false).html(optionsHtml);
         $help.text('Select a commit and confirm. Workspace files will reset to that snapshot.');
         $confirm.prop('disabled', false);
+        $pageInfo.text(
+          'Page ' + state.rewindCommitPicker.page +
+          ' / ' + state.rewindCommitPicker.totalPages +
+          ' • ' + state.rewindCommitPicker.total + ' commits'
+        );
+        $('#btn-rewind-commit-prev').prop('disabled', state.rewindCommitPicker.page <= 1);
+        $('#btn-rewind-commit-next').prop('disabled', state.rewindCommitPicker.page >= state.rewindCommitPicker.totalPages);
       })
       .fail(function (xhr) {
-        $select.html('<option value="">Failed to load commits</option>');
+        $select.prop('disabled', true).html('<option value="">Failed to load commits</option>');
         $help.text('Unable to load commit history.');
+        $pageInfo.text('');
         $confirm.prop('disabled', true);
+        $('#btn-rewind-commit-prev').prop('disabled', true);
+        $('#btn-rewind-commit-next').prop('disabled', true);
         showErrorToast(xhr, 'Failed to load commit history');
+      })
+      .always(function () {
+        state.rewindCommitPicker.loading = false;
       });
   }
 
@@ -5026,7 +5092,8 @@
     var project = findProjectById(state.selectedProjectId);
     var isRunning = project && project.status === 'running';
     var isWaiting = project && project.isWaitingForInput;
-    var isVisible = !!(isRunning && isWaiting);
+    var hasProject = !!state.selectedProjectId;
+    var isVisible = !!hasProject;
 
     if (isVisible) {
       $('#btn-rewind-agent').removeClass('hidden');
@@ -5034,7 +5101,8 @@
       $('#btn-rewind-agent').addClass('hidden');
     }
 
-    $('#btn-rewind-agent').prop('disabled', !!state.rewindSending || !isVisible);
+    // Keep button visible always; only enable execution when runtime conditions are valid.
+    $('#btn-rewind-agent').prop('disabled', !!state.rewindSending || !isRunning || !isWaiting);
   }
 
   // Agent status polling - reduced to 10 seconds as fallback (WebSocket is primary)

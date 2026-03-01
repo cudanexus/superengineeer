@@ -228,7 +228,10 @@ interface SessionUsageAggregate {
 interface ModelPricing {
   inputPerMTok: number;
   outputPerMTok: number;
+  /** 5-minute TTL prompt cache write rate per MTok */
   cacheWritePerMTok: number;
+  /** 1-hour TTL prompt cache write rate per MTok */
+  cacheWrite1hPerMTok: number;
   cacheReadPerMTok: number;
 }
 
@@ -248,22 +251,39 @@ const ZERO_COST: CostTotals = {
   totalUsd: 0,
 };
 
+// Pricing sourced from Anthropic official pricing page.
+// cacheWritePerMTok = 5-minute TTL; cacheWrite1hPerMTok = 1-hour TTL.
+// The Claude CLI reports cache_creation_input_tokens without distinguishing
+// TTL, so we use the 5-minute rate as the default for cost calculation.
 const MODEL_PRICING: Record<string, ModelPricing> = {
-  'claude-opus-4-6': { inputPerMTok: 5, outputPerMTok: 25, cacheWritePerMTok: 6.25, cacheReadPerMTok: 0.5 },
-  'claude-opus-4-5': { inputPerMTok: 5, outputPerMTok: 25, cacheWritePerMTok: 6.25, cacheReadPerMTok: 0.5 },
-  'claude-opus-4-5-20250929': { inputPerMTok: 5, outputPerMTok: 25, cacheWritePerMTok: 6.25, cacheReadPerMTok: 0.5 },
-  'claude-opus-4-1': { inputPerMTok: 15, outputPerMTok: 75, cacheWritePerMTok: 18.75, cacheReadPerMTok: 1.5 },
-  'claude-opus-4': { inputPerMTok: 15, outputPerMTok: 75, cacheWritePerMTok: 18.75, cacheReadPerMTok: 1.5 },
-  'claude-opus-3': { inputPerMTok: 15, outputPerMTok: 75, cacheWritePerMTok: 18.75, cacheReadPerMTok: 1.5 },
-  'claude-sonnet-4-6': { inputPerMTok: 3, outputPerMTok: 15, cacheWritePerMTok: 3.75, cacheReadPerMTok: 0.3 },
-  'claude-sonnet-4-5': { inputPerMTok: 3, outputPerMTok: 15, cacheWritePerMTok: 3.75, cacheReadPerMTok: 0.3 },
-  'claude-sonnet-4-5-20250929': { inputPerMTok: 3, outputPerMTok: 15, cacheWritePerMTok: 3.75, cacheReadPerMTok: 0.3 },
-  'claude-sonnet-4': { inputPerMTok: 3, outputPerMTok: 15, cacheWritePerMTok: 3.75, cacheReadPerMTok: 0.3 },
-  'claude-sonnet-3.7': { inputPerMTok: 3, outputPerMTok: 15, cacheWritePerMTok: 3.75, cacheReadPerMTok: 0.3 },
-  'claude-haiku-4-5': { inputPerMTok: 1, outputPerMTok: 5, cacheWritePerMTok: 1.25, cacheReadPerMTok: 0.1 },
-  'claude-haiku-4-5-20251001': { inputPerMTok: 1, outputPerMTok: 5, cacheWritePerMTok: 1.25, cacheReadPerMTok: 0.1 },
-  'claude-haiku-3-5': { inputPerMTok: 0.8, outputPerMTok: 4, cacheWritePerMTok: 1, cacheReadPerMTok: 0.08 },
-  'claude-haiku-3': { inputPerMTok: 0.25, outputPerMTok: 1.25, cacheWritePerMTok: 0.3, cacheReadPerMTok: 0.03 },
+  // ── Opus 4 family ─────────────────────────────────────────────────────────
+  'claude-opus-4-6': { inputPerMTok: 5, outputPerMTok: 25, cacheWritePerMTok: 6.25, cacheWrite1hPerMTok: 10, cacheReadPerMTok: 0.5 },
+  'claude-opus-4-5': { inputPerMTok: 5, outputPerMTok: 25, cacheWritePerMTok: 6.25, cacheWrite1hPerMTok: 10, cacheReadPerMTok: 0.5 },
+  'claude-opus-4-5-20250929': { inputPerMTok: 5, outputPerMTok: 25, cacheWritePerMTok: 6.25, cacheWrite1hPerMTok: 10, cacheReadPerMTok: 0.5 },
+  'claude-opus-4-1': { inputPerMTok: 15, outputPerMTok: 75, cacheWritePerMTok: 18.75, cacheWrite1hPerMTok: 30, cacheReadPerMTok: 1.5 },
+  'claude-opus-4': { inputPerMTok: 15, outputPerMTok: 75, cacheWritePerMTok: 18.75, cacheWrite1hPerMTok: 30, cacheReadPerMTok: 1.5 },
+  // ── Opus 3 (deprecated) ───────────────────────────────────────────────────
+  'claude-opus-3': { inputPerMTok: 15, outputPerMTok: 75, cacheWritePerMTok: 18.75, cacheWrite1hPerMTok: 30, cacheReadPerMTok: 1.5 },
+  'claude-3-opus-20240229': { inputPerMTok: 15, outputPerMTok: 75, cacheWritePerMTok: 18.75, cacheWrite1hPerMTok: 30, cacheReadPerMTok: 1.5 },
+  // ── Sonnet 4 family ───────────────────────────────────────────────────────
+  'claude-sonnet-4-6': { inputPerMTok: 3, outputPerMTok: 15, cacheWritePerMTok: 3.75, cacheWrite1hPerMTok: 6, cacheReadPerMTok: 0.3 },
+  'claude-sonnet-4-5': { inputPerMTok: 3, outputPerMTok: 15, cacheWritePerMTok: 3.75, cacheWrite1hPerMTok: 6, cacheReadPerMTok: 0.3 },
+  'claude-sonnet-4-5-20250929': { inputPerMTok: 3, outputPerMTok: 15, cacheWritePerMTok: 3.75, cacheWrite1hPerMTok: 6, cacheReadPerMTok: 0.3 },
+  'claude-sonnet-4': { inputPerMTok: 3, outputPerMTok: 15, cacheWritePerMTok: 3.75, cacheWrite1hPerMTok: 6, cacheReadPerMTok: 0.3 },
+  // ── Sonnet 3.x (deprecated) ───────────────────────────────────────────────
+  'claude-sonnet-3.7': { inputPerMTok: 3, outputPerMTok: 15, cacheWritePerMTok: 3.75, cacheWrite1hPerMTok: 6, cacheReadPerMTok: 0.3 },
+  'claude-3-7-sonnet-20250219': { inputPerMTok: 3, outputPerMTok: 15, cacheWritePerMTok: 3.75, cacheWrite1hPerMTok: 6, cacheReadPerMTok: 0.3 },
+  'claude-3-5-sonnet-20241022': { inputPerMTok: 3, outputPerMTok: 15, cacheWritePerMTok: 3.75, cacheWrite1hPerMTok: 6, cacheReadPerMTok: 0.3 },
+  'claude-3-5-sonnet-20240620': { inputPerMTok: 3, outputPerMTok: 15, cacheWritePerMTok: 3.75, cacheWrite1hPerMTok: 6, cacheReadPerMTok: 0.3 },
+  // ── Haiku 4.5 ─────────────────────────────────────────────────────────────
+  'claude-haiku-4-5': { inputPerMTok: 1, outputPerMTok: 5, cacheWritePerMTok: 1.25, cacheWrite1hPerMTok: 2, cacheReadPerMTok: 0.1 },
+  'claude-haiku-4-5-20251001': { inputPerMTok: 1, outputPerMTok: 5, cacheWritePerMTok: 1.25, cacheWrite1hPerMTok: 2, cacheReadPerMTok: 0.1 },
+  // ── Haiku 3.5 ─────────────────────────────────────────────────────────────
+  'claude-haiku-3-5': { inputPerMTok: 0.8, outputPerMTok: 4, cacheWritePerMTok: 1, cacheWrite1hPerMTok: 1.6, cacheReadPerMTok: 0.08 },
+  'claude-3-5-haiku-20241022': { inputPerMTok: 0.8, outputPerMTok: 4, cacheWritePerMTok: 1, cacheWrite1hPerMTok: 1.6, cacheReadPerMTok: 0.08 },
+  // ── Haiku 3 ───────────────────────────────────────────────────────────────
+  'claude-haiku-3': { inputPerMTok: 0.25, outputPerMTok: 1.25, cacheWritePerMTok: 0.3, cacheWrite1hPerMTok: 0.5, cacheReadPerMTok: 0.03 },
+  'claude-3-haiku-20240307': { inputPerMTok: 0.25, outputPerMTok: 1.25, cacheWritePerMTok: 0.3, cacheWrite1hPerMTok: 0.5, cacheReadPerMTok: 0.03 },
 };
 
 /**
@@ -1145,6 +1165,15 @@ export class DefaultAgentManager implements AgentManager {
       this.emit('oneOffWaiting', oneOffId, waitingStatus.isWaiting, waitingStatus.version);
     });
 
+    // Track usage so one-off costs (commit message gen, PR description, etc.)
+    // appear in the project's cost summary — not just in the Claude console.
+    agent.on('usageUpdate', (usage: TurnUsageEvent) => {
+      const meta = this.oneOffMeta.get(oneOffId);
+      if (meta) {
+        this.recordUsage(meta.projectId, usage);
+      }
+    });
+
     agent.on('exit', () => {
       this.oneOffAgents.delete(oneOffId);
       this.oneOffMeta.delete(oneOffId);
@@ -1598,19 +1627,52 @@ export class DefaultAgentManager implements AgentManager {
   private async handleSessionNotFound(agent: ClaudeAgent, missingSessionId: string): Promise<void> {
     const projectId = agent.projectId;
 
-    this.logger.warn('Session not found by Claude, recovering', {
+    this.logger.warn('Session not found by Claude, auto-recovering with fresh session', {
       projectId,
       missingSessionId,
     });
 
-    // Use session manager to handle recovery
+    // Use session manager to create a new local conversation
     const recovery = await this.sessionManager.handleSessionNotFound(projectId, missingSessionId);
 
-    // Agent will exit, and user will need to restart with new session
-    this.logger.info('Session recovery complete, agent will need restart', {
+    this.logger.info('Session recovery: new conversation created, restarting agent', {
       projectId,
       newConversationId: recovery.conversationId,
     });
+
+    // Stop the crashed agent and wait for it to fully exit
+    try {
+      await this.stopAgent(projectId);
+    } catch {
+      // Agent may already be exiting — clean up defensively
+      this.agents.delete(projectId);
+      this.processTracker.untrackProcess(projectId);
+      this.waitingVersions.delete(projectId);
+    }
+
+    await this.delay(500);
+
+    // Restart as a completely fresh session (no --resume) so Claude
+    // doesn't try to look up the missing JSONL file again.
+    try {
+      await this.startInteractiveAgent(projectId, {
+        sessionId: recovery.conversationId,
+        isNewSession: true,
+      });
+
+      const systemMessage: AgentMessage = {
+        type: 'system',
+        content: '[Session recovered — Claude restarted with a fresh context. Previous conversation history is still visible in the UI.]',
+        timestamp: new Date().toISOString(),
+      };
+      this.emit('message', projectId, systemMessage);
+    } catch (restartError) {
+      this.logger.error('Failed to restart agent after session recovery', {
+        projectId,
+        newConversationId: recovery.conversationId,
+        error: restartError instanceof Error ? restartError.message : String(restartError),
+      });
+    }
   }
 
   private async handleAgentCompletionResponse(

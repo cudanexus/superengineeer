@@ -169,6 +169,7 @@ export class DefaultClaudeAgent implements ClaudeAgent {
   private readonly _mcpServers: McpServerConfig[];
   private readonly _chromeEnabled: boolean;
   private _sessionError: string | null = null;
+  private _isWaitingForInput = false;
   private _ralphLoopPhase: 'worker' | 'reviewer' | undefined;
   private _mcpConfigPath: string | null = null;
   private answeredToolIds = new Set<string>();
@@ -236,8 +237,7 @@ export class DefaultClaudeAgent implements ClaudeAgent {
   }
 
   get isWaitingForInput(): boolean {
-    const waitingStatus = this.getWaitingStatus();
-    return waitingStatus.isWaiting;
+    return this._isWaitingForInput;
   }
 
   get waitingVersion(): number {
@@ -432,6 +432,7 @@ export class DefaultClaudeAgent implements ClaudeAgent {
 
     if (success) {
       this._waitingVersion++;
+      this._isWaitingForInput = false;
       this.emitter.emit('waitingForInput', {
         isWaiting: false,
         version: this._waitingVersion,
@@ -494,6 +495,7 @@ export class DefaultClaudeAgent implements ClaudeAgent {
 
     this.streamHandler.on('waitingForInput', (status: WaitingStatus) => {
       this._waitingVersion = status.version;
+      this._isWaitingForInput = status.isWaiting;
       this.emitter.emit('waitingForInput', status);
     });
 
@@ -685,6 +687,7 @@ export class DefaultClaudeAgent implements ClaudeAgent {
 
       // Update waiting status
       this._waitingVersion++;
+      this._isWaitingForInput = false;
       this.emitter.emit('waitingForInput', {
         isWaiting: false,
         version: this._waitingVersion,
@@ -740,17 +743,12 @@ export class DefaultClaudeAgent implements ClaudeAgent {
     return env;
   }
 
-  private getWaitingStatus(): WaitingStatus {
-    const recentActivity = (Date.now() - this.lastActivityTimestamp) < 3000;
-    return {
-      isWaiting: this.mode === 'interactive' && this._status === 'running' && !recentActivity,
-      version: this._waitingVersion,
-    };
-  }
-
   private setStatus(status: AgentStatus): void {
     if (this._status !== status) {
       this._status = status;
+      if (status !== 'running') {
+        this._isWaitingForInput = false;
+      }
       this.emitter.emit('status', status);
     }
   }

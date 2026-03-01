@@ -1192,11 +1192,15 @@
   /**
    * Get recent commits
    * @param {string} projectId - Project UUID
-   * @param {number} limit - Number of commits
-   * @returns {Promise<{commits: Array<{hash: string, message: string, author: string, date: string}>}>}
+   * @param {number} limit - Number of commits per page
+   * @param {number} page - 1-based page number
+   * @returns {Promise<{commits: Array<{hash: string, message: string, author: string, date: string}>, pagination?: {page: number, perPage: number, total: number, totalPages: number, hasNextPage: boolean, hasPrevPage: boolean}}>}
    */
-  ApiClient.getGitCommits = function (projectId, limit) {
-    return $.get(baseUrl + '/api/projects/' + projectId + '/git/commits', { limit: limit || 30 });
+  ApiClient.getGitCommits = function (projectId, limit, page) {
+    return $.get(baseUrl + '/api/projects/' + projectId + '/git/commits', {
+      limit: limit || 50,
+      page: page || 1
+    });
   };
 
   /**
