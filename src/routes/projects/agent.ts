@@ -457,17 +457,16 @@ export function createAgentRouter(deps: ProjectRouterDependencies): Router {
     const commitHash = String(rewindBody.commitHash || '').trim();
     const project = req.project!;
 
-    if (!agentManager.isRunning(id)) {
-      throw new ValidationError('Agent is not running');
-    }
+    const agentRunning = agentManager.isRunning(id);
+    if (agentRunning) {
+      const mode = agentManager.getAgentMode(id);
+      if (mode !== 'interactive') {
+        throw new ValidationError('Rewind is only available in interactive mode');
+      }
 
-    const mode = agentManager.getAgentMode(id);
-    if (mode !== 'interactive') {
-      throw new ValidationError('Rewind is only available in interactive mode');
-    }
-
-    if (!agentManager.isWaitingForInput(id)) {
-      throw new ValidationError('Rewind is only available when agent is waiting for input');
+      if (!agentManager.isWaitingForInput(id)) {
+        throw new ValidationError('Rewind is only available when agent is waiting for input');
+      }
     }
 
     const gitExecOptions = {
@@ -603,7 +602,7 @@ export function createAgentRouter(deps: ProjectRouterDependencies): Router {
     // so when the agent resumes it will NOT remember the rewound interactions.
     let sessionFileTruncated = false;
     let sessionFileRemovedLines = 0;
-    if (rewoundCommits > 0) {
+    if (agentRunning && rewoundCommits > 0) {
       try {
         const currentSessionId = agentManager.getSessionId(id);
         if (currentSessionId) {
@@ -633,6 +632,7 @@ export function createAgentRouter(deps: ProjectRouterDependencies): Router {
       sessionFileTruncated,
       sessionFileRemovedLines,
       remoteForceUpdated,
+      agentRunningDuringRewind: agentRunning,
     });
   }));
 

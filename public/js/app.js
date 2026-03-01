@@ -4871,14 +4871,6 @@
     var projectId = state.selectedProjectId;
     if (!projectId) return;
 
-    var project = findProjectById(projectId);
-    var isRunning = project && project.status === 'running';
-    var isWaiting = project && project.isWaitingForInput;
-    if (!isRunning || !isWaiting) {
-      showToast('Rewind is available only when waiting for input', 'warning');
-      return;
-    }
-
     var $select = $('#rewind-commit-select');
     var $help = $('#rewind-commit-help');
     var $confirm = $('#btn-confirm-rewind-commit');
@@ -5022,8 +5014,9 @@
     var isRunning = project && project.status === 'running';
     var isWaiting = project && project.isWaitingForInput;
 
-    if (!isRunning || !isWaiting) {
-      showToast('Rewind is available only when waiting for input', 'warning');
+    // Allow rewind even when agent is stopped. If agent is running, require waiting state.
+    if (isRunning && !isWaiting) {
+      showToast('Wait for current response to finish before rewind', 'warning');
       return;
     }
 
@@ -5101,8 +5094,9 @@
       $('#btn-rewind-agent').addClass('hidden');
     }
 
-    // Keep button visible always; only enable execution when runtime conditions are valid.
-    $('#btn-rewind-agent').prop('disabled', !!state.rewindSending || !isRunning || !isWaiting);
+    // Keep button visible and enabled whenever a project is selected.
+    // Runtime guard (if agent is actively responding) is handled in requestRewindOperation().
+    $('#btn-rewind-agent').prop('disabled', !!state.rewindSending || !isVisible);
   }
 
   // Agent status polling - reduced to 10 seconds as fallback (WebSocket is primary)

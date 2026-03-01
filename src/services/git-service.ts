@@ -707,6 +707,11 @@ export class SimpleGitService implements GitService {
       const git = this.getGit(projectPath);
       // Best effort: refresh refs so rewind picker can show complete history.
       try {
+        await git.raw(['config', 'remote.origin.fetch', '+refs/heads/*:refs/remotes/origin/*']);
+      } catch {
+        // Ignore if no origin is configured.
+      }
+      try {
         await git.raw(['fetch', '--all', '--tags', '--prune', '--unshallow']);
       } catch {
         try {
