@@ -127,6 +127,28 @@ export const shellResizeSchema = z.object({
   rows: z.number().int().min(1),
 });
 
+// Abilities schemas
+export const installAbilitySchema = z.object({
+  abilityId: z.string().min(1, 'Ability ID is required'),
+});
+
+export const createAbilitySchema = z.object({
+  id: z.string().min(1, 'Ability ID is required'),
+  name: z.string().min(1, 'Name is required'),
+  description: z.string().optional().default(''),
+  repoUrl: z.string().url('Valid repository URL is required'),
+  sourceSubdir: z.string().min(1, 'Source folder is required'),
+  enabled: z.boolean().optional().default(true),
+});
+
+export const updateAbilitySchema = z.object({
+  name: z.string().min(1).optional(),
+  description: z.string().optional(),
+  repoUrl: z.string().url().optional(),
+  sourceSubdir: z.string().min(1).optional(),
+  enabled: z.boolean().optional(),
+});
+
 // Ralph Loop schemas
 export const ralphLoopStartSchema = z.object({
   taskDescription: z.string().min(1, 'Task description is required'),

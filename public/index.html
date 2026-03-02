@@ -414,6 +414,16 @@
               </svg>
               <span class="text-xs md:text-sm">Run</span>
             </button>
+            <button id="btn-open-abilities"
+              class="tab-button py-2 px-4 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 flex flex-col items-center md:flex-row md:justify-start"
+              title="Install abilities">
+              <svg class="w-4 h-4 mb-1 md:mb-0 md:inline-block md:mr-1.5" fill="none" stroke="currentColor"
+                viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M12 6v12m6-6H6" />
+              </svg>
+              <span class="text-xs md:text-sm">Abilities</span>
+            </button>
           </div>
 
           <!-- Agent Output Tab Content -->
@@ -3016,6 +3026,47 @@
               class="px-3 py-1.5 text-sm bg-purple-600 hover:bg-purple-700 text-white rounded transition-colors">OK</button>
           </div>
         </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Abilities Modal -->
+  <div id="modal-abilities" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl">
+        <div class="p-3 border-b border-gray-700 flex items-center justify-between">
+          <h3 class="font-semibold text-white">Install Abilities</h3>
+          <button class="modal-close text-gray-400 hover:text-white">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div class="p-3 space-y-3">
+          <p class="text-sm text-gray-300">Select an ability package to clone and install into
+            <code>.superengineer-v5/.claude/skills</code>.
+          </p>
+          <div class="space-y-1">
+            <label for="abilities-select" class="block text-sm font-medium text-gray-300">Ability</label>
+            <select id="abilities-select"
+              class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-purple-500"></select>
+            <p id="abilities-help" class="text-xs text-gray-400"></p>
+          </div>
+          <div class="space-y-1">
+            <label for="abilities-install-target" class="block text-sm font-medium text-gray-300">Install Target</label>
+            <select id="abilities-install-target"
+              class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-purple-500">
+              <option value="project">Current Project (.superengineer-v5/.claude/skills)</option>
+              <option value="user">User Home (~/.claude/skills)</option>
+            </select>
+          </div>
+        </div>
+        <div class="p-3 border-t border-gray-700 flex justify-end gap-2">
+          <button type="button" class="modal-close px-3 py-1.5 text-sm text-gray-300 hover:text-white transition-colors">Cancel</button>
+          <button type="button" id="btn-install-ability"
+            class="px-3 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded transition-colors">Install</button>
+        </div>
       </div>
     </div>
   </div>

@@ -177,7 +177,8 @@
       totalPages: 1,
       total: 0,
       loading: false
-    }
+    },
+    abilitiesCatalog: []
   };
 
   // Local storage keys - use module's KEYS
@@ -1365,6 +1366,22 @@
 
     $('#btn-settings').on('click', function () {
       loadAndShowSettings();
+    });
+
+    $('#btn-open-abilities').on('click', function () {
+      openAbilitiesModal();
+    });
+
+    $('#btn-install-ability').on('click', function () {
+      installSelectedAbility();
+    });
+
+    $('#abilities-select').on('change', function () {
+      var selectedId = String($(this).val() || '').trim();
+      var selected = (state.abilitiesCatalog || []).find(function (ability) {
+        return String(ability.id || '') === selectedId;
+      });
+      $('#abilities-help').text(String((selected && selected.description) || ''));
     });
 
 
@@ -4875,6 +4892,80 @@
       })
       .always(function () {
         $('#btn-cancel-agent').prop('disabled', false);
+      });
+  }
+
+  function renderAbilitiesOptions(abilities) {
+    var $select = $('#abilities-select');
+    var options = Array.isArray(abilities) ? abilities : [];
+    if (options.length === 0) {
+      $select.html('<option value="">No abilities available</option>');
+      $('#abilities-help').text('No installable abilities found.');
+      $('#btn-install-ability').prop('disabled', true);
+      return;
+    }
+
+    var html = options.map(function (ability) {
+      var id = String(ability.id || '');
+      var name = String(ability.name || id || 'Ability');
+      return '<option value="' + escapeHtml(id) + '">' + escapeHtml(name) + '</option>';
+    }).join('');
+    $select.html(html);
+
+    var selected = options[0];
+    $('#abilities-help').text(String((selected && selected.description) || ''));
+    $('#btn-install-ability').prop('disabled', false);
+  }
+
+  function openAbilitiesModal() {
+    $('#abilities-select').html('<option value="">Loading abilities...</option>');
+    $('#abilities-help').text('Loading...');
+    $('#btn-install-ability').prop('disabled', true);
+    $('#abilities-install-target').val('project');
+    openModal('modal-abilities');
+
+    api.getGlobalAbilitiesCatalog()
+      .done(function (response) {
+        state.abilitiesCatalog = (response && response.abilities) || [];
+        renderAbilitiesOptions(state.abilitiesCatalog);
+      })
+      .fail(function (xhr) {
+        $('#abilities-select').html('<option value="">Failed to load abilities</option>');
+        $('#abilities-help').text('Unable to load ability catalog.');
+        $('#btn-install-ability').prop('disabled', true);
+        showErrorToast(xhr, 'Failed to load abilities');
+      });
+  }
+
+  function installSelectedAbility() {
+    var abilityId = String($('#abilities-select').val() || '').trim();
+    if (!abilityId) {
+      showToast('Select an ability first', 'warning');
+      return;
+    }
+    var target = String($('#abilities-install-target').val() || 'project');
+    var projectId = state.selectedProjectId;
+    if (target === 'project' && !projectId) {
+      showToast('Select a project first', 'warning');
+      return;
+    }
+
+    $('#btn-install-ability').prop('disabled', true).text('Installing...');
+    var request = target === 'user'
+      ? api.installGlobalAbility(abilityId)
+      : api.installProjectAbility(projectId, abilityId);
+
+    request
+      .done(function (response) {
+        var installedName = String((response && response.abilityName) || abilityId);
+        closeModal('modal-abilities');
+        showToast(installedName + ' installed', 'success');
+      })
+      .fail(function (xhr) {
+        showErrorToast(xhr, 'Failed to install ability');
+      })
+      .always(function () {
+        $('#btn-install-ability').prop('disabled', false).text('Install');
       });
   }
 

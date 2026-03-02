@@ -191,6 +191,27 @@ export interface ShellResizeBody {
   rows?: number;
 }
 
+export interface InstallAbilityBody {
+  abilityId?: string;
+}
+
+export interface CreateAbilityBody {
+  id?: string;
+  name?: string;
+  description?: string;
+  repoUrl?: string;
+  sourceSubdir?: string;
+  enabled?: boolean;
+}
+
+export interface UpdateAbilityBody {
+  name?: string;
+  description?: string;
+  repoUrl?: string;
+  sourceSubdir?: string;
+  enabled?: boolean;
+}
+
 export interface RalphLoopStartBody {
   taskDescription?: string;
   maxTurns?: number;

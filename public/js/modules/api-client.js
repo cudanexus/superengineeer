@@ -191,6 +191,169 @@
     return $.get(baseUrl + '/api/projects/' + id + '/debug');
   };
 
+  /**
+   * Get installable abilities catalog for a project
+   * @param {string} id - Project UUID
+   * @returns {Promise<{abilities: Array<{id: string, name: string, description: string, repoUrl: string, sourceSubdir: string}>}>}
+   */
+  ApiClient.getAbilitiesCatalog = function (id) {
+    return $.get(baseUrl + '/api/projects/' + id + '/abilities/catalog');
+  };
+
+  /**
+   * Get installable abilities catalog (global)
+   * @returns {Promise<{abilities: Array}>}
+   */
+  ApiClient.getGlobalAbilitiesCatalog = function () {
+    return $.get(baseUrl + '/api/abilities/catalog');
+  };
+
+  /**
+   * Get all abilities including disabled entries
+   * @param {string} id - Project UUID
+   * @returns {Promise<{abilities: Array}>}
+   */
+  ApiClient.getAllAbilitiesCatalog = function (id) {
+    return $.get(baseUrl + '/api/projects/' + id + '/abilities/catalog/all');
+  };
+
+  /**
+   * Get all abilities including disabled entries (global)
+   * @returns {Promise<{abilities: Array}>}
+   */
+  ApiClient.getAllGlobalAbilitiesCatalog = function () {
+    return $.get(baseUrl + '/api/abilities/catalog/all');
+  };
+
+  /**
+   * Create a catalog ability
+   * @param {string} id - Project UUID
+   * @param {{id: string, name: string, description?: string, repoUrl: string, sourceSubdir: string, enabled?: boolean}} payload
+   * @returns {Promise<{success: boolean, ability: Object}>}
+   */
+  ApiClient.createAbility = function (id, payload) {
+    return $.ajax({
+      url: baseUrl + '/api/projects/' + id + '/abilities/catalog',
+      method: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify(payload || {})
+    });
+  };
+
+  /**
+   * Create a global catalog ability
+   * @param {{id: string, name: string, description?: string, repoUrl: string, sourceSubdir: string, enabled?: boolean}} payload
+   * @returns {Promise<{success: boolean, ability: Object}>}
+   */
+  ApiClient.createGlobalAbility = function (payload) {
+    return $.ajax({
+      url: baseUrl + '/api/abilities/catalog',
+      method: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify(payload || {})
+    });
+  };
+
+  /**
+   * Update a catalog ability
+   * @param {string} id - Project UUID
+   * @param {string} abilityId - Ability identifier
+   * @param {Object} payload - Partial ability fields
+   * @returns {Promise<{success: boolean, ability: Object}>}
+   */
+  ApiClient.updateAbility = function (id, abilityId, payload) {
+    return $.ajax({
+      url: baseUrl + '/api/projects/' + id + '/abilities/catalog/' + encodeURIComponent(abilityId),
+      method: 'PUT',
+      contentType: 'application/json',
+      data: JSON.stringify(payload || {})
+    });
+  };
+
+  /**
+   * Update a global catalog ability
+   * @param {string} abilityId - Ability identifier
+   * @param {Object} payload - Partial ability fields
+   * @returns {Promise<{success: boolean, ability: Object}>}
+   */
+  ApiClient.updateGlobalAbility = function (abilityId, payload) {
+    return $.ajax({
+      url: baseUrl + '/api/abilities/catalog/' + encodeURIComponent(abilityId),
+      method: 'PUT',
+      contentType: 'application/json',
+      data: JSON.stringify(payload || {})
+    });
+  };
+
+  /**
+   * Delete a catalog ability
+   * @param {string} id - Project UUID
+   * @param {string} abilityId - Ability identifier
+   * @returns {Promise<{success: boolean}>}
+   */
+  ApiClient.deleteAbility = function (id, abilityId) {
+    return $.ajax({
+      url: baseUrl + '/api/projects/' + id + '/abilities/catalog/' + encodeURIComponent(abilityId),
+      method: 'DELETE'
+    });
+  };
+
+  /**
+   * Delete a global catalog ability
+   * @param {string} abilityId - Ability identifier
+   * @returns {Promise<{success: boolean}>}
+   */
+  ApiClient.deleteGlobalAbility = function (abilityId) {
+    return $.ajax({
+      url: baseUrl + '/api/abilities/catalog/' + encodeURIComponent(abilityId),
+      method: 'DELETE'
+    });
+  };
+
+  /**
+   * Install an ability into project .superengineer-v5/.claude/skills
+   * @param {string} id - Project UUID
+   * @param {string} abilityId - Ability identifier
+   * @returns {Promise<{success: boolean, abilityId: string, abilityName: string, skillsPath: string}>}
+   */
+  ApiClient.installAbility = function (id, abilityId) {
+    return $.ajax({
+      url: baseUrl + '/api/projects/' + id + '/abilities/install',
+      method: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify({ abilityId: abilityId })
+    });
+  };
+
+  /**
+   * Install a global ability into user home (~/.claude/skills)
+   * @param {string} abilityId - Ability identifier
+   * @returns {Promise<{success: boolean, abilityId: string, abilityName: string, skillsPath: string}>}
+   */
+  ApiClient.installGlobalAbility = function (abilityId) {
+    return $.ajax({
+      url: baseUrl + '/api/abilities/install/global',
+      method: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify({ abilityId: abilityId })
+    });
+  };
+
+  /**
+   * Install an ability into a specific project (.superengineer-v5/.claude/skills)
+   * @param {string} projectId - Project UUID
+   * @param {string} abilityId - Ability identifier
+   * @returns {Promise<{success: boolean, abilityId: string, abilityName: string, skillsPath: string, projectId: string}>}
+   */
+  ApiClient.installProjectAbility = function (projectId, abilityId) {
+    return $.ajax({
+      url: baseUrl + '/api/abilities/install/project',
+      method: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify({ projectId: projectId, abilityId: abilityId })
+    });
+  };
+
   // ============================================================
   // Roadmap
   // ============================================================

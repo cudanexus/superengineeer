@@ -247,6 +247,15 @@ export interface McpSettings {
   servers: McpServerConfig[];    // Server configurations
 }
 
+export interface AbilityCatalogItem {
+  id: string;
+  name: string;
+  description: string;
+  repoUrl: string;
+  sourceSubdir: string;
+  enabled: boolean;
+}
+
 export interface GlobalSettings {
   maxConcurrentAgents: number;
   claudePermissions: ClaudePermissions;
@@ -270,6 +279,8 @@ export interface GlobalSettings {
   chromeEnabled: boolean;
   /** Base directory for Inventify-generated projects */
   inventifyFolder: string;
+  /** Installable abilities catalog */
+  abilities: AbilityCatalogItem[];
 }
 
 const DEFAULT_SETTINGS: GlobalSettings = {
@@ -372,6 +383,16 @@ Your goal is to ensure high-quality deliverables. Be thorough but fair in your a
   },
   chromeEnabled: false,
   inventifyFolder: '',
+  abilities: [
+    {
+      id: 'scientific-skills',
+      name: 'Scientific Skills',
+      description: 'Adds scientific skills pack for Claude workflows.',
+      repoUrl: 'https://github.com/K-Dense-AI/claude-scientific-skills.git',
+      sourceSubdir: 'scientific-skills',
+      enabled: true,
+    },
+  ],
 };
 
 // Update type that allows partial nested objects for incremental updates
@@ -391,6 +412,7 @@ export interface SettingsUpdate {
   mcp?: Partial<McpSettings>;
   chromeEnabled?: boolean;
   inventifyFolder?: string;
+  abilities?: AbilityCatalogItem[];
 }
 
 export interface SettingsRepository {
@@ -517,6 +539,7 @@ export class FileSettingsRepository implements SettingsRepository {
       },
       chromeEnabled: parsed.chromeEnabled ?? DEFAULT_SETTINGS.chromeEnabled,
       inventifyFolder: parsed.inventifyFolder ?? DEFAULT_SETTINGS.inventifyFolder,
+      abilities: Array.isArray(parsed.abilities) ? parsed.abilities : DEFAULT_SETTINGS.abilities,
     };
   }
 
@@ -620,6 +643,10 @@ export class FileSettingsRepository implements SettingsRepository {
 
     if (updates.inventifyFolder !== undefined) {
       this.settings.inventifyFolder = updates.inventifyFolder;
+    }
+
+    if (updates.abilities !== undefined) {
+      this.settings.abilities = updates.abilities;
     }
 
     this.saveToFile();

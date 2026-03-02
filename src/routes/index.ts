@@ -2,6 +2,7 @@ import { Router } from 'express';
 import * as https from 'https';
 import { createFilesystemRouter, createFilesystemService } from './filesystem';
 import { createProjectsRouter } from './projects';
+import { createAbilitiesRouter as createGlobalAbilitiesRouter } from './abilities';
 import { createSettingsRouter } from './settings';
 import {
   FileProjectRepository,
@@ -354,6 +355,12 @@ export function createApiRouter(deps: ApiRouterDependencies = {}): Router {
     ralphLoopService,
     settingsRepository,
   );
+
+  // Project routes
+  router.use('/abilities', createGlobalAbilitiesRouter({
+    projectRepository,
+    settingsRepository,
+  }));
 
   // Project routes
   router.use('/projects', createProjectsRouter({
