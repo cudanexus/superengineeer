@@ -2161,11 +2161,32 @@
 
   function uploadFileToSharedStorage(file) {
     return new Promise(function (resolve, reject) {
+      function extensionFromMime(mimeType) {
+        var mime = String(mimeType || '').toLowerCase();
+        if (!mime) return '';
+        var map = {
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+          'application/vnd.ms-excel': 'xls',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+          'application/msword': 'doc',
+          'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+          'application/vnd.ms-powerpoint': 'ppt',
+          'text/csv': 'csv',
+          'application/pdf': 'pdf'
+        };
+        if (map[mime]) return map[mime];
+        var slashIdx = mime.indexOf('/');
+        if (slashIdx === -1 || slashIdx === mime.length - 1) return '';
+        return mime.slice(slashIdx + 1).replace(/[^a-z0-9.+-]/g, '');
+      }
+
       function sanitizeClientFileName(name) {
         var safe = String(name || '')
           .replace(/[<>:"|?*\u0000-\u001F]/g, '_')
           .trim();
-        return safe || 'attachment.bin';
+        if (safe) return safe;
+        var ext = extensionFromMime(file && file.type);
+        return ext ? ('attachment.' + ext) : 'attachment.bin';
       }
 
       var reader = new FileReader();
@@ -2186,8 +2207,14 @@
           dataType: 'json',
           timeout: 120000,
           data: JSON.stringify({
+            // Keep legacy payload field for existing Lambda behavior.
             fileData: base64,
-            fileName: sanitizeClientFileName(file.name)
+            // Also provide richer metadata for content-type aware backends.
+            fileDataBase64: base64,
+            dataUrl: dataUrl,
+            fileName: sanitizeClientFileName(file && file.name),
+            mimeType: String((file && file.type) || ''),
+            contentType: String((file && file.type) || '')
           })
         })
           .done(function (response) {

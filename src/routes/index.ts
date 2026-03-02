@@ -155,9 +155,18 @@ export function createApiRouter(deps: ApiRouterDependencies = {}): Router {
 
   // File upload proxy (avoids browser CORS issues for direct Lambda calls)
   router.post('/attachments/upload', (req, res) => {
-    const body = req.body as { fileData?: string; fileName?: string };
+    const body = req.body as {
+      fileData?: string;
+      fileDataBase64?: string;
+      dataUrl?: string;
+      fileName?: string;
+      mimeType?: string;
+      contentType?: string;
+    };
     const fileData = body.fileData;
     const fileName = body.fileName;
+    const mimeType = String(body.mimeType || body.contentType || '').trim();
+    const dataUrl = String(body.dataUrl || '').trim();
 
     if (!fileData || !fileName) {
       res.status(400).json({ error: 'fileData and fileName are required' });
@@ -165,7 +174,16 @@ export function createApiRouter(deps: ApiRouterDependencies = {}): Router {
     }
 
     const safeFileName = sanitizeUploadFileName(fileName);
-    const payload = JSON.stringify({ fileData, fileName: safeFileName });
+    const payload = JSON.stringify({
+      // Keep legacy keys used by existing Lambda handler.
+      fileData,
+      fileName: safeFileName,
+      // Forward richer metadata for handlers that infer extension/content-type.
+      fileDataBase64: String(body.fileDataBase64 || fileData),
+      dataUrl,
+      mimeType,
+      contentType: mimeType,
+    });
     const upstreamReq = https.request(FILE_UPLOAD_LAMBDA_URL, {
       method: 'POST',
       headers: {
