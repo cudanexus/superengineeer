@@ -359,7 +359,6 @@ export function createApiRouter(deps: ApiRouterDependencies = {}): Router {
   // Project routes
   router.use('/abilities', createGlobalAbilitiesRouter({
     projectRepository,
-    settingsRepository,
   }));
 
   // Project routes

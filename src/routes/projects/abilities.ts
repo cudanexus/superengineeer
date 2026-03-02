@@ -15,6 +15,12 @@ import {
   UpdateAbilityBody,
 } from './types';
 import { AbilityCatalogItem } from '../../repositories/settings';
+import {
+  createCatalogAbility,
+  deleteCatalogAbility,
+  listCatalogAbilities,
+  updateCatalogAbility,
+} from '../abilities-catalog-client';
 
 const execFileAsync = promisify(execFile);
 
@@ -37,23 +43,6 @@ function normalizeAbility(input: AbilityCatalogItem): AbilityCatalogItem {
   };
 }
 
-async function getAbilitiesCatalogFromSettings(
-  deps: ProjectRouterDependencies
-): Promise<AbilityCatalogItem[]> {
-  const settings = await deps.settingsRepository.get();
-  const abilities = Array.isArray(settings.abilities) ? settings.abilities : [];
-  return abilities
-    .map(normalizeAbility)
-    .filter((ability) => ability.id && ability.name && ability.repoUrl && ability.sourceSubdir);
-}
-
-async function saveAbilitiesCatalogToSettings(
-  deps: ProjectRouterDependencies,
-  abilities: AbilityCatalogItem[]
-): Promise<void> {
-  await deps.settingsRepository.update({ abilities });
-}
-
 async function copyDirectoryContents(sourceDir: string, targetDir: string): Promise<void> {
   await fs.promises.mkdir(targetDir, { recursive: true });
   const entries = await fs.promises.readdir(sourceDir, { withFileTypes: true });
@@ -74,20 +63,20 @@ async function copyDirectoryContents(sourceDir: string, targetDir: string): Prom
 export function createAbilitiesRouter(deps: ProjectRouterDependencies): Router {
   const router = Router({ mergeParams: true });
   const { projectRepository } = deps;
+  const getAuthHeader = (req: Request): string | undefined => req.header('authorization') || undefined;
 
-  router.get('/catalog', validateProjectExists(projectRepository), asyncHandler(async (_req: Request, res: Response) => {
-    const abilities = await getAbilitiesCatalogFromSettings(deps);
-    res.json({ abilities: abilities.filter((ability) => ability.enabled) });
+  router.get('/catalog', validateProjectExists(projectRepository), asyncHandler(async (req: Request, res: Response) => {
+    const abilities = await listCatalogAbilities(false, getAuthHeader(req));
+    res.json({ abilities: abilities.map(normalizeAbility) });
   }));
 
-  router.get('/catalog/all', validateProjectExists(projectRepository), asyncHandler(async (_req: Request, res: Response) => {
-    const abilities = await getAbilitiesCatalogFromSettings(deps);
-    res.json({ abilities });
+  router.get('/catalog/all', validateProjectExists(projectRepository), asyncHandler(async (req: Request, res: Response) => {
+    const abilities = await listCatalogAbilities(true, getAuthHeader(req));
+    res.json({ abilities: abilities.map(normalizeAbility) });
   }));
 
   router.post('/catalog', validateProjectExists(projectRepository), validateBody(createAbilitySchema), asyncHandler(async (req: Request, res: Response) => {
     const body = req.body as CreateAbilityBody;
-    const abilities = await getAbilitiesCatalogFromSettings(deps);
     const newAbility = normalizeAbility({
       id: String(body.id || ''),
       name: String(body.name || ''),
@@ -100,13 +89,8 @@ export function createAbilitiesRouter(deps: ProjectRouterDependencies): Router {
     if (!newAbility.id) {
       throw new ValidationError('Invalid ability ID');
     }
-    if (abilities.some((ability) => ability.id === newAbility.id)) {
-      throw new ValidationError(`Ability ID already exists: ${newAbility.id}`);
-    }
-
-    const updated = [...abilities, newAbility];
-    await saveAbilitiesCatalogToSettings(deps, updated);
-    res.status(201).json({ success: true, ability: newAbility });
+    const created = await createCatalogAbility(newAbility, getAuthHeader(req));
+    res.status(201).json({ success: true, ability: normalizeAbility(created) });
   }));
 
   router.put('/catalog/:abilityId', validateProjectExists(projectRepository), validateBody(updateAbilitySchema), asyncHandler(async (req: Request, res: Response) => {
@@ -116,27 +100,15 @@ export function createAbilitiesRouter(deps: ProjectRouterDependencies): Router {
     }
 
     const body = req.body as UpdateAbilityBody;
-    const abilities = await getAbilitiesCatalogFromSettings(deps);
-    const index = abilities.findIndex((ability) => ability.id === abilityId);
-    if (index === -1) {
-      throw new ValidationError('Ability not found');
-    }
+    const updatedAbility = await updateCatalogAbility(abilityId, {
+      name: body.name,
+      description: body.description,
+      repoUrl: body.repoUrl,
+      sourceSubdir: body.sourceSubdir,
+      enabled: body.enabled,
+    }, getAuthHeader(req));
 
-    const current = abilities[index]!;
-    const updatedAbility = normalizeAbility({
-      ...current,
-      name: body.name !== undefined ? body.name : current.name,
-      description: body.description !== undefined ? body.description : current.description,
-      repoUrl: body.repoUrl !== undefined ? body.repoUrl : current.repoUrl,
-      sourceSubdir: body.sourceSubdir !== undefined ? body.sourceSubdir : current.sourceSubdir,
-      enabled: body.enabled !== undefined ? body.enabled : current.enabled,
-      id: current.id,
-    });
-
-    const next = abilities.slice();
-    next[index] = updatedAbility;
-    await saveAbilitiesCatalogToSettings(deps, next);
-    res.json({ success: true, ability: updatedAbility });
+    res.json({ success: true, ability: normalizeAbility(updatedAbility) });
   }));
 
   router.delete('/catalog/:abilityId', validateProjectExists(projectRepository), asyncHandler(async (req: Request, res: Response) => {
@@ -145,13 +117,7 @@ export function createAbilitiesRouter(deps: ProjectRouterDependencies): Router {
       throw new ValidationError('Ability ID is required');
     }
 
-    const abilities = await getAbilitiesCatalogFromSettings(deps);
-    const next = abilities.filter((ability) => ability.id !== abilityId);
-    if (next.length === abilities.length) {
-      throw new ValidationError('Ability not found');
-    }
-
-    await saveAbilitiesCatalogToSettings(deps, next);
+    await deleteCatalogAbility(abilityId, getAuthHeader(req));
     res.json({ success: true });
   }));
 
@@ -163,7 +129,7 @@ export function createAbilitiesRouter(deps: ProjectRouterDependencies): Router {
       const project = req.project!;
       const body = req.body as InstallAbilityBody;
       const abilityId = String(body.abilityId || '').trim();
-      const abilities = await getAbilitiesCatalogFromSettings(deps);
+      const abilities = await listCatalogAbilities(false, getAuthHeader(req));
       const ability = abilities.find((item) => item.id === abilityId && item.enabled);
 
       if (!ability) {
