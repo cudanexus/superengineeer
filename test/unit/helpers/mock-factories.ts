@@ -822,6 +822,7 @@ export function createMockGitService(): jest.Mocked<GitService> {
     ensureIgnoredPaths: jest.fn().mockResolvedValue(undefined),
     stashPaths: jest.fn().mockResolvedValue(null),
     popStash: jest.fn().mockResolvedValue(undefined),
+    cleanupAutoStashes: jest.fn().mockResolvedValue(0),
     listCommits: jest.fn().mockResolvedValue({ commits: [], total: 0, currentHead: null }),
     createGithubRepoRemote: jest.fn().mockResolvedValue({
       repo: 'testuser/test-repo',

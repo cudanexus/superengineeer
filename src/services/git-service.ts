@@ -87,6 +87,7 @@ export interface GitService {
     includeUntracked?: boolean
   ): Promise<string | null>;
   popStash(projectPath: string, stashRef?: string): Promise<void>;
+  cleanupAutoStashes(projectPath: string, messagePrefix?: string): Promise<number>;
   createGithubRepoRemote(
     projectPath: string,
     repoName: string,
@@ -1106,6 +1107,41 @@ export class SimpleGitService implements GitService {
       await this.getGit(projectPath).raw(['stash', 'pop', stashRef]);
     } catch (error) {
       throw new GitError(`Failed to restore stashed paths: ${this.toGitErrorMessage(error)}`);
+    }
+  }
+
+  async cleanupAutoStashes(projectPath: string, messagePrefix = 'superengineer:auto-meta-wait-'): Promise<number> {
+    try {
+      const git = this.getGit(projectPath);
+      const raw = await git.raw(['stash', 'list', '--format=%gd|%s']);
+      const lines = String(raw || '')
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+      const refsToDrop: string[] = [];
+      for (const line of lines) {
+        const sep = line.indexOf('|');
+        if (sep <= 0) continue;
+        const ref = line.slice(0, sep).trim();
+        const subject = line.slice(sep + 1).trim();
+        if (subject.startsWith(messagePrefix)) {
+          refsToDrop.push(ref);
+        }
+      }
+
+      let dropped = 0;
+      for (const ref of refsToDrop) {
+        try {
+          await git.raw(['stash', 'drop', ref]);
+          dropped += 1;
+        } catch {
+          // Best effort: continue dropping other entries.
+        }
+      }
+      return dropped;
+    } catch {
+      return 0;
     }
   }
 }

@@ -263,6 +263,12 @@ function isDetachedBranchName(branchName: string): boolean {
   return normalized === 'head' || normalized.includes('detached');
 }
 
+const INTERNAL_RUNTIME_PATHS = [
+  '.superengineer-v5/',
+  '.superengineer/',
+  '.claude/',
+];
+
 const ZERO_TOKENS: TokenTotals = {
   inputTokens: 0,
   outputTokens: 0,
@@ -457,6 +463,18 @@ export class DefaultAgentManager implements AgentManager {
     const project = await this.projectRepository.findById(projectId);
     if (!project) {
       throw new Error(`Project not found: ${projectId}`);
+    }
+
+    // Keep runtime metadata out of normal git workflows across restored projects.
+    if (this.gitService) {
+      try {
+        await this.gitService.ensureIgnoredPaths(project.path, INTERNAL_RUNTIME_PATHS);
+      } catch (error) {
+        this.logger.warn('Failed to ensure internal runtime paths are ignored on interactive start', {
+          projectId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
 
     // Handle session management
@@ -1563,6 +1581,8 @@ export class DefaultAgentManager implements AgentManager {
       const project = await this.projectRepository.findById(projectId);
       if (!project) return;
       projectPath = project.path;
+      await this.gitService.ensureIgnoredPaths(project.path, INTERNAL_RUNTIME_PATHS);
+      await this.gitService.cleanupAutoStashes(project.path, 'superengineer:auto-meta-wait-');
       const initialStatus = await this.gitService.getStatus(project.path);
       const internalDirtyPaths = Array.from(new Set([
         ...(initialStatus.staged || []).map((f) => f.path),
@@ -1666,6 +1686,12 @@ export class DefaultAgentManager implements AgentManager {
             stashRef: metadataStashRef,
             error: restoreError instanceof Error ? restoreError.message : String(restoreError),
           });
+          try {
+            await this.gitService.cleanupAutoStashes(projectPath, 'superengineer:auto-meta-wait-');
+            await this.gitService.ensureIgnoredPaths(projectPath, INTERNAL_RUNTIME_PATHS);
+          } catch {
+            // Best effort cleanup only.
+          }
         }
       }
       this.autoPushInFlight.delete(projectId);
