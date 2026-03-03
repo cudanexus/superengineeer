@@ -237,18 +237,9 @@ interface ModelPricing {
   cacheReadPerMTok: number;
 }
 
-const AUTO_COMMIT_EXCLUDED_PREFIXES = [
-  '.claude/',
-  '.superengineer-v5/',
-  '.superengineer/',
-];
-
 function isAutoCommitPathAllowed(filePath: string): boolean {
   const normalized = String(filePath || '').replace(/\\/g, '/').replace(/^\.?\//, '');
-  if (!normalized) return false;
-  return !AUTO_COMMIT_EXCLUDED_PREFIXES.some(
-    (prefix) => normalized === prefix.slice(0, -1) || normalized.startsWith(prefix)
-  );
+  return normalized.length > 0;
 }
 
 const ZERO_TOKENS: TokenTotals = {
