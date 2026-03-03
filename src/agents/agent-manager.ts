@@ -1525,9 +1525,31 @@ export class DefaultAgentManager implements AgentManager {
       const project = await this.projectRepository.findById(projectId);
       if (!project) return;
 
+      // If there are local edits at waiting time, persist them first so push
+      // actually has a commit to send.
+      const status = await this.gitService.getStatus(project.path);
+      const hasLocalChanges = (
+        (status.staged && status.staged.length > 0)
+        || (status.unstaged && status.unstaged.length > 0)
+        || (status.untracked && status.untracked.length > 0)
+      );
+
+      if (hasLocalChanges) {
+        await this.gitService.stageAll(project.path);
+        try {
+          const stamp = new Date().toISOString().replace('T', ' ').slice(0, 19);
+          await this.gitService.commit(project.path, `chore: auto-save before waiting (${stamp})`);
+        } catch (commitError) {
+          const commitMessage = commitError instanceof Error ? commitError.message : String(commitError);
+          if (!commitMessage.toLowerCase().includes('no staged changes')) {
+            throw commitError;
+          }
+        }
+      }
+
       await this.gitService.push(project.path);
       this.autoPushedWaitingVersions.set(projectId, waitingVersion);
-      this.logger.info('Auto-push completed on waiting state', { projectId, waitingVersion });
+      this.logger.info('Auto-commit/push completed on waiting state', { projectId, waitingVersion, hasLocalChanges });
     } catch (error) {
       this.logger.warn('Auto-push skipped/failed on waiting state', {
         projectId,
