@@ -263,11 +263,26 @@ function isDetachedBranchName(branchName: string): boolean {
   return normalized === 'head' || normalized.includes('detached');
 }
 
+function hasAllowedWorkingTreeChanges(status: {
+  staged?: Array<{ path: string }>;
+  unstaged?: Array<{ path: string }>;
+  untracked?: Array<{ path: string }>;
+}): boolean {
+  const allPaths = [
+    ...((status.staged || []).map((f) => f.path)),
+    ...((status.unstaged || []).map((f) => f.path)),
+    ...((status.untracked || []).map((f) => f.path)),
+  ];
+  return allPaths.some((p) => isAutoCommitPathAllowed(p));
+}
+
 const INTERNAL_RUNTIME_PATHS = [
   '.superengineer-v5/',
   '.superengineer/',
   '.claude/',
 ];
+const DEFAULT_AUTO_COMMIT_NAME = 'Superengineer';
+const DEFAULT_AUTO_COMMIT_EMAIL = 'superengineer@example.com';
 
 const ZERO_TOKENS: TokenTotals = {
   inputTokens: 0,
@@ -1559,6 +1574,33 @@ export class DefaultAgentManager implements AgentManager {
     }
   }
 
+  private async ensureAutoCommitIdentity(projectId: string, projectPath: string): Promise<void> {
+    if (!this.gitService) return;
+
+    try {
+      const [name, email] = await Promise.all([
+        this.gitService.getUserName(projectPath),
+        this.gitService.getUserEmail(projectPath),
+      ]);
+
+      const hasName = Boolean(String(name || '').trim());
+      const hasEmail = Boolean(String(email || '').trim());
+      if (hasName && hasEmail) return;
+
+      await this.gitService.setUserIdentity(
+        projectPath,
+        hasName ? String(name).trim() : DEFAULT_AUTO_COMMIT_NAME,
+        hasEmail ? String(email).trim() : DEFAULT_AUTO_COMMIT_EMAIL
+      );
+      this.logger.info('Configured git identity for waiting auto-commit', { projectId });
+    } catch (error) {
+      this.logger.warn('Failed to ensure git identity for waiting auto-commit', {
+        projectId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
   private async autoPushWhenWaiting(projectId: string, waitingVersion: number): Promise<void> {
     const agent = this.agents.get(projectId);
     if (!agent || agent.mode !== 'interactive' || !this.gitService) return;
@@ -1581,6 +1623,7 @@ export class DefaultAgentManager implements AgentManager {
       const project = await this.projectRepository.findById(projectId);
       if (!project) return;
       projectPath = project.path;
+      await this.ensureAutoCommitIdentity(projectId, project.path);
       await this.gitService.ensureIgnoredPaths(project.path, INTERNAL_RUNTIME_PATHS);
       await this.gitService.cleanupAutoStashes(project.path, 'superengineer:auto-meta-wait-');
       const initialStatus = await this.gitService.getStatus(project.path);
@@ -1650,6 +1693,45 @@ export class DefaultAgentManager implements AgentManager {
               projectId,
               branch: currentBranch,
             });
+          }
+
+          // Guard against race/late file writes: don't report sync complete
+          // if user-visible changes still exist after push.
+          const finalStatus = await this.gitService.getStatus(project.path);
+          if (hasAllowedWorkingTreeChanges(finalStatus)) {
+            this.logger.warn('Auto-sync detected remaining local changes after push; running one final sync pass', {
+              projectId,
+              waitingVersion,
+            });
+
+            await this.gitService.stageAll(project.path);
+            const followupStamp = new Date().toISOString().replace('T', ' ').slice(0, 19);
+            try {
+              await this.gitService.commit(
+                project.path,
+                `chore: auto-save before waiting (${followupStamp})`
+              );
+            } catch (followupCommitError) {
+              this.logger.warn('Follow-up auto-commit skipped/failed during waiting sync', {
+                projectId,
+                waitingVersion,
+                error: followupCommitError instanceof Error ? followupCommitError.message : String(followupCommitError),
+              });
+            }
+
+            const followupDetached = await this.gitService.isHeadDetached(project.path);
+            const followupBranches = await this.gitService.getBranches(project.path);
+            const followupBranch = String(followupBranches.current || '').trim();
+            const followupCanonical = followupBranches.local.includes('main')
+              ? 'main'
+              : followupBranches.local.includes('master')
+                ? 'master'
+                : 'main';
+            if (followupDetached || isDetachedBranchName(followupBranch)) {
+              await this.gitService.promoteCurrentHeadToBranch(project.path, followupCanonical, 'origin');
+            } else {
+              await this.gitService.push(project.path, 'origin', followupBranch);
+            }
           }
 
           synced = true;
