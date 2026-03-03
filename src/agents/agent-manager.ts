@@ -237,6 +237,18 @@ interface ModelPricing {
   cacheReadPerMTok: number;
 }
 
+const AUTO_COMMIT_EXCLUDED_PREFIXES = [
+  '.claude/',
+  '.superengineer-v5/',
+  '.superengineer/',
+];
+
+function isAutoCommitPathAllowed(filePath: string): boolean {
+  const normalized = String(filePath || '').replace(/\\/g, '/').replace(/^\.?\//, '');
+  if (!normalized) return false;
+  return !AUTO_COMMIT_EXCLUDED_PREFIXES.some((prefix) => normalized === prefix.slice(0, -1) || normalized.startsWith(prefix));
+}
+
 const ZERO_TOKENS: TokenTotals = {
   inputTokens: 0,
   outputTokens: 0,
@@ -1528,28 +1540,65 @@ export class DefaultAgentManager implements AgentManager {
       // If there are local edits at waiting time, persist them first so push
       // actually has a commit to send.
       const status = await this.gitService.getStatus(project.path);
-      const hasLocalChanges = (
-        (status.staged && status.staged.length > 0)
-        || (status.unstaged && status.unstaged.length > 0)
-        || (status.untracked && status.untracked.length > 0)
-      );
+      const stagedPaths = (status.staged || []).map((f) => f.path);
+      const unstagedPaths = (status.unstaged || []).map((f) => f.path);
+      const untrackedPaths = (status.untracked || []).map((f) => f.path);
 
-      if (hasLocalChanges) {
-        await this.gitService.stageAll(project.path);
+      const blockedStaged = stagedPaths.filter((p) => !isAutoCommitPathAllowed(p));
+      if (blockedStaged.length > 0) {
         try {
-          const stamp = new Date().toISOString().replace('T', ' ').slice(0, 19);
-          await this.gitService.commit(project.path, `chore: auto-save before waiting (${stamp})`);
-        } catch (commitError) {
-          const commitMessage = commitError instanceof Error ? commitError.message : String(commitError);
-          if (!commitMessage.toLowerCase().includes('no staged changes')) {
-            throw commitError;
-          }
+          await this.gitService.unstageFiles(project.path, blockedStaged);
+        } catch (unstageError) {
+          this.logger.warn('Failed to unstage blocked files before auto-commit', {
+            projectId,
+            blockedStaged,
+            error: unstageError instanceof Error ? unstageError.message : String(unstageError),
+          });
         }
       }
 
-      await this.gitService.push(project.path);
+      const stageCandidates = Array.from(new Set([...unstagedPaths, ...untrackedPaths]))
+        .filter((p) => isAutoCommitPathAllowed(p));
+      if (stageCandidates.length > 0) {
+        await this.gitService.stageFiles(project.path, stageCandidates);
+      }
+
+      const postStageStatus = await this.gitService.getStatus(project.path);
+      const blockedStillStaged = (postStageStatus.staged || [])
+        .map((f) => f.path)
+        .filter((p) => !isAutoCommitPathAllowed(p));
+      const hasCommitReadyChanges = (postStageStatus.staged || [])
+        .some((f) => isAutoCommitPathAllowed(f.path));
+
+      if (hasCommitReadyChanges && blockedStillStaged.length === 0) {
+        const stamp = new Date().toISOString().replace('T', ' ').slice(0, 19);
+        await this.gitService.commit(project.path, `chore: auto-save before waiting (${stamp})`);
+      } else if (blockedStillStaged.length > 0) {
+        this.logger.warn('Skipping auto-commit because blocked files are staged', {
+          projectId,
+          waitingVersion,
+          blockedStillStaged,
+        });
+      }
+
+      try {
+        await this.gitService.push(project.path);
+      } catch (firstPushError) {
+        // Brief retry helps when remote updates race with this wait transition.
+        await this.delay(1200);
+        await this.gitService.push(project.path);
+        this.logger.warn('Auto-push succeeded on retry', {
+          projectId,
+          waitingVersion,
+          firstError: firstPushError instanceof Error ? firstPushError.message : String(firstPushError),
+        });
+      }
       this.autoPushedWaitingVersions.set(projectId, waitingVersion);
-      this.logger.info('Auto-commit/push completed on waiting state', { projectId, waitingVersion, hasLocalChanges });
+      this.logger.info('Auto-commit/push completed on waiting state', {
+        projectId,
+        waitingVersion,
+        stagedCandidates: stageCandidates.length,
+      });
     } catch (error) {
       this.logger.warn('Auto-push skipped/failed on waiting state', {
         projectId,
