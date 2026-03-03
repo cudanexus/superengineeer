@@ -337,6 +337,7 @@ export class DefaultAgentManager implements AgentManager {
   private readonly usageByProject: Map<string, Map<string, SessionUsageAggregate>> = new Map();
   private readonly autoPushedWaitingVersions: Map<string, number> = new Map();
   private readonly autoPushInFlight: Set<string> = new Set();
+  private readonly pendingWaitingPushVersions: Map<string, number> = new Map();
   private _maxConcurrentAgents: number;
 
   constructor({
@@ -617,6 +618,7 @@ export class DefaultAgentManager implements AgentManager {
     this.processTracker.untrackProcess(projectId);
     this.waitingVersions.delete(projectId);
     this.queuedMessages.delete(projectId);
+    this.pendingWaitingPushVersions.delete(projectId);
   }
 
   async stopAllAgents(): Promise<void> {
@@ -1464,6 +1466,7 @@ export class DefaultAgentManager implements AgentManager {
     this.waitingVersions.delete(projectId);
     this.autoPushedWaitingVersions.delete(projectId);
     this.autoPushInFlight.delete(projectId);
+    this.pendingWaitingPushVersions.delete(projectId);
 
     // Save context usage if available
     const conversationId = agent.sessionId;
@@ -1523,9 +1526,16 @@ export class DefaultAgentManager implements AgentManager {
 
     const lastVersion = this.autoPushedWaitingVersions.get(projectId) || 0;
     if (waitingVersion <= lastVersion) return;
-    if (this.autoPushInFlight.has(projectId)) return;
+    if (this.autoPushInFlight.has(projectId)) {
+      const pending = this.pendingWaitingPushVersions.get(projectId) || 0;
+      if (waitingVersion > pending) {
+        this.pendingWaitingPushVersions.set(projectId, waitingVersion);
+      }
+      return;
+    }
 
     this.autoPushInFlight.add(projectId);
+    this.pendingWaitingPushVersions.delete(projectId);
     let metadataStashRef: string | null = null;
     let projectPath: string | null = null;
     try {
@@ -1600,12 +1610,19 @@ export class DefaultAgentManager implements AgentManager {
               ? 'master'
               : 'main';
 
-          await this.gitService.promoteCurrentHeadToBranch(project.path, canonicalBranch, 'origin');
-          this.logger.info('Auto-promoted HEAD to canonical branch', {
-            projectId,
-            targetBranch: canonicalBranch,
-            wasDetachedHead: currentBranch === 'HEAD',
-          });
+          if (currentBranch === 'HEAD') {
+            await this.gitService.promoteCurrentHeadToBranch(project.path, canonicalBranch, 'origin');
+            this.logger.info('Auto-promoted detached HEAD to canonical branch', {
+              projectId,
+              targetBranch: canonicalBranch,
+            });
+          } else {
+            await this.gitService.push(project.path);
+            this.logger.info('Auto-pushed current branch on waiting state', {
+              projectId,
+              branch: currentBranch,
+            });
+          }
 
           synced = true;
           break;
@@ -1644,6 +1661,13 @@ export class DefaultAgentManager implements AgentManager {
         }
       }
       this.autoPushInFlight.delete(projectId);
+
+      const pendingVersion = this.pendingWaitingPushVersions.get(projectId) || 0;
+      const appliedVersion = this.autoPushedWaitingVersions.get(projectId) || 0;
+      if (pendingVersion > appliedVersion) {
+        this.pendingWaitingPushVersions.delete(projectId);
+        void this.autoPushWhenWaiting(projectId, pendingVersion);
+      }
     }
   }
 
