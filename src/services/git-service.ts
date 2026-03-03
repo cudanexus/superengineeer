@@ -51,6 +51,7 @@ export interface GitService {
   stageAll(projectPath: string): Promise<void>;
   unstageAll(projectPath: string): Promise<void>;
   commit(projectPath: string, message: string, allowEmpty?: boolean): Promise<CommitResult>;
+  commitPaths(projectPath: string, message: string, paths: string[]): Promise<CommitResult>;
   createBranch(projectPath: string, name: string, checkout?: boolean): Promise<void>;
   checkout(projectPath: string, branch: string): Promise<void>;
   push(projectPath: string, remote?: string, branch?: string, setUpstream?: boolean): Promise<string>;
@@ -62,6 +63,8 @@ export interface GitService {
     push?: boolean,
     remote?: string
   ): Promise<{ sourceBranch: string; targetBranch: string; pushed: boolean }>;
+  deleteBranch(projectPath: string, branch: string, remote?: string): Promise<void>;
+  promoteCurrentHeadToBranch(projectPath: string, targetBranch?: string, remote?: string): Promise<string>;
   getDiff(projectPath: string, staged?: boolean): Promise<string>;
   listCommits(projectPath: string, limit?: number, offset?: number): Promise<{ commits: GitCommitEntry[]; total: number; currentHead: string | null }>;
   getFileDiff(projectPath: string, filePath: string, staged?: boolean): Promise<FileDiffResult>;
@@ -172,6 +175,13 @@ export class SimpleGitService implements GitService {
 
   private isMissingRemoteRefError(errorText: string): boolean {
     return errorText.toLowerCase().includes("couldn't find remote ref");
+  }
+
+  private isInternalMetadataConflict(errorText: string): boolean {
+    const text = errorText.toLowerCase();
+    return text.includes('.superengineer-v5/')
+      || text.includes('.superengineer/')
+      || text.includes('.claude/');
   }
 
   private isGithubHttpsAuthError(errorText: string): boolean {
@@ -534,6 +544,22 @@ export class SimpleGitService implements GitService {
     }
   }
 
+  async commitPaths(projectPath: string, message: string, paths: string[]): Promise<CommitResult> {
+    if (!paths || paths.length === 0) {
+      throw new GitError('No paths provided for commit.');
+    }
+
+    try {
+      const git = this.getGit(projectPath);
+      const args = ['commit', '-m', message, '--', ...paths];
+      await git.raw(args);
+      const hash = (await git.revparse(['--short', 'HEAD'])).trim();
+      return { hash, message };
+    } catch (error) {
+      throw new GitError(`Failed to commit selected files: ${this.toGitErrorMessage(error)}`);
+    }
+  }
+
   async createBranch(projectPath: string, name: string, checkout = false): Promise<void> {
     try {
       const git = this.getGit(projectPath);
@@ -634,7 +660,21 @@ export class SimpleGitService implements GitService {
         try {
           return await this.rebaseAndRetryPush(git, remote, branch, setUpstream);
         } catch (rebaseError) {
-          throw new GitError(`Failed to push after rebase: ${this.toGitErrorMessage(rebaseError)}`);
+          const rebaseMessage = this.toGitErrorMessage(rebaseError);
+          if (this.isInternalMetadataConflict(rebaseMessage)) {
+            try {
+              // If rebase failed on internal metadata files, abort and force-with-lease
+              // to keep the user unblocked. This is scoped to metadata-conflict cases.
+              await git.raw(['rebase', '--abort']).catch(() => {});
+              const targetBranch = branch || await this.resolveCurrentBranch(git, rebaseMessage) || 'HEAD';
+              return await git.raw(['push', '--force-with-lease', remote, targetBranch]);
+            } catch (forceError) {
+              throw new GitError(
+                `Failed to push after metadata-conflict fallback: ${this.toGitErrorMessage(forceError)}`
+              );
+            }
+          }
+          throw new GitError(`Failed to push after rebase: ${rebaseMessage}`);
         }
       }
 
@@ -713,6 +753,78 @@ export class SimpleGitService implements GitService {
     } catch (error) {
       if (error instanceof GitError) throw error;
       throw new GitError(`Failed to merge to main: ${this.toGitErrorMessage(error)}`);
+    }
+  }
+
+  async deleteBranch(projectPath: string, branch: string, remote = 'origin'): Promise<void> {
+    try {
+      const git = this.getGit(projectPath);
+      const localBranches = await git.branchLocal();
+      if (localBranches.current === branch) {
+        throw new GitError(`Cannot delete currently checked out branch "${branch}".`);
+      }
+
+      if (localBranches.all.includes(branch)) {
+        await git.deleteLocalBranch(branch, true);
+      }
+
+      try {
+        await git.raw(['push', remote, '--delete', branch]);
+      } catch {
+        // Ignore remote deletion failures (branch may not exist remotely).
+      }
+    } catch (error) {
+      if (error instanceof GitError) throw error;
+      throw new GitError(`Failed to delete branch: ${this.toGitErrorMessage(error)}`);
+    }
+  }
+
+  async promoteCurrentHeadToBranch(projectPath: string, targetBranch = 'main', remote = 'origin'): Promise<string> {
+    try {
+      const git = this.getGit(projectPath);
+      const headCommit = (await git.raw(['rev-parse', 'HEAD'])).trim();
+      const localBranches = await git.branchLocal();
+      const hadTargetBranch = localBranches.all.includes(targetBranch);
+      let oldTip: string | null = null;
+
+      if (hadTargetBranch) {
+        try {
+          oldTip = (await git.raw(['rev-parse', targetBranch])).trim() || null;
+        } catch {
+          oldTip = null;
+        }
+      }
+
+      // Preserve the previous canonical tip permanently so pointer moves never
+      // lose recoverability even after reflog expiration/GC.
+      if (oldTip && oldTip !== headCommit) {
+        await git.raw(['update-ref', `refs/archive/${oldTip}`, oldTip]);
+      }
+
+      if (hadTargetBranch) {
+        await git.raw(['branch', '-f', targetBranch, headCommit]);
+      } else {
+        await git.raw(['branch', targetBranch, headCommit]);
+      }
+
+      await git.checkout(targetBranch);
+
+      try {
+        await git.raw(['push', '--force-with-lease', remote, targetBranch]);
+      } catch (error) {
+        // No remote or no upstream configured; keep local branch pointer updated.
+        const message = this.toGitErrorMessage(error).toLowerCase();
+        if (!message.includes('no configured push destination')
+          && !message.includes('does not appear to be a git repository')
+          && !message.includes('could not read from remote repository')
+          && !message.includes('no such remote')) {
+          throw error;
+        }
+      }
+
+      return headCommit;
+    } catch (error) {
+      throw new GitError(`Failed to promote HEAD to "${targetBranch}": ${this.toGitErrorMessage(error)}`);
     }
   }
 

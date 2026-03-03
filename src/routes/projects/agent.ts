@@ -532,7 +532,8 @@ export function createAgentRouter(deps: ProjectRouterDependencies): Router {
       throw new ValidationError('Rewind unavailable: project is not a git repository');
     }
 
-    let resetTarget = '';
+    let rewindTarget = '';
+    let targetCommit = '';
     let rewoundCommits = 0;
     const beforeHead = (await execFileAsync('git', ['rev-parse', 'HEAD'], gitExecOptions)).stdout.trim();
     const conversationId = project.currentConversationId || null;
@@ -543,9 +544,12 @@ export function createAgentRouter(deps: ProjectRouterDependencies): Router {
       } catch {
         throw new ValidationError('Rewind unavailable: selected commit was not found');
       }
-      resetTarget = commitHash;
+      rewindTarget = commitHash;
+      targetCommit = (
+        await execFileAsync('git', ['rev-parse', `${commitHash}^{commit}`], gitExecOptions)
+      ).stdout.trim();
       try {
-        const countRaw = await execFileAsync('git', ['rev-list', '--count', `${commitHash}..${beforeHead}`], gitExecOptions);
+        const countRaw = await execFileAsync('git', ['rev-list', '--count', `${targetCommit}..${beforeHead}`], gitExecOptions);
         rewoundCommits = Math.max(0, Number(String(countRaw.stdout || '0').trim()) || 0);
       } catch {
         rewoundCommits = 0;
@@ -556,13 +560,22 @@ export function createAgentRouter(deps: ProjectRouterDependencies): Router {
       } catch {
         throw new ValidationError(`Rewind unavailable: not enough commit history for ${steps} step(s)`);
       }
-      resetTarget = `HEAD~${steps}`;
+      rewindTarget = `HEAD~${steps}`;
+      targetCommit = (
+        await execFileAsync('git', ['rev-parse', `HEAD~${steps}`], gitExecOptions)
+      ).stdout.trim();
       rewoundCommits = Math.max(0, steps);
     }
 
+    const workingTreeChanges = (
+      await execFileAsync('git', ['status', '--porcelain'], gitExecOptions)
+    ).stdout.trim();
+    if (workingTreeChanges.length > 0) {
+      throw new ValidationError('Rewind unavailable: commit or stash current changes first');
+    }
+
     await abortInProgressGitOperations(gitExecOptions);
-    await execFileAsync('git', ['reset', '--hard', resetTarget], gitExecOptions);
-    await execFileAsync('git', ['clean', '-fd'], gitExecOptions);
+    await execFileAsync('git', ['checkout', '--detach', targetCommit], gitExecOptions);
 
     // Do not rewrite remote history automatically during rewind.
     // This preserves collaborators' branch history and avoids accidental commit loss.
@@ -656,7 +669,9 @@ export function createAgentRouter(deps: ProjectRouterDependencies): Router {
       success: true,
       steps,
       head: headSha,
-      target: resetTarget,
+      target: rewindTarget,
+      targetCommit,
+      detachedHead: true,
       byCommitHash: Boolean(commitHash),
       rewoundCommits,
       conversationTrimmed,

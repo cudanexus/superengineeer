@@ -237,18 +237,6 @@ interface ModelPricing {
   cacheReadPerMTok: number;
 }
 
-const AUTO_COMMIT_EXCLUDED_PREFIXES = [
-  '.claude/',
-  '.superengineer-v5/',
-  '.superengineer/',
-];
-
-function isAutoCommitPathAllowed(filePath: string): boolean {
-  const normalized = String(filePath || '').replace(/\\/g, '/').replace(/^\.?\//, '');
-  if (!normalized) return false;
-  return !AUTO_COMMIT_EXCLUDED_PREFIXES.some((prefix) => normalized === prefix.slice(0, -1) || normalized.startsWith(prefix));
-}
-
 const ZERO_TOKENS: TokenTotals = {
   inputTokens: 0,
   outputTokens: 0,
@@ -1536,70 +1524,40 @@ export class DefaultAgentManager implements AgentManager {
     try {
       const project = await this.projectRepository.findById(projectId);
       if (!project) return;
+      const branches = await this.gitService.getBranches(project.path);
+      const currentBranch = String(branches.current || '').trim();
 
-      // If there are local edits at waiting time, persist them first so push
-      // actually has a commit to send.
-      const status = await this.gitService.getStatus(project.path);
-      const stagedPaths = (status.staged || []).map((f) => f.path);
-      const unstagedPaths = (status.unstaged || []).map((f) => f.path);
-      const untrackedPaths = (status.untracked || []).map((f) => f.path);
+      const canonicalBranch = branches.local.includes('main')
+        ? 'main'
+        : branches.local.includes('master')
+          ? 'master'
+          : 'main';
 
-      const blockedStaged = stagedPaths.filter((p) => !isAutoCommitPathAllowed(p));
-      if (blockedStaged.length > 0) {
+      if (currentBranch === 'HEAD') {
+        await this.gitService.promoteCurrentHeadToBranch(project.path, canonicalBranch, 'origin');
+        this.logger.info('Auto-promoted detached HEAD to canonical branch', {
+          projectId,
+          targetBranch: canonicalBranch,
+        });
+      } else {
+        // Keep this simple: only push existing commits when waiting.
         try {
-          // Reset index to a known state, then re-stage only allowed paths.
-          await this.gitService.unstageAll(project.path);
-        } catch (unstageError) {
-          this.logger.warn('Failed to reset staged files before auto-commit', {
+          await this.gitService.push(project.path);
+        } catch (firstPushError) {
+          // Brief retry helps when remote updates race with this wait transition.
+          await this.delay(1200);
+          await this.gitService.push(project.path);
+          this.logger.warn('Auto-push succeeded on retry', {
             projectId,
-            blockedStaged,
-            error: unstageError instanceof Error ? unstageError.message : String(unstageError),
+            waitingVersion,
+            firstError: firstPushError instanceof Error ? firstPushError.message : String(firstPushError),
           });
         }
       }
-
-      const stageCandidates = Array.from(new Set([...stagedPaths, ...unstagedPaths, ...untrackedPaths]))
-        .filter((p) => isAutoCommitPathAllowed(p));
-      if (stageCandidates.length > 0) {
-        await this.gitService.stageFiles(project.path, stageCandidates);
-      }
-
-      const postStageStatus = await this.gitService.getStatus(project.path);
-      const blockedStillStaged = (postStageStatus.staged || [])
-        .map((f) => f.path)
-        .filter((p) => !isAutoCommitPathAllowed(p));
-      const hasCommitReadyChanges = (postStageStatus.staged || [])
-        .some((f) => isAutoCommitPathAllowed(f.path));
-
-      if (hasCommitReadyChanges && blockedStillStaged.length === 0) {
-        const stamp = new Date().toISOString().replace('T', ' ').slice(0, 19);
-        await this.gitService.commit(project.path, `chore: auto-save before waiting (${stamp})`);
-      } else if (blockedStillStaged.length > 0) {
-        this.logger.warn('Skipping auto-commit because blocked files are staged', {
-          projectId,
-          waitingVersion,
-          blockedStillStaged,
-        });
-      }
-
-      // Push anyway so already-created commits (if any) still sync automatically.
-      try {
-        await this.gitService.push(project.path);
-      } catch (firstPushError) {
-        // Brief retry helps when remote updates race with this wait transition.
-        await this.delay(1200);
-        await this.gitService.push(project.path);
-        this.logger.warn('Auto-push succeeded on retry', {
-          projectId,
-          waitingVersion,
-          firstError: firstPushError instanceof Error ? firstPushError.message : String(firstPushError),
-        });
-      }
       this.autoPushedWaitingVersions.set(projectId, waitingVersion);
-      this.logger.info('Auto-commit/push completed on waiting state', {
+      this.logger.info('Auto-push completed on waiting state', {
         projectId,
         waitingVersion,
-        stagedCandidates: stageCandidates.length,
       });
     } catch (error) {
       this.logger.warn('Auto-push skipped/failed on waiting state', {
