@@ -237,6 +237,20 @@ interface ModelPricing {
   cacheReadPerMTok: number;
 }
 
+const AUTO_COMMIT_EXCLUDED_PREFIXES = [
+  '.claude/',
+  '.superengineer-v5/',
+  '.superengineer/',
+];
+
+function isAutoCommitPathAllowed(filePath: string): boolean {
+  const normalized = String(filePath || '').replace(/\\/g, '/').replace(/^\.?\//, '');
+  if (!normalized) return false;
+  return !AUTO_COMMIT_EXCLUDED_PREFIXES.some(
+    (prefix) => normalized === prefix.slice(0, -1) || normalized.startsWith(prefix)
+  );
+}
+
 const ZERO_TOKENS: TokenTotals = {
   inputTokens: 0,
   outputTokens: 0,
@@ -1524,6 +1538,42 @@ export class DefaultAgentManager implements AgentManager {
     try {
       const project = await this.projectRepository.findById(projectId);
       if (!project) return;
+
+      // Auto-stage and commit meaningful project changes before pushing.
+      const status = await this.gitService.getStatus(project.path);
+      const stagedPaths = (status.staged || []).map((f) => f.path);
+      const unstagedPaths = (status.unstaged || []).map((f) => f.path);
+      const untrackedPaths = (status.untracked || []).map((f) => f.path);
+
+      const blockedStaged = stagedPaths.filter((p) => !isAutoCommitPathAllowed(p));
+      if (blockedStaged.length > 0) {
+        try {
+          await this.gitService.unstageFiles(project.path, blockedStaged);
+        } catch {
+          // Non-fatal: continue with allowed paths.
+        }
+      }
+
+      const stageCandidates = Array.from(new Set([...unstagedPaths, ...untrackedPaths]))
+        .filter((p) => isAutoCommitPathAllowed(p));
+      if (stageCandidates.length > 0) {
+        await this.gitService.stageFiles(project.path, stageCandidates);
+      }
+
+      const postStage = await this.gitService.getStatus(project.path);
+      const allowedStaged = (postStage.staged || [])
+        .map((f) => f.path)
+        .filter((p) => isAutoCommitPathAllowed(p));
+
+      if (allowedStaged.length > 0) {
+        const stamp = new Date().toISOString().replace('T', ' ').slice(0, 19);
+        await this.gitService.commitPaths(
+          project.path,
+          `chore: auto-save before waiting (${stamp})`,
+          allowedStaged
+        );
+      }
+
       const branches = await this.gitService.getBranches(project.path);
       const currentBranch = String(branches.current || '').trim();
 

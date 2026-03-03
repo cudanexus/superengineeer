@@ -18,6 +18,7 @@
 
   // Module state
   var gitOperationInProgress = false;
+  var gitOperationTimeout = null;
   var lastGitStatus = null;
   var gitAuthPollTimer = null;
   var gitAuthConnected = false;
@@ -63,25 +64,12 @@
   }
 
   function refreshGitAuthGate() {
-    api.getGitHubStatus()
-      .done(function(status) {
-        gitAuthConnected = !!(status && status.authenticated);
-        renderGitAuthGate();
-      })
-      .fail(function() {
-        gitAuthConnected = false;
-        renderGitAuthGate();
-      });
+    gitAuthConnected = true;
+    renderGitAuthGate();
   }
 
   function renderGitAuthGate() {
-    if (gitAuthConnected) {
-      $('#git-connect-required').addClass('hidden');
-      $('#git-auth-gated-content').removeClass('hidden');
-    } else {
-      $('#git-connect-required').removeClass('hidden');
-      $('#git-auth-gated-content').addClass('hidden');
-    }
+    $('#git-auth-gated-content').removeClass('hidden');
   }
 
   function loadGitTags() {
@@ -358,14 +346,19 @@
     gitOperationInProgress = loading;
     var $gitContent = $('#git-content');
 
+    if (gitOperationTimeout) {
+      clearTimeout(gitOperationTimeout);
+      gitOperationTimeout = null;
+    }
+
     if (loading) {
       $gitContent.addClass('git-loading');
-      $gitContent.find('button, select').prop('disabled', true);
-      $gitContent.find('.git-action-btn, .git-branch-item, .git-push-tag-btn').addClass('pointer-events-none opacity-50');
+      gitOperationTimeout = setTimeout(function() {
+        gitOperationInProgress = false;
+        $('#git-content').removeClass('git-loading');
+      }, 30000);
     } else {
       $gitContent.removeClass('git-loading');
-      $gitContent.find('button, select').prop('disabled', false);
-      $gitContent.find('.git-action-btn, .git-branch-item, .git-push-tag-btn').removeClass('pointer-events-none opacity-50');
     }
   }
 
@@ -984,11 +977,6 @@
         });
     });
 
-    $('#btn-git-create-repo-push').on('click', function() {
-      if (gitOperationInProgress || !state.selectedProjectId) return;
-      createRepoOnly();
-    });
-
     $('#btn-git-restore-commit').on('click', function() {
       if (gitOperationInProgress || !state.selectedProjectId) return;
       openRestoreCommitModal();
@@ -1026,10 +1014,6 @@
 
     $('#modal-restore-commit .modal-close, #modal-restore-commit .modal-backdrop').on('click', function() {
       $('#modal-restore-commit').addClass('hidden');
-    });
-
-    $('#btn-git-connect-auth').on('click', function() {
-      openGitHubAuthDeviceModal();
     });
 
     $('#btn-git-auth-copy').on('click', function() {
