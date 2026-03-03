@@ -1621,15 +1621,12 @@ export class DefaultAgentManager implements AgentManager {
               ? 'master'
               : 'main';
 
-          if (currentBranch === 'HEAD') {
-            await this.gitService.promoteCurrentHeadToBranch(project.path, canonicalBranch, 'origin');
-            this.logger.info('Auto-promoted detached HEAD to canonical branch', {
-              projectId,
-              targetBranch: canonicalBranch,
-            });
-          } else {
-            await this.gitService.push(project.path);
-          }
+          await this.gitService.promoteCurrentHeadToBranch(project.path, canonicalBranch, 'origin');
+          this.logger.info('Auto-promoted HEAD to canonical branch', {
+            projectId,
+            targetBranch: canonicalBranch,
+            wasDetachedHead: currentBranch === 'HEAD',
+          });
 
           synced = true;
           break;
