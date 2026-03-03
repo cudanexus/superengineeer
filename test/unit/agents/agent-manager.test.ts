@@ -13,6 +13,7 @@ import {
   createMockRoadmapParser,
   createMockPermissionGenerator,
   createMockSettingsRepository,
+  createMockGitService,
   createTestProject,
 } from '../helpers/mock-factories';
 
@@ -46,6 +47,7 @@ describe('DefaultAgentManager', () => {
   let mockRoadmapParser: ReturnType<typeof createMockRoadmapParser>;
   let mockPermissionGenerator: ReturnType<typeof createMockPermissionGenerator>;
   let mockSettingsRepo: ReturnType<typeof createMockSettingsRepository>;
+  let mockGitService: ReturnType<typeof createMockGitService>;
 
   const testProject = createTestProject({ id: 'test-project', path: '/test/path' });
 
@@ -58,6 +60,7 @@ describe('DefaultAgentManager', () => {
     mockRoadmapParser = createMockRoadmapParser();
     mockPermissionGenerator = createMockPermissionGenerator();
     mockSettingsRepo = createMockSettingsRepository();
+    mockGitService = createMockGitService();
 
     const deps: AgentManagerDependencies = {
       maxConcurrentAgents: 3,
@@ -68,6 +71,7 @@ describe('DefaultAgentManager', () => {
       roadmapParser: mockRoadmapParser,
       permissionGenerator: mockPermissionGenerator,
       settingsRepository: mockSettingsRepo,
+      gitService: mockGitService,
     };
 
     agentManager = new DefaultAgentManager(deps);
@@ -178,6 +182,30 @@ describe('DefaultAgentManager', () => {
       await agentManager.startInteractiveAgent('test-project');
 
       expect(mockProjectRepo.updateStatus).toHaveBeenCalledWith('test-project', 'running');
+    });
+  });
+
+  describe('auto push on waiting', () => {
+    it('should auto-push once when interactive agent enters waiting state', async () => {
+      await agentManager.startInteractiveAgent('test-project');
+
+      (mockAgent as unknown as { _setProcessing: (p: boolean) => void })._setProcessing(false);
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(mockGitService.push).toHaveBeenCalledWith('/test/path');
+    });
+
+    it('should not auto-push repeatedly for the same waiting version', async () => {
+      await agentManager.startInteractiveAgent('test-project');
+
+      const emit = (mockAgent as unknown as {
+        _emit: (event: 'waitingForInput', payload: { isWaiting: boolean; version: number }) => void
+      })._emit;
+      emit('waitingForInput', { isWaiting: true, version: 99 });
+      emit('waitingForInput', { isWaiting: true, version: 99 });
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(mockGitService.push).toHaveBeenCalledTimes(1);
     });
   });
 

@@ -207,10 +207,11 @@ export function createGitRouter(deps: ProjectRouterDependencies): Router {
     const perPage = Math.max(1, Math.min(100, Number(req.query['limit'] || 50)));
     const page = Math.max(1, Number(req.query['page'] || 1));
     const offset = (page - 1) * perPage;
-    const { commits, total } = await gitService.listCommits((project).path, perPage, offset);
+    const { commits, total, currentHead } = await gitService.listCommits((project).path, perPage, offset);
     const totalPages = Math.max(1, Math.ceil(total / perPage));
     res.json({
       commits,
+      currentHead,
       pagination: {
         page,
         perPage,

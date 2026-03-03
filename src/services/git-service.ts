@@ -63,7 +63,7 @@ export interface GitService {
     remote?: string
   ): Promise<{ sourceBranch: string; targetBranch: string; pushed: boolean }>;
   getDiff(projectPath: string, staged?: boolean): Promise<string>;
-  listCommits(projectPath: string, limit?: number, offset?: number): Promise<{ commits: GitCommitEntry[]; total: number }>;
+  listCommits(projectPath: string, limit?: number, offset?: number): Promise<{ commits: GitCommitEntry[]; total: number; currentHead: string | null }>;
   getFileDiff(projectPath: string, filePath: string, staged?: boolean): Promise<FileDiffResult>;
   discardChanges(projectPath: string, paths: string[]): Promise<void>;
   isGitRepo(projectPath: string): Promise<boolean>;
@@ -504,6 +504,7 @@ export class SimpleGitService implements GitService {
       const conflictedFiles = Array.isArray((status as { conflicted?: unknown[] }).conflicted)
         ? (status as { conflicted: unknown[] }).conflicted
         : [];
+      const hasStagedInfo = Array.isArray((status as { staged?: unknown[] }).staged);
       const stagedFiles = Array.isArray((status as { staged?: unknown[] }).staged)
         ? (status as { staged: unknown[] }).staged
         : [];
@@ -518,7 +519,7 @@ export class SimpleGitService implements GitService {
         return { hash, message };
       }
 
-      if (stagedFiles.length === 0) {
+      if (hasStagedInfo && stagedFiles.length === 0) {
         throw new GitError('No staged changes to commit. Stage files first.');
       }
 
@@ -720,7 +721,7 @@ export class SimpleGitService implements GitService {
     return await this.getGit(projectPath).diff(args);
   }
 
-  async listCommits(projectPath: string, limit = 200, offset = 0): Promise<{ commits: GitCommitEntry[]; total: number }> {
+  async listCommits(projectPath: string, limit = 200, offset = 0): Promise<{ commits: GitCommitEntry[]; total: number; currentHead: string | null }> {
     try {
       const git = this.getGit(projectPath);
       // Best effort: refresh refs so rewind picker can show complete history.
@@ -762,10 +763,16 @@ export class SimpleGitService implements GitService {
         author: item.author_name,
         date: item.date,
       }));
+      let currentHead: string | null = null;
+      try {
+        currentHead = (await git.raw(['rev-parse', 'HEAD'])).trim() || null;
+      } catch {
+        currentHead = null;
+      }
       if (!total) {
         total = commits.length;
       }
-      return { commits, total };
+      return { commits, total, currentHead };
     } catch (error) {
       throw new GitError(`Failed to list commits: ${this.toGitErrorMessage(error)}`);
     }

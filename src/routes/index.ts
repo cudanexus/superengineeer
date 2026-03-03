@@ -25,7 +25,7 @@ import {
   DefaultInventifyService,
 } from '../services';
 import { RunProcessManager } from '../services/run-config/run-process-types';
-import { createGitService } from '../services/git-service';
+import { createGitService, GitService } from '../services/git-service';
 import { createShellService, ShellService } from '../services/shell-service';
 import { createGitHubCLIService, GitHubCLIService } from '../services/github-cli-service';
 import { createIntegrationsRouter } from './integrations';
@@ -100,6 +100,7 @@ export function createApiRouter(deps: ApiRouterDependencies = {}): Router {
   const roadmapEditor = new MarkdownRoadmapEditor(roadmapParser);
   const roadmapGenerator = getOrCreateRoadmapGenerator();
   const instructionGenerator = new DefaultInstructionGenerator();
+  const gitService = createGitService();
 
   // Agent Manager (singleton for WebSocket integration)
   const agentManager = deps.agentManager || getOrCreateAgentManager({
@@ -109,6 +110,7 @@ export function createApiRouter(deps: ApiRouterDependencies = {}): Router {
     instructionGenerator,
     roadmapParser,
     maxConcurrentAgents: deps.maxConcurrentAgents,
+    gitService,
   });
 
   // Health check
@@ -332,9 +334,6 @@ export function createApiRouter(deps: ApiRouterDependencies = {}): Router {
     },
   }));
 
-  // Git service
-  const gitService = createGitService();
-
   // Shell service (singleton for WebSocket integration) - only create if enabled
   const shellEnabled = deps.shellEnabled !== false;
   const shellService = shellEnabled ? getOrCreateShellService() : null;
@@ -394,6 +393,7 @@ interface AgentManagerConfig {
   instructionGenerator: DefaultInstructionGenerator;
   roadmapParser: MarkdownRoadmapParser;
   maxConcurrentAgents?: number;
+  gitService: GitService;
 }
 
 function getOrCreateAgentManager(config: AgentManagerConfig): AgentManager {
@@ -405,6 +405,7 @@ function getOrCreateAgentManager(config: AgentManagerConfig): AgentManager {
       instructionGenerator: config.instructionGenerator,
       roadmapParser: config.roadmapParser,
       maxConcurrentAgents: config.maxConcurrentAgents,
+      gitService: config.gitService,
     });
   }
 

@@ -77,10 +77,7 @@ declare module 'api-client' {
   export function rewindAgent(
     id: string,
     payloadOrSteps?: number | { steps?: number; commitHash?: string }
-  ): JQuery.Promise<{ success: boolean; head: string; rewoundCommits?: number; hasForward?: boolean }>;
-  export function forwardAgent(
-    id: string
-  ): JQuery.Promise<{ success: boolean; head: string; hasForward?: boolean }>;
+  ): JQuery.Promise<{ success: boolean; head: string; rewoundCommits?: number }>;
 
   // Queue
   export function getQueuedMessages(id: string): JQuery.Promise<Array<string>>;
@@ -193,7 +190,18 @@ declare module 'api-client' {
   export function getGitCommits(
     projectId: string,
     limit?: number
-  ): JQuery.Promise<{ commits: Array<{ hash: string; message: string; author: string; date: string }> }>;
+  ): JQuery.Promise<{
+    commits: Array<{ hash: string; message: string; author: string; date: string }>;
+    currentHead?: string | null;
+    pagination?: {
+      page: number;
+      perPage: number;
+      total: number;
+      totalPages: number;
+      hasNextPage: boolean;
+      hasPrevPage: boolean;
+    };
+  }>;
   export function getGitFileDiff(
     projectId: string,
     filePath: string,

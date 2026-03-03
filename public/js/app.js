@@ -2644,9 +2644,6 @@
     $('#btn-rewind-agent').on('click', function () {
       openRewindCommitModal();
     });
-    $('#btn-forward-agent').on('click', function () {
-      requestForwardOperation();
-    });
 
     $('#btn-confirm-rewind-commit').on('click', function () {
       confirmRewindCommitSelection();
@@ -4976,11 +4973,10 @@
     var hash = String(commit.hash || '').trim();
     var shortHash = hash ? hash.slice(0, 8) : 'unknown';
     var message = String(commit.message || '').trim() || 'No message';
-    var author = String(commit.author || '').trim() || 'unknown';
     var date = String(commit.date || '').trim();
     var dateLabel = date ? new Date(date).toLocaleString() : '';
     var title = shortHash + '  ' + message;
-    var meta = [author, dateLabel].filter(Boolean).join(' • ');
+    var meta = [dateLabel].filter(Boolean).join(' • ');
     return {
       value: hash,
       label: title + (meta ? ' (' + meta + ')' : ''),
@@ -5036,6 +5032,7 @@
     api.getGitCommits(projectId, state.rewindCommitPicker.perPage, targetPage)
       .done(function (data) {
         var commits = (data && data.commits) || [];
+        var currentHead = String((data && data.currentHead) || '').trim();
         var pagination = (data && data.pagination) || {};
         state.rewindCommitPicker.page = Number(pagination.page || targetPage);
         state.rewindCommitPicker.totalPages = Math.max(1, Number(pagination.totalPages || 1));
@@ -5053,7 +5050,9 @@
 
         var optionsHtml = commits.map(function (commit) {
           var option = formatRewindCommitOption(commit);
-          return '<option value="' + escapeHtml(option.value) + '">' + escapeHtml(option.label) + '</option>';
+          var isActiveCommit = !!currentHead && option.value && option.value === currentHead;
+          var label = (isActiveCommit ? '🟢 ' : '') + option.label;
+          return '<option value="' + escapeHtml(option.value) + '">' + escapeHtml(label) + '</option>';
         }).join('');
         $select.prop('disabled', false).html(optionsHtml);
         $help.text('Select a commit and confirm. Workspace files will reset to that snapshot.');
@@ -5143,7 +5142,6 @@
 
     state.rewindSending = true;
     $('#btn-rewind-agent').prop('disabled', true);
-    $('#btn-forward-agent').prop('disabled', true);
 
     var payload = commitHash
       ? { commitHash: commitHash }
@@ -5188,57 +5186,6 @@
       });
   }
 
-  function requestForwardOperation() {
-    var projectId = state.selectedProjectId;
-
-    if (!projectId || state.rewindSending) return;
-
-    var project = findProjectById(projectId);
-    var isRunning = project && project.status === 'running';
-    var isWaiting = project && project.isWaitingForInput;
-
-    // Allow forward even when agent is stopped. If agent is running, require waiting state.
-    if (isRunning && !isWaiting) {
-      showToast('Wait for current response to finish before forward', 'warning');
-      return;
-    }
-
-    state.rewindSending = true;
-    $('#btn-rewind-agent').prop('disabled', true);
-    $('#btn-forward-agent').prop('disabled', true);
-
-    var previouslyActiveFilePath = state.activeFilePath;
-
-    api.forwardAgent(projectId)
-      .done(function () {
-        if (project) {
-          project.isWaitingForInput = false;
-          state.waitingVersion++;
-          renderProjectList();
-        }
-        updateWaitingIndicator(false);
-        updateCancelButton();
-
-        loadConversationHistory(projectId);
-        refreshCurrentTabContent();
-        GitModule.loadGitStatus();
-
-        if (previouslyActiveFilePath && typeof FileBrowser !== 'undefined' && FileBrowser && typeof FileBrowser.openFile === 'function') {
-          var fileName = previouslyActiveFilePath.split('/').pop() || previouslyActiveFilePath;
-          FileBrowser.openFile(previouslyActiveFilePath, fileName);
-        }
-
-        showToast('Forward restore completed', 'success');
-      })
-      .fail(function (xhr) {
-        showErrorToast(xhr, 'Failed to restore forward');
-      })
-      .always(function () {
-        state.rewindSending = false;
-        updateRewindButton();
-      });
-  }
-
   function updateCancelButton() {
     var project = findProjectById(state.selectedProjectId);
     var isRunning = project && project.status === 'running';
@@ -5263,16 +5210,13 @@
 
     if (isVisible) {
       $('#btn-rewind-agent').removeClass('hidden');
-      $('#btn-forward-agent').removeClass('hidden');
     } else {
       $('#btn-rewind-agent').addClass('hidden');
-      $('#btn-forward-agent').addClass('hidden');
     }
 
     // Keep button visible and enabled whenever a project is selected.
     // Runtime guard (if agent is actively responding) is handled in requestRewindOperation().
     $('#btn-rewind-agent').prop('disabled', !!state.rewindSending || !isVisible);
-    $('#btn-forward-agent').prop('disabled', !!state.rewindSending || !isVisible);
   }
 
   // Agent status polling - reduced to 10 seconds as fallback (WebSocket is primary)

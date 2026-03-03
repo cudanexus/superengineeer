@@ -25,6 +25,7 @@ import {
   ProjectStatus,
 } from '../repositories';
 import { InstructionGenerator, RoadmapParser } from '../services';
+import { GitService } from '../services/git-service';
 import { getLogger, Logger } from '../utils';
 import { DEFAULT_MODEL } from '../config/models';
 
@@ -213,6 +214,7 @@ export interface AgentManagerDependencies {
   agentFactory?: AgentFactory;
   permissionGenerator?: PermissionGenerator;
   maxConcurrentAgents?: number;
+  gitService?: GitService;
 }
 
 type EventListeners = {
@@ -306,6 +308,7 @@ export class DefaultAgentManager implements AgentManager {
   private readonly roadmapParser: RoadmapParser;
   private readonly agentFactory: AgentFactory;
   private readonly permissionGenerator: PermissionGenerator;
+  private readonly gitService?: GitService;
   private readonly logger: Logger;
   private readonly pendingMessageSaves: Set<Promise<unknown>> = new Set();
   private readonly listeners: EventListeners = {
@@ -327,6 +330,8 @@ export class DefaultAgentManager implements AgentManager {
   private queuedMessages: Map<string, string[]> = new Map();
   private pendingPlans: Map<string, { planContent: string; sessionId: string | null }> = new Map();
   private readonly usageByProject: Map<string, Map<string, SessionUsageAggregate>> = new Map();
+  private readonly autoPushedWaitingVersions: Map<string, number> = new Map();
+  private readonly autoPushInFlight: Set<string> = new Set();
   private _maxConcurrentAgents: number;
 
   constructor({
@@ -338,6 +343,7 @@ export class DefaultAgentManager implements AgentManager {
     agentFactory = defaultAgentFactory,
     permissionGenerator,
     maxConcurrentAgents = 3,
+    gitService,
   }: AgentManagerDependencies) {
     this.projectRepository = projectRepository;
     this.conversationRepository = conversationRepository;
@@ -346,6 +352,7 @@ export class DefaultAgentManager implements AgentManager {
     this.roadmapParser = roadmapParser;
     this.agentFactory = agentFactory;
     this.permissionGenerator = permissionGenerator || new DefaultPermissionGenerator();
+    this.gitService = gitService;
     this._maxConcurrentAgents = maxConcurrentAgents;
     this.logger = getLogger('agent-manager');
 
@@ -1407,6 +1414,7 @@ export class DefaultAgentManager implements AgentManager {
       // Store the waiting version
       if (status.isWaiting) {
         this.waitingVersions.set(projectId, status.version);
+        void this.autoPushWhenWaiting(projectId, status.version);
       }
 
       this.emit('waitingForInput', projectId, status);
@@ -1449,6 +1457,8 @@ export class DefaultAgentManager implements AgentManager {
     this.agents.delete(projectId);
     this.processTracker.untrackProcess(projectId);
     this.waitingVersions.delete(projectId);
+    this.autoPushedWaitingVersions.delete(projectId);
+    this.autoPushInFlight.delete(projectId);
 
     // Save context usage if available
     const conversationId = agent.sessionId;
@@ -1499,6 +1509,35 @@ export class DefaultAgentManager implements AgentManager {
         status,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
+    }
+  }
+
+  private async autoPushWhenWaiting(projectId: string, waitingVersion: number): Promise<void> {
+    const agent = this.agents.get(projectId);
+    if (!agent || agent.mode !== 'interactive' || !this.gitService) return;
+
+    const lastVersion = this.autoPushedWaitingVersions.get(projectId) || 0;
+    if (waitingVersion <= lastVersion) return;
+    if (this.autoPushInFlight.has(projectId)) return;
+
+    this.autoPushInFlight.add(projectId);
+    try {
+      const project = await this.projectRepository.findById(projectId);
+      if (!project) return;
+
+      await this.gitService.push(project.path);
+      this.autoPushedWaitingVersions.set(projectId, waitingVersion);
+      this.logger.info('Auto-push completed on waiting state', { projectId, waitingVersion });
+    } catch (error) {
+      this.logger.warn('Auto-push skipped/failed on waiting state', {
+        projectId,
+        waitingVersion,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      // Mark as handled for this waiting version to avoid repeated failures/spam.
+      this.autoPushedWaitingVersions.set(projectId, waitingVersion);
+    } finally {
+      this.autoPushInFlight.delete(projectId);
     }
   }
 

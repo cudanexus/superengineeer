@@ -281,13 +281,6 @@ describe('ApiClient', () => {
       });
     });
 
-    it('forwardAgent should POST to correct endpoint', () => {
-      ApiClient.forwardAgent('proj-123');
-      expect(mockAjax).toHaveBeenCalledWith({
-        url: '/api/projects/proj-123/agent/forward',
-        method: 'POST'
-      });
-    });
   });
 
   describe('Queue', () => {

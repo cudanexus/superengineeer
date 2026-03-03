@@ -674,20 +674,6 @@
   };
 
   /**
-   * Restore the latest state saved before rewind.
-   * @function forwardAgent
-   * @memberof module:ApiClient
-   * @param {string} id - Project UUID
-   * @returns {Promise<{success: boolean}>}
-   */
-  ApiClient.forwardAgent = function (id) {
-    return $.ajax({
-      url: baseUrl + '/api/projects/' + id + '/agent/forward',
-      method: 'POST'
-    });
-  };
-
-  /**
    * Stop a one-off agent
    * @function stopOneOffAgent
    * @memberof module:ApiClient
