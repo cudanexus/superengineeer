@@ -820,12 +820,13 @@ export class SimpleGitService implements GitService {
       try {
         await git.raw(['push', '--force-with-lease', remote, targetBranch]);
       } catch (error) {
-        // No remote or no upstream configured; keep local branch pointer updated.
+        // If no remote is configured, keep local pointer updated.
+        // For auth/network/rejection failures we must surface the error so callers
+        // can report "commit succeeded locally but push failed".
         const message = this.toGitErrorMessage(error).toLowerCase();
         if (!message.includes('no configured push destination')
-          && !message.includes('does not appear to be a git repository')
-          && !message.includes('could not read from remote repository')
-          && !message.includes('no such remote')) {
+          && !message.includes('no such remote')
+          && !message.includes('does not appear to be a git repository')) {
           throw error;
         }
       }
