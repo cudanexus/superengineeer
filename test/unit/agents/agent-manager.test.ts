@@ -192,7 +192,7 @@ describe('DefaultAgentManager', () => {
       (mockAgent as unknown as { _setProcessing: (p: boolean) => void })._setProcessing(false);
       await new Promise((resolve) => setImmediate(resolve));
 
-      expect(mockGitService.push).toHaveBeenCalledWith('/test/path');
+      expect(mockGitService.push).toHaveBeenCalledWith('/test/path', 'origin', 'main');
     });
 
     it('should not auto-push repeatedly for the same waiting version', async () => {
@@ -206,6 +206,40 @@ describe('DefaultAgentManager', () => {
       await new Promise((resolve) => setImmediate(resolve));
 
       expect(mockGitService.push).toHaveBeenCalledTimes(1);
+    });
+
+    it('should promote when waiting on a detached head branch label', async () => {
+      await agentManager.startInteractiveAgent('test-project');
+      mockGitService.getBranches.mockResolvedValue({
+        current: '(detached)',
+        local: ['main'],
+        remote: ['origin/main'],
+      });
+
+      const emit = (mockAgent as unknown as {
+        _emit: (event: 'waitingForInput', payload: { isWaiting: boolean; version: number }) => void
+      })._emit;
+      emit('waitingForInput', { isWaiting: true, version: 42 });
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(mockGitService.promoteCurrentHeadToBranch).toHaveBeenCalledWith('/test/path', 'main', 'origin');
+      expect(mockGitService.push).not.toHaveBeenCalled();
+    });
+
+    it('should continue auto-pushing when waiting version resets lower', async () => {
+      await agentManager.startInteractiveAgent('test-project');
+
+      const emit = (mockAgent as unknown as {
+        _emit: (event: 'waitingForInput', payload: { isWaiting: boolean; version: number }) => void
+      })._emit;
+      emit('waitingForInput', { isWaiting: true, version: 100 });
+      await new Promise((resolve) => setImmediate(resolve));
+      emit('waitingForInput', { isWaiting: true, version: 2 });
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(mockGitService.push).toHaveBeenCalledTimes(2);
+      expect(mockGitService.push).toHaveBeenNthCalledWith(1, '/test/path', 'origin', 'main');
+      expect(mockGitService.push).toHaveBeenNthCalledWith(2, '/test/path', 'origin', 'main');
     });
   });
 

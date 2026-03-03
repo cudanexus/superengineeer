@@ -239,7 +239,28 @@ interface ModelPricing {
 
 function isAutoCommitPathAllowed(filePath: string): boolean {
   const normalized = String(filePath || '').replace(/\\/g, '/').replace(/^\.?\//, '');
-  return normalized.length > 0;
+  if (!normalized) return false;
+
+  const blockedPrefixes = [
+    '.superengineer-v5/',
+    '.superengineer/',
+    '.claude/',
+  ];
+
+  for (const prefix of blockedPrefixes) {
+    const exact = prefix.endsWith('/') ? prefix.slice(0, -1) : prefix;
+    if (normalized === exact || normalized.startsWith(prefix)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function isDetachedBranchName(branchName: string): boolean {
+  const normalized = String(branchName || '').trim().toLowerCase();
+  if (!normalized) return true;
+  return normalized === 'head' || normalized.includes('detached');
 }
 
 const ZERO_TOKENS: TokenTotals = {
@@ -1524,11 +1545,11 @@ export class DefaultAgentManager implements AgentManager {
     const agent = this.agents.get(projectId);
     if (!agent || agent.mode !== 'interactive' || !this.gitService) return;
 
-    const lastVersion = this.autoPushedWaitingVersions.get(projectId) || 0;
-    if (waitingVersion <= lastVersion) return;
+    const lastVersion = this.autoPushedWaitingVersions.get(projectId);
+    if (lastVersion === waitingVersion) return;
     if (this.autoPushInFlight.has(projectId)) {
-      const pending = this.pendingWaitingPushVersions.get(projectId) || 0;
-      if (waitingVersion > pending) {
+      const pending = this.pendingWaitingPushVersions.get(projectId);
+      if (pending !== waitingVersion) {
         this.pendingWaitingPushVersions.set(projectId, waitingVersion);
       }
       return;
@@ -1542,10 +1563,6 @@ export class DefaultAgentManager implements AgentManager {
       const project = await this.projectRepository.findById(projectId);
       if (!project) return;
       projectPath = project.path;
-      await this.gitService.ensureIgnoredPaths(project.path, [
-        '.superengineer-v5/',
-        '.claude/',
-      ]);
       const initialStatus = await this.gitService.getStatus(project.path);
       const internalDirtyPaths = Array.from(new Set([
         ...(initialStatus.staged || []).map((f) => f.path),
@@ -1573,32 +1590,22 @@ export class DefaultAgentManager implements AgentManager {
       for (let attempt = 1; attempt <= 2; attempt += 1) {
         try {
           // Auto-stage and commit all project changes before pushing.
-          const status = await this.gitService.getStatus(project.path);
-          const unstagedPaths = (status.unstaged || []).map((f) => f.path);
-          const untrackedPaths = (status.untracked || []).map((f) => f.path);
-          if (unstagedPaths.length > 0 || untrackedPaths.length > 0) {
-            await this.gitService.stageAll(project.path);
-          }
+          await this.gitService.stageAll(project.path);
 
-          const postStage = await this.gitService.getStatus(project.path);
-          const stagedCount = (postStage.staged || []).length;
-
-          if (stagedCount > 0) {
-            const stamp = new Date().toISOString().replace('T', ' ').slice(0, 19);
-            try {
-              await this.gitService.commit(
-                project.path,
-                `chore: auto-save before waiting (${stamp})`
-              );
-            } catch (commitError) {
-              // Keep push flow alive even if commit fails on this attempt.
-              this.logger.warn('Auto-commit failed during waiting sync; continuing to push existing commits', {
-                projectId,
-                waitingVersion,
-                attempt,
-                error: commitError instanceof Error ? commitError.message : String(commitError),
-              });
-            }
+          const stamp = new Date().toISOString().replace('T', ' ').slice(0, 19);
+          try {
+            await this.gitService.commit(
+              project.path,
+              `chore: auto-save before waiting (${stamp})`
+            );
+          } catch (commitError) {
+            // Keep push flow alive even if there were no staged changes to commit.
+            this.logger.warn('Auto-commit skipped/failed during waiting sync; continuing to push existing commits', {
+              projectId,
+              waitingVersion,
+              attempt,
+              error: commitError instanceof Error ? commitError.message : String(commitError),
+            });
           }
 
           const branches = await this.gitService.getBranches(project.path);
@@ -1610,14 +1617,14 @@ export class DefaultAgentManager implements AgentManager {
               ? 'master'
               : 'main';
 
-          if (currentBranch === 'HEAD') {
+          if (isDetachedBranchName(currentBranch)) {
             await this.gitService.promoteCurrentHeadToBranch(project.path, canonicalBranch, 'origin');
             this.logger.info('Auto-promoted detached HEAD to canonical branch', {
               projectId,
               targetBranch: canonicalBranch,
             });
           } else {
-            await this.gitService.push(project.path);
+            await this.gitService.push(project.path, 'origin', currentBranch);
             this.logger.info('Auto-pushed current branch on waiting state', {
               projectId,
               branch: currentBranch,
@@ -1662,9 +1669,9 @@ export class DefaultAgentManager implements AgentManager {
       }
       this.autoPushInFlight.delete(projectId);
 
-      const pendingVersion = this.pendingWaitingPushVersions.get(projectId) || 0;
-      const appliedVersion = this.autoPushedWaitingVersions.get(projectId) || 0;
-      if (pendingVersion > appliedVersion) {
+      const pendingVersion = this.pendingWaitingPushVersions.get(projectId);
+      const appliedVersion = this.autoPushedWaitingVersions.get(projectId);
+      if (typeof pendingVersion === 'number' && pendingVersion !== appliedVersion) {
         this.pendingWaitingPushVersions.delete(projectId);
         void this.autoPushWhenWaiting(projectId, pendingVersion);
       }
