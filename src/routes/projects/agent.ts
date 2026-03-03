@@ -19,6 +19,186 @@ import {
 } from './schemas';
 
 const execFileAsync = promisify(execFile);
+const MAX_REWIND_CHECKPOINTS = 25;
+
+interface RewindCheckpoint {
+  timestamp: number;
+  headCommit: string;
+  backupRef: string | null;
+  conversationMessages: AgentMessage[];
+  sessionId: string | null;
+  sessionFileContent: string | null;
+}
+
+interface RewindHistoryState {
+  checkpoints: RewindCheckpoint[];
+  currentCheckpointIndex: number;
+}
+
+const rewindHistoryByProject = new Map<string, RewindHistoryState>();
+
+function cloneAgentMessages(messages: AgentMessage[]): AgentMessage[] {
+  return JSON.parse(JSON.stringify(messages)) as AgentMessage[];
+}
+
+function getClaudeSessionFilePath(projectPath: string, sessionId: string): string {
+  const encodedPath = projectPath.replace(/\//g, '-');
+  const claudeConfigDir = path.join(projectPath, '.superengineer-v5', '.claude');
+  return path.join(claudeConfigDir, 'projects', encodedPath, `${sessionId}.jsonl`);
+}
+
+async function readClaudeSessionFileContent(
+  projectPath: string,
+  sessionId: string | null
+): Promise<string | null> {
+  if (!sessionId) {
+    return null;
+  }
+
+  const sessionFile = getClaudeSessionFilePath(projectPath, sessionId);
+  try {
+    return await fs.promises.readFile(sessionFile, 'utf-8');
+  } catch {
+    return null;
+  }
+}
+
+async function writeClaudeSessionFileContent(
+  projectPath: string,
+  sessionId: string | null,
+  content: string | null
+): Promise<boolean> {
+  if (!sessionId) {
+    return false;
+  }
+
+  const sessionFile = getClaudeSessionFilePath(projectPath, sessionId);
+  try {
+    if (content === null) {
+      await fs.promises.unlink(sessionFile).catch(() => {});
+      return true;
+    }
+
+    await fs.promises.mkdir(path.dirname(sessionFile), { recursive: true });
+    await fs.promises.writeFile(sessionFile, content, 'utf-8');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function getRewindHistoryState(projectId: string): RewindHistoryState {
+  const existing = rewindHistoryByProject.get(projectId);
+  if (existing) return existing;
+
+  const created: RewindHistoryState = {
+    checkpoints: [],
+    currentCheckpointIndex: -1,
+  };
+  rewindHistoryByProject.set(projectId, created);
+  return created;
+}
+
+function hasForwardCheckpoint(projectId: string): boolean {
+  const state = rewindHistoryByProject.get(projectId);
+  return !!state && state.currentCheckpointIndex >= 0 && state.checkpoints.length > 0;
+}
+
+function pushRewindCheckpoint(projectId: string, checkpoint: RewindCheckpoint): void {
+  const state = getRewindHistoryState(projectId);
+
+  // If we previously moved forward, creating a new rewind branch invalidates
+  // future checkpoints.
+  if (state.currentCheckpointIndex < state.checkpoints.length - 1) {
+    state.checkpoints = state.checkpoints.slice(0, state.currentCheckpointIndex + 1);
+  }
+
+  state.checkpoints.push(checkpoint);
+  if (state.checkpoints.length > MAX_REWIND_CHECKPOINTS) {
+    state.checkpoints.shift();
+  }
+  state.currentCheckpointIndex = state.checkpoints.length - 1;
+}
+
+function popForwardCheckpoint(projectId: string): RewindCheckpoint | null {
+  const state = rewindHistoryByProject.get(projectId);
+  if (!state || state.currentCheckpointIndex < 0 || state.checkpoints.length === 0) {
+    return null;
+  }
+
+  const checkpoint = state.checkpoints[state.currentCheckpointIndex] || null;
+  state.currentCheckpointIndex -= 1;
+  return checkpoint;
+}
+
+function peekForwardCheckpoint(projectId: string): RewindCheckpoint | null {
+  const state = rewindHistoryByProject.get(projectId);
+  if (!state || state.currentCheckpointIndex < 0 || state.checkpoints.length === 0) {
+    return null;
+  }
+  return state.checkpoints[state.currentCheckpointIndex] || null;
+}
+
+async function restoreConversationMessages(
+  projectId: string,
+  conversationId: string,
+  messages: AgentMessage[],
+  conversationRepository: ProjectRouterDependencies['conversationRepository']
+): Promise<boolean> {
+  try {
+    await conversationRepository.clearMessages(projectId, conversationId);
+    for (const message of messages) {
+      await conversationRepository.addMessage(projectId, conversationId, message);
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function createRewindBackupRef(
+  commitHash: string,
+  gitExecOptions: {
+    cwd: string;
+    encoding: 'utf-8';
+    timeout: number;
+    maxBuffer: number;
+  }
+): Promise<string | null> {
+  try {
+    const shortHash = commitHash.slice(0, 12);
+    const refName = `refs/superengineer/rewind/${Date.now()}-${shortHash}`;
+    await execFileAsync('git', ['update-ref', refName, commitHash], gitExecOptions);
+    return refName;
+  } catch {
+    return null;
+  }
+}
+
+async function abortInProgressGitOperations(
+  gitExecOptions: {
+    cwd: string;
+    encoding: 'utf-8';
+    timeout: number;
+    maxBuffer: number;
+  }
+): Promise<void> {
+  const abortCommands: Array<string[]> = [
+    ['rebase', '--abort'],
+    ['merge', '--abort'],
+    ['cherry-pick', '--abort'],
+    ['revert', '--abort'],
+    ['am', '--abort'],
+  ];
+
+  for (const args of abortCommands) {
+    try {
+      await execFileAsync('git', args, gitExecOptions);
+    } catch {
+      // Ignore when operation is not in progress.
+    }
+  }
+}
 
 /**
  * Truncate Claude's session JSONL file by removing the last `turns` user+assistant
@@ -38,11 +218,7 @@ async function truncateClaudeSessionFile(
     return { truncated: false, removedLines: 0 };
   }
 
-  // Claude encodes the project path as: replace every '/' with '-'
-  // e.g. /home/syed/Documents/superengineeer → -home-syed-Documents-superengineeer
-  const encodedPath = projectPath.replace(/\//g, '-');
-  const claudeConfigDir = path.join(projectPath, '.superengineer-v5', '.claude');
-  const sessionFile = path.join(claudeConfigDir, 'projects', encodedPath, `${sessionId}.jsonl`);
+  const sessionFile = getClaudeSessionFilePath(projectPath, sessionId);
 
   let content: string;
   try {
@@ -488,6 +664,13 @@ export function createAgentRouter(deps: ProjectRouterDependencies): Router {
     let resetTarget = '';
     let rewoundCommits = 0;
     const beforeHead = (await execFileAsync('git', ['rev-parse', 'HEAD'], gitExecOptions)).stdout.trim();
+    const conversationId = project.currentConversationId || null;
+    const checkpointConversationMessages = conversationId
+      ? cloneAgentMessages(await conversationRepository.getMessages(id, conversationId))
+      : [];
+    const checkpointSessionId = agentManager.getSessionId(id);
+    const checkpointSessionFileContent = await readClaudeSessionFileContent(project.path, checkpointSessionId);
+    const checkpointBackupRef = await createRewindBackupRef(beforeHead, gitExecOptions);
     if (commitHash) {
       try {
         await execFileAsync('git', ['rev-parse', '--verify', `${commitHash}^{commit}`], gitExecOptions);
@@ -511,34 +694,25 @@ export function createAgentRouter(deps: ProjectRouterDependencies): Router {
       rewoundCommits = Math.max(0, steps);
     }
 
+    pushRewindCheckpoint(id, {
+      timestamp: Date.now(),
+      headCommit: beforeHead,
+      backupRef: checkpointBackupRef,
+      conversationMessages: checkpointConversationMessages,
+      sessionId: checkpointSessionId,
+      sessionFileContent: checkpointSessionFileContent,
+    });
+
+    await abortInProgressGitOperations(gitExecOptions);
     await execFileAsync('git', ['reset', '--hard', resetTarget], gitExecOptions);
     await execFileAsync('git', ['clean', '-fd'], gitExecOptions);
 
-    // Force-push to remote so it matches the rewound local state.
-    // Without this the remote still has the rewound commits, causing Claude's
-    // subsequent pushes to be rejected with "pull required / conflicts".
-    // --force-with-lease fails safely if the remote state isn't what we expect.
-    let remoteForceUpdated = false;
-    try {
-      const currentBranch = (
-        await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], gitExecOptions)
-      ).stdout.trim();
-      if (currentBranch && currentBranch !== 'HEAD') {
-        await execFileAsync(
-          'git',
-          ['push', '--force-with-lease', 'origin', currentBranch],
-          gitExecOptions
-        );
-        remoteForceUpdated = true;
-      }
-    } catch {
-      // No remote, or push not configured — safe to ignore.
-      // Claude will still be able to make local commits fine.
-    }
+    // Do not rewrite remote history automatically during rewind.
+    // This preserves collaborators' branch history and avoids accidental commit loss.
+    const remoteForceUpdated = false;
 
     // Trim only the most recent rewound user/assistant turns from persisted conversation
     // instead of clearing whole history.
-    const conversationId = project.currentConversationId;
     let conversationTrimmed = false;
     if (conversationId && rewoundCommits > 0) {
       try {
@@ -632,7 +806,94 @@ export function createAgentRouter(deps: ProjectRouterDependencies): Router {
       sessionFileTruncated,
       sessionFileRemovedLines,
       remoteForceUpdated,
+      backupRef: checkpointBackupRef,
       agentRunningDuringRewind: agentRunning,
+      hasForward: hasForwardCheckpoint(id),
+    });
+  }));
+
+  // Restore the most recent pre-rewind checkpoint (forward in rewind history)
+  router.post('/forward', validateProjectExists(projectRepository), moderateRateLimit, asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params['id'] as string;
+    const project = req.project!;
+    const conversationId = project.currentConversationId || null;
+    const checkpoint = peekForwardCheckpoint(id);
+
+    if (!checkpoint) {
+      throw new ValidationError('No forward checkpoint available');
+    }
+
+    const agentRunning = agentManager.isRunning(id);
+    if (agentRunning) {
+      const mode = agentManager.getAgentMode(id);
+      if (mode !== 'interactive') {
+        throw new ValidationError('Forward is only available in interactive mode');
+      }
+
+      if (!agentManager.isWaitingForInput(id)) {
+        throw new ValidationError('Forward is only available when agent is waiting for input');
+      }
+    }
+
+    const gitExecOptions = {
+      cwd: project.path,
+      encoding: 'utf-8' as const,
+      timeout: 120000,
+      maxBuffer: 10 * 1024 * 1024,
+    };
+
+    try {
+      const revParse = await execFileAsync('git', ['rev-parse', '--is-inside-work-tree'], gitExecOptions);
+      if (!String(revParse.stdout || '').trim().includes('true')) {
+        throw new ValidationError('Forward unavailable: project is not a git repository');
+      }
+    } catch {
+      throw new ValidationError('Forward unavailable: project is not a git repository');
+    }
+
+    try {
+      await execFileAsync('git', ['rev-parse', '--verify', `${checkpoint.headCommit}^{commit}`], gitExecOptions);
+    } catch {
+      throw new ValidationError('Forward unavailable: checkpoint commit was not found');
+    }
+
+    await abortInProgressGitOperations(gitExecOptions);
+    await execFileAsync('git', ['reset', '--hard', checkpoint.headCommit], gitExecOptions);
+    await execFileAsync('git', ['clean', '-fd'], gitExecOptions);
+
+    // Do not rewrite remote history automatically during forward restore.
+    const remoteForceUpdated = false;
+
+    let conversationRestored = false;
+    if (conversationId) {
+      conversationRestored = await restoreConversationMessages(
+        id,
+        conversationId,
+        checkpoint.conversationMessages,
+        conversationRepository
+      );
+    }
+
+    const sessionFileRestored = await writeClaudeSessionFileContent(
+      project.path,
+      checkpoint.sessionId,
+      checkpoint.sessionFileContent
+    );
+
+    popForwardCheckpoint(id);
+
+    const head = await execFileAsync('git', ['rev-parse', '--short', 'HEAD'], gitExecOptions);
+    const headSha = String(head.stdout || '').trim();
+    res.json({
+      success: true,
+      head: headSha,
+      restoredFrom: checkpoint.headCommit,
+      restoredFromBackupRef: checkpoint.backupRef,
+      restoredTimestamp: checkpoint.timestamp,
+      conversationRestored,
+      sessionFileRestored,
+      remoteForceUpdated,
+      hasForward: hasForwardCheckpoint(id),
     });
   }));
 

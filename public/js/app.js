@@ -2644,6 +2644,9 @@
     $('#btn-rewind-agent').on('click', function () {
       openRewindCommitModal();
     });
+    $('#btn-forward-agent').on('click', function () {
+      requestForwardOperation();
+    });
 
     $('#btn-confirm-rewind-commit').on('click', function () {
       confirmRewindCommitSelection();
@@ -5140,6 +5143,7 @@
 
     state.rewindSending = true;
     $('#btn-rewind-agent').prop('disabled', true);
+    $('#btn-forward-agent').prop('disabled', true);
 
     var payload = commitHash
       ? { commitHash: commitHash }
@@ -5184,6 +5188,57 @@
       });
   }
 
+  function requestForwardOperation() {
+    var projectId = state.selectedProjectId;
+
+    if (!projectId || state.rewindSending) return;
+
+    var project = findProjectById(projectId);
+    var isRunning = project && project.status === 'running';
+    var isWaiting = project && project.isWaitingForInput;
+
+    // Allow forward even when agent is stopped. If agent is running, require waiting state.
+    if (isRunning && !isWaiting) {
+      showToast('Wait for current response to finish before forward', 'warning');
+      return;
+    }
+
+    state.rewindSending = true;
+    $('#btn-rewind-agent').prop('disabled', true);
+    $('#btn-forward-agent').prop('disabled', true);
+
+    var previouslyActiveFilePath = state.activeFilePath;
+
+    api.forwardAgent(projectId)
+      .done(function () {
+        if (project) {
+          project.isWaitingForInput = false;
+          state.waitingVersion++;
+          renderProjectList();
+        }
+        updateWaitingIndicator(false);
+        updateCancelButton();
+
+        loadConversationHistory(projectId);
+        refreshCurrentTabContent();
+        GitModule.loadGitStatus();
+
+        if (previouslyActiveFilePath && typeof FileBrowser !== 'undefined' && FileBrowser && typeof FileBrowser.openFile === 'function') {
+          var fileName = previouslyActiveFilePath.split('/').pop() || previouslyActiveFilePath;
+          FileBrowser.openFile(previouslyActiveFilePath, fileName);
+        }
+
+        showToast('Forward restore completed', 'success');
+      })
+      .fail(function (xhr) {
+        showErrorToast(xhr, 'Failed to restore forward');
+      })
+      .always(function () {
+        state.rewindSending = false;
+        updateRewindButton();
+      });
+  }
+
   function updateCancelButton() {
     var project = findProjectById(state.selectedProjectId);
     var isRunning = project && project.status === 'running';
@@ -5208,13 +5263,16 @@
 
     if (isVisible) {
       $('#btn-rewind-agent').removeClass('hidden');
+      $('#btn-forward-agent').removeClass('hidden');
     } else {
       $('#btn-rewind-agent').addClass('hidden');
+      $('#btn-forward-agent').addClass('hidden');
     }
 
     // Keep button visible and enabled whenever a project is selected.
     // Runtime guard (if agent is actively responding) is handled in requestRewindOperation().
     $('#btn-rewind-agent').prop('disabled', !!state.rewindSending || !isVisible);
+    $('#btn-forward-agent').prop('disabled', !!state.rewindSending || !isVisible);
   }
 
   // Agent status polling - reduced to 10 seconds as fallback (WebSocket is primary)

@@ -500,6 +500,17 @@ export class SimpleGitService implements GitService {
   async commit(projectPath: string, message: string, allowEmpty = false): Promise<CommitResult> {
     try {
       const git = this.getGit(projectPath);
+      const status = await git.status();
+      const conflictedFiles = Array.isArray((status as { conflicted?: unknown[] }).conflicted)
+        ? (status as { conflicted: unknown[] }).conflicted
+        : [];
+      const stagedFiles = Array.isArray((status as { staged?: unknown[] }).staged)
+        ? (status as { staged: unknown[] }).staged
+        : [];
+
+      if (conflictedFiles.length > 0) {
+        throw new GitError('Cannot commit while merge/rebase conflicts exist. Resolve conflicts first.');
+      }
 
       if (allowEmpty) {
         await git.raw(['commit', '--allow-empty', '-m', message]);
@@ -507,10 +518,17 @@ export class SimpleGitService implements GitService {
         return { hash, message };
       }
 
+      if (stagedFiles.length === 0) {
+        throw new GitError('No staged changes to commit. Stage files first.');
+      }
+
       const result = await git.commit(message);
       const hash = result.commit.substring(0, 7);
       return { hash, message };
     } catch (error) {
+      if (error instanceof GitError) {
+        throw error;
+      }
       throw new GitError(`Failed to commit: ${this.toGitErrorMessage(error)}`);
     }
   }

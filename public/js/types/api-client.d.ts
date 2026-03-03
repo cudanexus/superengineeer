@@ -74,6 +74,13 @@ declare module 'api-client' {
     images?: Array<{ dataUrl: string; mimeType: string }>,
     files?: Array<{ url: string; fileName?: string }>
   ): JQuery.Promise<void>;
+  export function rewindAgent(
+    id: string,
+    payloadOrSteps?: number | { steps?: number; commitHash?: string }
+  ): JQuery.Promise<{ success: boolean; head: string; rewoundCommits?: number; hasForward?: boolean }>;
+  export function forwardAgent(
+    id: string
+  ): JQuery.Promise<{ success: boolean; head: string; hasForward?: boolean }>;
 
   // Queue
   export function getQueuedMessages(id: string): JQuery.Promise<Array<string>>;

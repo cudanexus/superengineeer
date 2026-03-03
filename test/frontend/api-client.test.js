@@ -270,6 +270,24 @@ describe('ApiClient', () => {
       const payload = JSON.parse(call.data);
       expect(payload.images).toEqual([{ type: 'image/jpeg', data: 'XYZ789' }]);
     });
+
+    it('rewindAgent should POST with steps payload', () => {
+      ApiClient.rewindAgent('proj-123', 2);
+      expect(mockAjax).toHaveBeenCalledWith({
+        url: '/api/projects/proj-123/agent/rewind',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ steps: 2 })
+      });
+    });
+
+    it('forwardAgent should POST to correct endpoint', () => {
+      ApiClient.forwardAgent('proj-123');
+      expect(mockAjax).toHaveBeenCalledWith({
+        url: '/api/projects/proj-123/agent/forward',
+        method: 'POST'
+      });
+    });
   });
 
   describe('Queue', () => {
