@@ -1535,89 +1535,138 @@ export class DefaultAgentManager implements AgentManager {
     if (this.autoPushInFlight.has(projectId)) return;
 
     this.autoPushInFlight.add(projectId);
+    let metadataStashRef: string | null = null;
+    let projectPath: string | null = null;
     try {
       const project = await this.projectRepository.findById(projectId);
       if (!project) return;
-
-      // Auto-stage and commit meaningful project changes before pushing.
-      const status = await this.gitService.getStatus(project.path);
-      const stagedPaths = (status.staged || []).map((f) => f.path);
-      const unstagedPaths = (status.unstaged || []).map((f) => f.path);
-      const untrackedPaths = (status.untracked || []).map((f) => f.path);
-
-      const blockedStaged = stagedPaths.filter((p) => !isAutoCommitPathAllowed(p));
-      if (blockedStaged.length > 0) {
+      projectPath = project.path;
+      const initialStatus = await this.gitService.getStatus(project.path);
+      const internalDirtyPaths = Array.from(new Set([
+        ...(initialStatus.staged || []).map((f) => f.path),
+        ...(initialStatus.unstaged || []).map((f) => f.path),
+        ...(initialStatus.untracked || []).map((f) => f.path),
+      ].filter((p) => !isAutoCommitPathAllowed(p))));
+      if (internalDirtyPaths.length > 0) {
         try {
-          await this.gitService.unstageFiles(project.path, blockedStaged);
-        } catch {
-          // Non-fatal: continue with allowed paths.
-        }
-      }
-
-      const stageCandidates = Array.from(new Set([...unstagedPaths, ...untrackedPaths]))
-        .filter((p) => isAutoCommitPathAllowed(p));
-      if (stageCandidates.length > 0) {
-        await this.gitService.stageFiles(project.path, stageCandidates);
-      }
-
-      const postStage = await this.gitService.getStatus(project.path);
-      const allowedStaged = (postStage.staged || [])
-        .map((f) => f.path)
-        .filter((p) => isAutoCommitPathAllowed(p));
-
-      if (allowedStaged.length > 0) {
-        const stamp = new Date().toISOString().replace('T', ' ').slice(0, 19);
-        await this.gitService.commitPaths(
-          project.path,
-          `chore: auto-save before waiting (${stamp})`,
-          allowedStaged
-        );
-      }
-
-      const branches = await this.gitService.getBranches(project.path);
-      const currentBranch = String(branches.current || '').trim();
-
-      const canonicalBranch = branches.local.includes('main')
-        ? 'main'
-        : branches.local.includes('master')
-          ? 'master'
-          : 'main';
-
-      if (currentBranch === 'HEAD') {
-        await this.gitService.promoteCurrentHeadToBranch(project.path, canonicalBranch, 'origin');
-        this.logger.info('Auto-promoted detached HEAD to canonical branch', {
-          projectId,
-          targetBranch: canonicalBranch,
-        });
-      } else {
-        // Keep this simple: only push existing commits when waiting.
-        try {
-          await this.gitService.push(project.path);
-        } catch (firstPushError) {
-          // Brief retry helps when remote updates race with this wait transition.
-          await this.delay(1200);
-          await this.gitService.push(project.path);
-          this.logger.warn('Auto-push succeeded on retry', {
+          metadataStashRef = await this.gitService.stashPaths(
+            project.path,
+            internalDirtyPaths,
+            `superengineer:auto-meta-wait-${projectId}-${waitingVersion}`,
+            true
+          );
+        } catch (stashError) {
+          this.logger.warn('Failed to stash internal metadata before waiting auto-push; proceeding without stash', {
             projectId,
             waitingVersion,
-            firstError: firstPushError instanceof Error ? firstPushError.message : String(firstPushError),
+            error: stashError instanceof Error ? stashError.message : String(stashError),
           });
         }
       }
-      this.autoPushedWaitingVersions.set(projectId, waitingVersion);
-      this.logger.info('Auto-push completed on waiting state', {
-        projectId,
-        waitingVersion,
-      });
+      let synced = false;
+
+      for (let attempt = 1; attempt <= 2; attempt += 1) {
+        try {
+          // Auto-stage and commit meaningful project changes before pushing.
+          const status = await this.gitService.getStatus(project.path);
+          const stagedPaths = (status.staged || []).map((f) => f.path);
+          const unstagedPaths = (status.unstaged || []).map((f) => f.path);
+          const untrackedPaths = (status.untracked || []).map((f) => f.path);
+
+          const blockedStaged = stagedPaths.filter((p) => !isAutoCommitPathAllowed(p));
+          if (blockedStaged.length > 0) {
+            try {
+              await this.gitService.unstageFiles(project.path, blockedStaged);
+            } catch {
+              // Non-fatal: continue with allowed paths.
+            }
+          }
+
+          const stageCandidates = Array.from(new Set([...unstagedPaths, ...untrackedPaths]))
+            .filter((p) => isAutoCommitPathAllowed(p));
+          if (stageCandidates.length > 0) {
+            await this.gitService.stageFiles(project.path, stageCandidates);
+          }
+
+          const postStage = await this.gitService.getStatus(project.path);
+          const allowedStaged = (postStage.staged || [])
+            .map((f) => f.path)
+            .filter((p) => isAutoCommitPathAllowed(p));
+
+          if (allowedStaged.length > 0) {
+            const stamp = new Date().toISOString().replace('T', ' ').slice(0, 19);
+            try {
+              await this.gitService.commitPaths(
+                project.path,
+                `chore: auto-save before waiting (${stamp})`,
+                allowedStaged
+              );
+            } catch (commitError) {
+              // Keep push flow alive even if commit fails on this attempt.
+              this.logger.warn('Auto-commit failed during waiting sync; continuing to push existing commits', {
+                projectId,
+                waitingVersion,
+                attempt,
+                error: commitError instanceof Error ? commitError.message : String(commitError),
+              });
+            }
+          }
+
+          const branches = await this.gitService.getBranches(project.path);
+          const currentBranch = String(branches.current || '').trim();
+
+          const canonicalBranch = branches.local.includes('main')
+            ? 'main'
+            : branches.local.includes('master')
+              ? 'master'
+              : 'main';
+
+          if (currentBranch === 'HEAD') {
+            await this.gitService.promoteCurrentHeadToBranch(project.path, canonicalBranch, 'origin');
+            this.logger.info('Auto-promoted detached HEAD to canonical branch', {
+              projectId,
+              targetBranch: canonicalBranch,
+            });
+          } else {
+            await this.gitService.push(project.path);
+          }
+
+          synced = true;
+          break;
+        } catch (attemptError) {
+          if (attempt >= 2) {
+            throw attemptError;
+          }
+          await this.delay(1200);
+        }
+      }
+
+      if (synced) {
+        this.autoPushedWaitingVersions.set(projectId, waitingVersion);
+        this.logger.info('Auto-push completed on waiting state', {
+          projectId,
+          waitingVersion,
+        });
+      }
     } catch (error) {
       this.logger.warn('Auto-push skipped/failed on waiting state', {
         projectId,
         waitingVersion,
         error: error instanceof Error ? error.message : String(error),
       });
-      // Mark as handled for this waiting version to avoid repeated failures/spam.
-      this.autoPushedWaitingVersions.set(projectId, waitingVersion);
     } finally {
+      if (metadataStashRef && projectPath) {
+        try {
+          await this.gitService.popStash(projectPath, metadataStashRef);
+        } catch (restoreError) {
+          this.logger.warn('Failed to restore internal metadata stash after waiting auto-push', {
+            projectId,
+            waitingVersion,
+            stashRef: metadataStashRef,
+            error: restoreError instanceof Error ? restoreError.message : String(restoreError),
+          });
+        }
+      }
       this.autoPushInFlight.delete(projectId);
     }
   }

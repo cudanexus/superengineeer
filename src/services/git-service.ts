@@ -78,6 +78,13 @@ export interface GitService {
   getUserName(projectPath: string): Promise<string | null>;
   getUserEmail(projectPath: string): Promise<string | null>;
   setUserIdentity(projectPath: string, name: string, email: string): Promise<void>;
+  stashPaths(
+    projectPath: string,
+    paths: string[],
+    message?: string,
+    includeUntracked?: boolean
+  ): Promise<string | null>;
+  popStash(projectPath: string, stashRef?: string): Promise<void>;
   createGithubRepoRemote(
     projectPath: string,
     repoName: string,
@@ -1012,6 +1019,45 @@ export class SimpleGitService implements GitService {
       await git.raw(['config', 'user.email', email]);
     } catch (error) {
       throw new GitError(`Failed to set git identity: ${this.toGitErrorMessage(error)}`);
+    }
+  }
+
+  async stashPaths(
+    projectPath: string,
+    paths: string[],
+    message = 'superengineer:auto-stash',
+    includeUntracked = true
+  ): Promise<string | null> {
+    if (!paths || paths.length === 0) return null;
+
+    try {
+      const git = this.getGit(projectPath);
+      const uniquePaths = Array.from(new Set(paths.filter(Boolean)));
+      if (uniquePaths.length === 0) return null;
+
+      const args = ['stash', 'push'];
+      if (includeUntracked) {
+        args.push('-u');
+      }
+      args.push('-m', message, '--', ...uniquePaths);
+
+      const output = await git.raw(args);
+      if (String(output || '').toLowerCase().includes('no local changes to save')) {
+        return null;
+      }
+
+      // Single-writer flow: newest stash entry is the one we just created.
+      return 'stash@{0}';
+    } catch (error) {
+      throw new GitError(`Failed to stash paths: ${this.toGitErrorMessage(error)}`);
+    }
+  }
+
+  async popStash(projectPath: string, stashRef = 'stash@{0}'): Promise<void> {
+    try {
+      await this.getGit(projectPath).raw(['stash', 'pop', stashRef]);
+    } catch (error) {
+      throw new GitError(`Failed to restore stashed paths: ${this.toGitErrorMessage(error)}`);
     }
   }
 }
