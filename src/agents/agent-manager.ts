@@ -1547,9 +1547,10 @@ export class DefaultAgentManager implements AgentManager {
       const blockedStaged = stagedPaths.filter((p) => !isAutoCommitPathAllowed(p));
       if (blockedStaged.length > 0) {
         try {
-          await this.gitService.unstageFiles(project.path, blockedStaged);
+          // Reset index to a known state, then re-stage only allowed paths.
+          await this.gitService.unstageAll(project.path);
         } catch (unstageError) {
-          this.logger.warn('Failed to unstage blocked files before auto-commit', {
+          this.logger.warn('Failed to reset staged files before auto-commit', {
             projectId,
             blockedStaged,
             error: unstageError instanceof Error ? unstageError.message : String(unstageError),
@@ -1557,7 +1558,7 @@ export class DefaultAgentManager implements AgentManager {
         }
       }
 
-      const stageCandidates = Array.from(new Set([...unstagedPaths, ...untrackedPaths]))
+      const stageCandidates = Array.from(new Set([...stagedPaths, ...unstagedPaths, ...untrackedPaths]))
         .filter((p) => isAutoCommitPathAllowed(p));
       if (stageCandidates.length > 0) {
         await this.gitService.stageFiles(project.path, stageCandidates);
@@ -1581,6 +1582,7 @@ export class DefaultAgentManager implements AgentManager {
         });
       }
 
+      // Push anyway so already-created commits (if any) still sync automatically.
       try {
         await this.gitService.push(project.path);
       } catch (firstPushError) {
