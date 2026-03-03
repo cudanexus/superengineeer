@@ -1610,6 +1610,7 @@ export class DefaultAgentManager implements AgentManager {
 
           const branches = await this.gitService.getBranches(project.path);
           const currentBranch = String(branches.current || '').trim();
+          const detachedHead = await this.gitService.isHeadDetached(project.path);
 
           const canonicalBranch = branches.local.includes('main')
             ? 'main'
@@ -1617,7 +1618,7 @@ export class DefaultAgentManager implements AgentManager {
               ? 'master'
               : 'main';
 
-          if (isDetachedBranchName(currentBranch)) {
+          if (detachedHead || isDetachedBranchName(currentBranch)) {
             await this.gitService.promoteCurrentHeadToBranch(project.path, canonicalBranch, 'origin');
             this.logger.info('Auto-promoted detached HEAD to canonical branch', {
               projectId,

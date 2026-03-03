@@ -226,6 +226,25 @@ describe('DefaultAgentManager', () => {
       expect(mockGitService.push).not.toHaveBeenCalled();
     });
 
+    it('should promote when git reports detached HEAD even if branch name looks normal', async () => {
+      await agentManager.startInteractiveAgent('test-project');
+      mockGitService.getBranches.mockResolvedValue({
+        current: 'main',
+        local: ['main'],
+        remote: ['origin/main'],
+      });
+      mockGitService.isHeadDetached.mockResolvedValue(true);
+
+      const emit = (mockAgent as unknown as {
+        _emit: (event: 'waitingForInput', payload: { isWaiting: boolean; version: number }) => void
+      })._emit;
+      emit('waitingForInput', { isWaiting: true, version: 43 });
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(mockGitService.promoteCurrentHeadToBranch).toHaveBeenCalledWith('/test/path', 'main', 'origin');
+      expect(mockGitService.push).not.toHaveBeenCalled();
+    });
+
     it('should continue auto-pushing when waiting version resets lower', async () => {
       await agentManager.startInteractiveAgent('test-project');
 

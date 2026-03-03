@@ -793,6 +793,7 @@ export function createMockGitService(): jest.Mocked<GitService> {
   return {
     getStatus: jest.fn().mockResolvedValue(sampleGitStatus),
     getBranches: jest.fn().mockResolvedValue(sampleBranchInfo),
+    isHeadDetached: jest.fn().mockResolvedValue(false),
     stageFiles: jest.fn().mockResolvedValue(undefined),
     unstageFiles: jest.fn().mockResolvedValue(undefined),
     stageAll: jest.fn().mockResolvedValue(undefined),
@@ -816,6 +817,16 @@ export function createMockGitService(): jest.Mocked<GitService> {
     deleteTag: jest.fn().mockResolvedValue(undefined),
     getRemoteUrl: jest.fn().mockResolvedValue('https://github.com/testuser/test-repo.git'),
     getUserName: jest.fn().mockResolvedValue('Test User'),
+    getUserEmail: jest.fn().mockResolvedValue('test@example.com'),
+    setUserIdentity: jest.fn().mockResolvedValue(undefined),
+    ensureIgnoredPaths: jest.fn().mockResolvedValue(undefined),
+    stashPaths: jest.fn().mockResolvedValue(null),
+    popStash: jest.fn().mockResolvedValue(undefined),
+    listCommits: jest.fn().mockResolvedValue({ commits: [], total: 0, currentHead: null }),
+    createGithubRepoRemote: jest.fn().mockResolvedValue({
+      repo: 'testuser/test-repo',
+      remoteUrl: 'https://github.com/testuser/test-repo.git',
+    }),
   };
 }
 

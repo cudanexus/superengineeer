@@ -46,6 +46,7 @@ export interface GitCommitEntry {
 export interface GitService {
   getStatus(projectPath: string): Promise<GitStatus>;
   getBranches(projectPath: string): Promise<BranchInfo>;
+  isHeadDetached(projectPath: string): Promise<boolean>;
   stageFiles(projectPath: string, paths: string[]): Promise<void>;
   unstageFiles(projectPath: string, paths: string[]): Promise<void>;
   stageAll(projectPath: string): Promise<void>;
@@ -472,6 +473,15 @@ export class SimpleGitService implements GitService {
       };
     } catch {
       return { current: '', local: [], remote: [] };
+    }
+  }
+
+  async isHeadDetached(projectPath: string): Promise<boolean> {
+    try {
+      const raw = await this.getGit(projectPath).raw(['rev-parse', '--abbrev-ref', 'HEAD']);
+      return String(raw || '').trim() === 'HEAD';
+    } catch {
+      return false;
     }
   }
 
