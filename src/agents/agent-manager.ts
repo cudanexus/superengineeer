@@ -1532,6 +1532,10 @@ export class DefaultAgentManager implements AgentManager {
       const project = await this.projectRepository.findById(projectId);
       if (!project) return;
       projectPath = project.path;
+      await this.gitService.ensureIgnoredPaths(project.path, [
+        '.superengineer-v5/',
+        '.claude/',
+      ]);
       const initialStatus = await this.gitService.getStatus(project.path);
       const internalDirtyPaths = Array.from(new Set([
         ...(initialStatus.staged || []).map((f) => f.path),
@@ -1558,39 +1562,23 @@ export class DefaultAgentManager implements AgentManager {
 
       for (let attempt = 1; attempt <= 2; attempt += 1) {
         try {
-          // Auto-stage and commit meaningful project changes before pushing.
+          // Auto-stage and commit all project changes before pushing.
           const status = await this.gitService.getStatus(project.path);
-          const stagedPaths = (status.staged || []).map((f) => f.path);
           const unstagedPaths = (status.unstaged || []).map((f) => f.path);
           const untrackedPaths = (status.untracked || []).map((f) => f.path);
-
-          const blockedStaged = stagedPaths.filter((p) => !isAutoCommitPathAllowed(p));
-          if (blockedStaged.length > 0) {
-            try {
-              await this.gitService.unstageFiles(project.path, blockedStaged);
-            } catch {
-              // Non-fatal: continue with allowed paths.
-            }
-          }
-
-          const stageCandidates = Array.from(new Set([...unstagedPaths, ...untrackedPaths]))
-            .filter((p) => isAutoCommitPathAllowed(p));
-          if (stageCandidates.length > 0) {
-            await this.gitService.stageFiles(project.path, stageCandidates);
+          if (unstagedPaths.length > 0 || untrackedPaths.length > 0) {
+            await this.gitService.stageAll(project.path);
           }
 
           const postStage = await this.gitService.getStatus(project.path);
-          const allowedStaged = (postStage.staged || [])
-            .map((f) => f.path)
-            .filter((p) => isAutoCommitPathAllowed(p));
+          const stagedCount = (postStage.staged || []).length;
 
-          if (allowedStaged.length > 0) {
+          if (stagedCount > 0) {
             const stamp = new Date().toISOString().replace('T', ' ').slice(0, 19);
             try {
-              await this.gitService.commitPaths(
+              await this.gitService.commit(
                 project.path,
-                `chore: auto-save before waiting (${stamp})`,
-                allowedStaged
+                `chore: auto-save before waiting (${stamp})`
               );
             } catch (commitError) {
               // Keep push flow alive even if commit fails on this attempt.

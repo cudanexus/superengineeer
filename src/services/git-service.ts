@@ -78,6 +78,7 @@ export interface GitService {
   getUserName(projectPath: string): Promise<string | null>;
   getUserEmail(projectPath: string): Promise<string | null>;
   setUserIdentity(projectPath: string, name: string, email: string): Promise<void>;
+  ensureIgnoredPaths(projectPath: string, paths: string[]): Promise<void>;
   stashPaths(
     projectPath: string,
     paths: string[],
@@ -1019,6 +1020,42 @@ export class SimpleGitService implements GitService {
       await git.raw(['config', 'user.email', email]);
     } catch (error) {
       throw new GitError(`Failed to set git identity: ${this.toGitErrorMessage(error)}`);
+    }
+  }
+
+  async ensureIgnoredPaths(projectPath: string, paths: string[]): Promise<void> {
+    const normalized = Array.from(new Set(
+      (paths || [])
+        .map((p) => String(p || '').trim())
+        .filter(Boolean)
+    ));
+    if (normalized.length === 0) return;
+
+    const gitignorePath = path.join(projectPath, '.gitignore');
+    let currentContent = '';
+    try {
+      currentContent = await fs.promises.readFile(gitignorePath, 'utf-8');
+    } catch {
+      currentContent = '';
+    }
+
+    const existing = new Set(
+      currentContent
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+    );
+    const missing = normalized.filter((entry) => !existing.has(entry));
+    if (missing.length > 0) {
+      const prefix = currentContent.length > 0 && !currentContent.endsWith('\n') ? '\n' : '';
+      const payload = `${prefix}${missing.join('\n')}\n`;
+      await fs.promises.appendFile(gitignorePath, payload, 'utf-8');
+    }
+
+    try {
+      await this.getGit(projectPath).raw(['rm', '-r', '--cached', '--ignore-unmatch', '--', ...normalized]);
+    } catch {
+      // Ignore when entries are not currently tracked.
     }
   }
 
