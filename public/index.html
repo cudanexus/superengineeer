@@ -2977,9 +2977,14 @@
             <!-- <code>.superengineer-v5/.claude/skills</code>. -->
           </p>
           <div class="space-y-1">
-            <label for="abilities-select" class="block text-sm font-medium text-gray-300">Ability</label>
-            <select id="abilities-select"
-              class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-purple-500"></select>
+            <label for="abilities-search-input" class="block text-sm font-medium text-gray-300">Search Ability</label>
+            <input type="text" id="abilities-search-input"
+              class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-purple-500"
+              placeholder="Search by name, id, or description">
+          </div>
+          <div id="abilities-cards" class="abilities-cards-grid" role="listbox" aria-multiselectable="true" aria-label="Abilities catalog"></div>
+          <div id="abilities-pagination" class="abilities-pagination"></div>
+          <div class="space-y-1">
             <p id="abilities-help" class="text-xs text-gray-400"></p>
           </div>
           <!-- <div class="space-y-1">

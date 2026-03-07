@@ -251,6 +251,7 @@ export interface AbilityCatalogItem {
   id: string;
   name: string;
   description: string;
+  imageUrl?: string;
   repoUrl: string;
   sourceSubdir: string;
   enabled: boolean;
@@ -388,6 +389,7 @@ Your goal is to ensure high-quality deliverables. Be thorough but fair in your a
       id: 'scientific-skills',
       name: 'Scientific Skills',
       description: 'Adds scientific skills pack for Claude workflows.',
+      imageUrl: 'https://avatars.githubusercontent.com/u/213084655',
       repoUrl: 'https://github.com/K-Dense-AI/claude-scientific-skills.git',
       sourceSubdir: 'scientific-skills',
       enabled: true,

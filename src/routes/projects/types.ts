@@ -193,12 +193,14 @@ export interface ShellResizeBody {
 
 export interface InstallAbilityBody {
   abilityId?: string;
+  abilityIds?: string[];
 }
 
 export interface CreateAbilityBody {
   id?: string;
   name?: string;
   description?: string;
+  imageUrl?: string;
   repoUrl?: string;
   sourceSubdir?: string;
   enabled?: boolean;
@@ -207,6 +209,7 @@ export interface CreateAbilityBody {
 export interface UpdateAbilityBody {
   name?: string;
   description?: string;
+  imageUrl?: string;
   repoUrl?: string;
   sourceSubdir?: string;
   enabled?: boolean;

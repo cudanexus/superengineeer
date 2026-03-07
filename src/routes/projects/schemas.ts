@@ -129,13 +129,22 @@ export const shellResizeSchema = z.object({
 
 // Abilities schemas
 export const installAbilitySchema = z.object({
-  abilityId: z.string().min(1, 'Ability ID is required'),
+  abilityId: z.string().min(1, 'Ability ID is required').optional(),
+  abilityIds: z.array(z.string().min(1, 'Ability ID is required')).min(1, 'At least one ability ID is required').optional(),
+}).refine((data) => {
+  return Boolean(
+    data.abilityId
+    || (Array.isArray(data.abilityIds) && data.abilityIds.length > 0)
+  );
+}, {
+  message: 'abilityId or abilityIds is required',
 });
 
 export const createAbilitySchema = z.object({
   id: z.string().min(1, 'Ability ID is required'),
   name: z.string().min(1, 'Name is required'),
   description: z.string().optional().default(''),
+  imageUrl: z.string().url('Valid image URL is required').optional(),
   repoUrl: z.string().url('Valid repository URL is required'),
   sourceSubdir: z.string().min(1, 'Source folder is required'),
   enabled: z.boolean().optional().default(true),
@@ -144,6 +153,7 @@ export const createAbilitySchema = z.object({
 export const updateAbilitySchema = z.object({
   name: z.string().min(1).optional(),
   description: z.string().optional(),
+  imageUrl: z.string().url().optional(),
   repoUrl: z.string().url().optional(),
   sourceSubdir: z.string().min(1).optional(),
   enabled: z.boolean().optional(),

@@ -226,6 +226,15 @@
   };
 
   /**
+   * Get installed abilities for a project
+   * @param {string} id - Project UUID
+   * @returns {Promise<{abilityIds: string[]}>}
+   */
+  ApiClient.getInstalledProjectAbilities = function (id) {
+    return $.get(baseUrl + '/api/projects/' + id + '/abilities/installed');
+  };
+
+  /**
    * Create a catalog ability
    * @param {string} id - Project UUID
    * @param {{id: string, name: string, description?: string, repoUrl: string, sourceSubdir: string, enabled?: boolean}} payload
@@ -313,44 +322,53 @@
   /**
    * Install an ability into project .superengineer-v5/.claude/skills
    * @param {string} id - Project UUID
-   * @param {string} abilityId - Ability identifier
-   * @returns {Promise<{success: boolean, abilityId: string, abilityName: string, skillsPath: string}>}
+   * @param {string|string[]} abilityIds - Ability identifier(s)
+   * @returns {Promise<{success: boolean, abilityId: string|null, abilityName: string|null, installedAbilities: Array<{abilityId: string, abilityName: string}>, installedCount: number, skillsPath: string}>}
    */
-  ApiClient.installAbility = function (id, abilityId) {
+  ApiClient.installAbility = function (id, abilityIds) {
+    var payload = Array.isArray(abilityIds)
+      ? { abilityIds: abilityIds }
+      : { abilityId: abilityIds };
     return $.ajax({
       url: baseUrl + '/api/projects/' + id + '/abilities/install',
       method: 'POST',
       contentType: 'application/json',
-      data: JSON.stringify({ abilityId: abilityId })
+      data: JSON.stringify(payload)
     });
   };
 
   /**
    * Install a global ability into user home (~/.claude/skills)
-   * @param {string} abilityId - Ability identifier
-   * @returns {Promise<{success: boolean, abilityId: string, abilityName: string, skillsPath: string}>}
+   * @param {string|string[]} abilityIds - Ability identifier(s)
+   * @returns {Promise<{success: boolean, abilityId: string|null, abilityName: string|null, installedAbilities: Array<{abilityId: string, abilityName: string}>, installedCount: number, skillsPath: string}>}
    */
-  ApiClient.installGlobalAbility = function (abilityId) {
+  ApiClient.installGlobalAbility = function (abilityIds) {
+    var payload = Array.isArray(abilityIds)
+      ? { abilityIds: abilityIds }
+      : { abilityId: abilityIds };
     return $.ajax({
       url: baseUrl + '/api/abilities/install/global',
       method: 'POST',
       contentType: 'application/json',
-      data: JSON.stringify({ abilityId: abilityId })
+      data: JSON.stringify(payload)
     });
   };
 
   /**
    * Install an ability into a specific project (.superengineer-v5/.claude/skills)
    * @param {string} projectId - Project UUID
-   * @param {string} abilityId - Ability identifier
-   * @returns {Promise<{success: boolean, abilityId: string, abilityName: string, skillsPath: string, projectId: string}>}
+   * @param {string|string[]} abilityIds - Ability identifier(s)
+   * @returns {Promise<{success: boolean, abilityId: string|null, abilityName: string|null, installedAbilities: Array<{abilityId: string, abilityName: string}>, installedCount: number, skillsPath: string, projectId: string}>}
    */
-  ApiClient.installProjectAbility = function (projectId, abilityId) {
+  ApiClient.installProjectAbility = function (projectId, abilityIds) {
+    var payload = Array.isArray(abilityIds)
+      ? { projectId: projectId, abilityIds: abilityIds }
+      : { projectId: projectId, abilityId: abilityIds };
     return $.ajax({
       url: baseUrl + '/api/abilities/install/project',
       method: 'POST',
       contentType: 'application/json',
-      data: JSON.stringify({ projectId: projectId, abilityId: abilityId })
+      data: JSON.stringify(payload)
     });
   };
 

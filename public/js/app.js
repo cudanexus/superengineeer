@@ -180,7 +180,12 @@
       total: 0,
       loading: false
     },
-    abilitiesCatalog: []
+    abilitiesCatalog: [],
+    abilitiesSearchQuery: '',
+    selectedAbilityIds: [],
+    installedAbilityIds: [],
+    abilitiesPage: 1,
+    abilitiesPageSize: 10
   };
 
   // Local storage keys - use module's KEYS
@@ -1440,12 +1445,33 @@
       installSelectedAbility();
     });
 
-    $('#abilities-select').on('change', function () {
-      var selectedId = String($(this).val() || '').trim();
-      var selected = (state.abilitiesCatalog || []).find(function (ability) {
-        return String(ability.id || '') === selectedId;
-      });
-      $('#abilities-help').text(String((selected && selected.description) || ''));
+    $('#abilities-search-input').on('input', function () {
+      state.abilitiesSearchQuery = String($(this).val() || '').trim().toLowerCase();
+      state.abilitiesPage = 1;
+      renderAbilitiesOptions(state.abilitiesCatalog);
+    });
+
+    $(document).on('click', '.ability-card', function () {
+      var abilityId = String($(this).data('abilityId') || '').trim();
+      if (!abilityId) return;
+      var selected = Array.isArray(state.selectedAbilityIds) ? state.selectedAbilityIds.slice() : [];
+      var currentIndex = selected.indexOf(abilityId);
+      if (currentIndex >= 0) {
+        selected.splice(currentIndex, 1);
+      } else {
+        selected.push(abilityId);
+      }
+      state.selectedAbilityIds = selected;
+      renderAbilitiesOptions(state.abilitiesCatalog);
+    });
+
+    $(document).on('click', '#abilities-pagination .ability-page-btn', function () {
+      var nextPage = Number($(this).data('page') || 0);
+      if (!Number.isFinite(nextPage) || nextPage < 1 || nextPage === state.abilitiesPage) {
+        return;
+      }
+      state.abilitiesPage = nextPage;
+      renderAbilitiesOptions(state.abilitiesCatalog);
     });
 
 
@@ -5049,30 +5075,130 @@
       });
   }
 
+  function renderAbilitiesPagination(totalPages, currentPage) {
+    var $pagination = $('#abilities-pagination');
+    if (totalPages <= 1) {
+      $pagination.html('');
+      return;
+    }
+
+    var pageTokens = [];
+    if (totalPages <= 7) {
+      for (var i = 1; i <= totalPages; i += 1) {
+        pageTokens.push(i);
+      }
+    } else {
+      pageTokens.push(1);
+      var start = Math.max(2, currentPage - 1);
+      var end = Math.min(totalPages - 1, currentPage + 1);
+      if (start > 2) pageTokens.push('...');
+      for (var page = start; page <= end; page += 1) {
+        pageTokens.push(page);
+      }
+      if (end < totalPages - 1) pageTokens.push('...');
+      pageTokens.push(totalPages);
+    }
+
+    var html = '';
+    html += '<button type="button" class="ability-page-btn" data-page="' + (currentPage - 1) + '"' + (currentPage <= 1 ? ' disabled' : '') + '>Prev</button>';
+    pageTokens.forEach(function (token) {
+      if (token === '...') {
+        html += '<span class="ability-page-ellipsis">...</span>';
+      } else {
+        var isActive = token === currentPage;
+        html += '<button type="button" class="ability-page-btn' + (isActive ? ' is-active' : '') + '" data-page="' + token + '"' + (isActive ? ' disabled' : '') + '>' + token + '</button>';
+      }
+    });
+    html += '<button type="button" class="ability-page-btn" data-page="' + (currentPage + 1) + '"' + (currentPage >= totalPages ? ' disabled' : '') + '>Next</button>';
+    $pagination.html(html);
+  }
+
   function renderAbilitiesOptions(abilities) {
-    var $select = $('#abilities-select');
+    var $cards = $('#abilities-cards');
+    var query = String(state.abilitiesSearchQuery || '').toLowerCase();
     var options = Array.isArray(abilities) ? abilities : [];
+    var selectedAbilityIds = Array.isArray(state.selectedAbilityIds) ? state.selectedAbilityIds : [];
+    var selectedSet = new Set(selectedAbilityIds);
+    var installedAbilityIds = Array.isArray(state.installedAbilityIds) ? state.installedAbilityIds : [];
+    var installedSet = new Set(installedAbilityIds);
+    var pageSize = Number(state.abilitiesPageSize || 10);
+
     if (options.length === 0) {
-      $select.html('<option value="">No abilities available</option>');
+      state.selectedAbilityIds = [];
+      $cards.html('');
+      $('#abilities-pagination').html('');
       $('#abilities-help').text('No installable abilities found.');
       $('#btn-install-ability').prop('disabled', true);
       return;
     }
 
-    var html = options.map(function (ability) {
+    var filtered = options.filter(function (ability) {
+      if (!query) return true;
+      var id = String(ability.id || '').toLowerCase();
+      var name = String(ability.name || '').toLowerCase();
+      var description = String(ability.description || '').toLowerCase();
+      return id.indexOf(query) !== -1 || name.indexOf(query) !== -1 || description.indexOf(query) !== -1;
+    });
+
+    if (filtered.length === 0) {
+      $cards.html('');
+      $('#abilities-pagination').html('');
+      $('#abilities-help').text('No abilities match your search.');
+      $('#btn-install-ability').prop('disabled', selectedSet.size === 0);
+      return;
+    }
+
+    var totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+    if (state.abilitiesPage > totalPages) {
+      state.abilitiesPage = totalPages;
+    } else if (state.abilitiesPage < 1) {
+      state.abilitiesPage = 1;
+    }
+    var currentPage = state.abilitiesPage;
+    var startIndex = (currentPage - 1) * pageSize;
+    var pagedAbilities = filtered.slice(startIndex, startIndex + pageSize);
+
+    var html = pagedAbilities.map(function (ability) {
       var id = String(ability.id || '');
       var name = String(ability.name || id || 'Ability');
-      return '<option value="' + escapeHtml(id) + '">' + escapeHtml(name) + '</option>';
+      var description = String(ability.description || 'No description available');
+      var imageUrl = String(ability.imageUrl || ability.image || ability.logoUrl || '/favicon-32x32.png');
+      var isSelected = selectedSet.has(id);
+      var isInstalled = installedSet.has(id);
+      var selectedClass = isSelected ? ' is-selected' : '';
+      return '<button type="button" class="ability-card' + selectedClass + '" data-ability-id="' + escapeHtml(id) + '" role="option" aria-selected="' + (isSelected ? 'true' : 'false') + '">' +
+        '<span class="ability-card-check" aria-hidden="true">' + (isSelected ? '&#10003;' : '') + '</span>' +
+        '<img class="ability-card-media" src="' + escapeHtml(imageUrl) + '" alt="' + escapeHtml(name) + ' icon" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src=\'/favicon-32x32.png\';">' +
+        '<span class="ability-card-content">' +
+        '<span class="ability-card-title">' + escapeHtml(name) + (isInstalled ? '<span class="ability-card-installed">&#10003; Installed</span>' : '') + '</span>' +
+        '<span class="ability-card-description">' + escapeHtml(description) + '</span>' +
+        '</span>' +
+      '</button>';
     }).join('');
-    $select.html(html);
+    $cards.html(html);
 
-    var selected = options[0];
-    $('#abilities-help').text(String((selected && selected.description) || ''));
-    $('#btn-install-ability').prop('disabled', false);
+    var selectedCount = selectedSet.size;
+    var helpText = selectedCount > 0
+      ? selectedCount + ' selected.'
+      : 'Select one or more abilities to install.';
+    var endIndex = Math.min(startIndex + pagedAbilities.length, filtered.length);
+    helpText += ' Showing ' + (startIndex + 1) + '-' + endIndex + ' of ' + filtered.length + '.';
+    if (filtered.length < options.length) {
+      helpText += ' Filtered from ' + options.length + '.';
+    }
+    $('#abilities-help').text(helpText.trim());
+    renderAbilitiesPagination(totalPages, currentPage);
+    $('#btn-install-ability').prop('disabled', selectedCount === 0);
   }
 
   function openAbilitiesModal() {
-    $('#abilities-select').html('<option value="">Loading abilities...</option>');
+    state.abilitiesSearchQuery = '';
+    state.selectedAbilityIds = [];
+    state.installedAbilityIds = [];
+    state.abilitiesPage = 1;
+    $('#abilities-search-input').val('');
+    $('#abilities-cards').html('');
+    $('#abilities-pagination').html('');
     $('#abilities-help').text('Loading...');
     $('#btn-install-ability').prop('disabled', true);
     $('#abilities-install-target').val('project');
@@ -5081,10 +5207,26 @@
     api.getGlobalAbilitiesCatalog()
       .done(function (response) {
         state.abilitiesCatalog = (response && response.abilities) || [];
-        renderAbilitiesOptions(state.abilitiesCatalog);
+        var projectId = state.selectedProjectId;
+        if (!projectId) {
+          renderAbilitiesOptions(state.abilitiesCatalog);
+          return;
+        }
+
+        api.getInstalledProjectAbilities(projectId)
+          .done(function (installedResponse) {
+            state.installedAbilityIds = Array.isArray(installedResponse && installedResponse.abilityIds)
+              ? installedResponse.abilityIds
+              : [];
+            renderAbilitiesOptions(state.abilitiesCatalog);
+          })
+          .fail(function () {
+            state.installedAbilityIds = [];
+            renderAbilitiesOptions(state.abilitiesCatalog);
+          });
       })
       .fail(function (xhr) {
-        $('#abilities-select').html('<option value="">Failed to load abilities</option>');
+        $('#abilities-cards').html('');
         $('#abilities-help').text('Unable to load ability catalog.');
         $('#btn-install-ability').prop('disabled', true);
         showErrorToast(xhr, 'Failed to load abilities');
@@ -5092,9 +5234,9 @@
   }
 
   function installSelectedAbility() {
-    var abilityId = String($('#abilities-select').val() || '').trim();
-    if (!abilityId) {
-      showToast('Select an ability first', 'warning');
+    var selected = Array.isArray(state.selectedAbilityIds) ? state.selectedAbilityIds : [];
+    if (selected.length === 0) {
+      showToast('Select at least one ability first', 'warning');
       return;
     }
     var target = String($('#abilities-install-target').val() || 'project');
@@ -5106,14 +5248,26 @@
 
     $('#btn-install-ability').prop('disabled', true).text('Installing...');
     var request = target === 'user'
-      ? api.installGlobalAbility(abilityId)
-      : api.installProjectAbility(projectId, abilityId);
+      ? api.installGlobalAbility(selected)
+      : api.installProjectAbility(projectId, selected);
 
     request
       .done(function (response) {
-        var installedName = String((response && response.abilityName) || abilityId);
-        closeModal('modal-abilities');
-        showToast(installedName + ' installed', 'success');
+        var installedCount = Number((response && response.installedCount) || selected.length || 0);
+        var fallbackName = selected[0] || 'Ability';
+        var installedName = String((response && response.abilityName) || fallbackName);
+        var installedFromResponse = Array.isArray(response && response.installedAbilities)
+          ? response.installedAbilities.map(function (item) { return String((item && item.abilityId) || '').trim(); }).filter(Boolean)
+          : selected;
+        state.installedAbilityIds = Array.from(new Set((state.installedAbilityIds || []).concat(installedFromResponse)));
+        state.selectedAbilityIds = (state.selectedAbilityIds || []).filter(function (id) {
+          return installedFromResponse.indexOf(String(id || '').trim()) === -1;
+        });
+        var message = installedCount > 1
+          ? installedCount + ' abilities installed'
+          : installedName + ' installed';
+        renderAbilitiesOptions(state.abilitiesCatalog);
+        showToast(message, 'success');
       })
       .fail(function (xhr) {
         showErrorToast(xhr, 'Failed to install ability');

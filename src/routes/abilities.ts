@@ -18,9 +18,15 @@ import {
 } from './abilities-catalog-client';
 
 const execFileAsync = promisify(execFile);
+const INSTALLED_ABILITIES_MANIFEST = '.superengineer-installed-abilities.json';
 
 interface AbilitiesRouterDeps {
   projectRepository: ProjectRepository;
+}
+
+interface InstallAbilityResult {
+  abilityId: string;
+  abilityName: string;
 }
 
 function normalizeAbilityId(raw: string): string {
@@ -36,6 +42,7 @@ function normalizeAbility(input: AbilityCatalogItem): AbilityCatalogItem {
     id: normalizeAbilityId(input.id),
     name: String(input.name || '').trim(),
     description: String(input.description || '').trim(),
+    imageUrl: String(input.imageUrl || '').trim() || undefined,
     repoUrl: String(input.repoUrl || '').trim(),
     sourceSubdir: String(input.sourceSubdir || '').trim(),
     enabled: input.enabled !== false,
@@ -81,6 +88,86 @@ async function installAbilityToTarget(
   }
 }
 
+function getInstalledAbilitiesManifestPath(targetDir: string): string {
+  return path.join(targetDir, INSTALLED_ABILITIES_MANIFEST);
+}
+
+async function readInstalledAbilityIds(targetDir: string): Promise<string[]> {
+  const manifestPath = getInstalledAbilitiesManifestPath(targetDir);
+  const raw = await fs.promises.readFile(manifestPath, 'utf-8').catch(() => '');
+  if (!raw) return [];
+
+  try {
+    const parsed = JSON.parse(raw) as { abilityIds?: unknown };
+    if (!Array.isArray(parsed.abilityIds)) return [];
+    return Array.from(new Set(parsed.abilityIds
+      .map((id) => String(id || '').trim())
+      .filter((id) => id.length > 0)));
+  } catch {
+    return [];
+  }
+}
+
+async function markInstalledAbilityIds(targetDir: string, abilityIds: string[]): Promise<void> {
+  const existing = await readInstalledAbilityIds(targetDir);
+  const merged = Array.from(new Set([
+    ...existing,
+    ...abilityIds.map((id) => String(id || '').trim()).filter((id) => id.length > 0),
+  ]));
+
+  await fs.promises.mkdir(targetDir, { recursive: true });
+  const manifestPath = getInstalledAbilitiesManifestPath(targetDir);
+  await fs.promises.writeFile(manifestPath, JSON.stringify({
+    abilityIds: merged,
+    updatedAt: new Date().toISOString(),
+  }, null, 2), 'utf-8');
+}
+
+function resolveRequestedAbilityIds(body: InstallAbilityBody): string[] {
+  const singleId = String(body.abilityId || '').trim();
+  const requestedIds = Array.isArray(body.abilityIds) ? body.abilityIds : [];
+  const normalizedList = requestedIds
+    .map((id) => String(id || '').trim())
+    .filter((id) => id.length > 0);
+  const merged = singleId ? [singleId, ...normalizedList] : normalizedList;
+  return Array.from(new Set(merged));
+}
+
+async function installSelectedAbilities(
+  abilityIds: string[],
+  targetDir: string,
+  authHeader?: string
+): Promise<InstallAbilityResult[]> {
+  if (abilityIds.length === 0) {
+    throw new ValidationError('At least one ability must be selected');
+  }
+
+  const catalog = await listCatalogAbilities(false, authHeader);
+  const abilitiesById = new Map<string, AbilityCatalogItem>();
+  catalog.forEach((item) => {
+    if (item.enabled) {
+      abilitiesById.set(item.id, item);
+    }
+  });
+
+  const invalidAbilityId = abilityIds.find((abilityId) => !abilitiesById.has(abilityId));
+  if (invalidAbilityId) {
+    throw new ValidationError(`Invalid ability selection: ${invalidAbilityId}`);
+  }
+
+  const installed: InstallAbilityResult[] = [];
+  for (const abilityId of abilityIds) {
+    const ability = abilitiesById.get(abilityId);
+    if (!ability) {
+      throw new ValidationError(`Invalid ability selection: ${abilityId}`);
+    }
+    await installAbilityToTarget(ability, targetDir);
+    installed.push({ abilityId: ability.id, abilityName: ability.name });
+  }
+
+  return installed;
+}
+
 export function createAbilitiesRouter(deps: AbilitiesRouterDeps): Router {
   const router = Router();
   const { projectRepository } = deps;
@@ -102,6 +189,7 @@ export function createAbilitiesRouter(deps: AbilitiesRouterDeps): Router {
       id: String(body.id || ''),
       name: String(body.name || ''),
       description: String(body.description || ''),
+      imageUrl: String(body.imageUrl || ''),
       repoUrl: String(body.repoUrl || ''),
       sourceSubdir: String(body.sourceSubdir || ''),
       enabled: body.enabled !== false,
@@ -120,6 +208,7 @@ export function createAbilitiesRouter(deps: AbilitiesRouterDeps): Router {
     const updated = await updateCatalogAbility(abilityId, {
       name: body.name,
       description: body.description,
+      imageUrl: body.imageUrl,
       repoUrl: body.repoUrl,
       sourceSubdir: body.sourceSubdir,
       enabled: body.enabled,
@@ -137,37 +226,59 @@ export function createAbilitiesRouter(deps: AbilitiesRouterDeps): Router {
 
   router.post('/install/global', validateBody(installAbilitySchema), asyncHandler(async (req: Request, res: Response) => {
     const body = req.body as InstallAbilityBody;
-    const abilityId = String(body.abilityId || '').trim();
-    const abilities = await listCatalogAbilities(false, getAuthHeader(req));
-    const ability = abilities.find((item) => item.id === abilityId && item.enabled);
-    if (!ability) throw new ValidationError('Invalid ability selection');
+    const abilityIds = resolveRequestedAbilityIds(body);
 
     const globalSkillsDir = path.join(os.homedir(), '.claude', 'skills');
-    await installAbilityToTarget(ability, globalSkillsDir);
-    res.json({ success: true, abilityId: ability.id, abilityName: ability.name, skillsPath: globalSkillsDir });
+    const installed = await installSelectedAbilities(abilityIds, globalSkillsDir, getAuthHeader(req));
+    await markInstalledAbilityIds(globalSkillsDir, installed.map((item) => item.abilityId));
+    const primary = installed[0] || null;
+
+    res.json({
+      success: true,
+      abilityId: primary ? primary.abilityId : null,
+      abilityName: primary ? primary.abilityName : null,
+      installedAbilities: installed,
+      installedCount: installed.length,
+      skillsPath: globalSkillsDir,
+    });
   }));
 
   const installProjectAbilitySchema = z.object({
-    abilityId: z.string().min(1, 'Ability ID is required'),
+    abilityId: z.string().min(1, 'Ability ID is required').optional(),
+    abilityIds: z.array(z.string().min(1, 'Ability ID is required')).min(1, 'At least one ability ID is required').optional(),
     projectId: z.string().min(1, 'projectId is required'),
+  }).refine((data) => {
+    return Boolean(
+      data.abilityId
+      || (Array.isArray(data.abilityIds) && data.abilityIds.length > 0)
+    );
+  }, {
+    message: 'abilityId or abilityIds is required',
   });
 
   router.post('/install/project', validateBody(installProjectAbilitySchema), asyncHandler(async (req: Request, res: Response) => {
     const body = req.body as InstallAbilityBody & { projectId?: string };
-    const abilityId = String(body.abilityId || '').trim();
+    const abilityIds = resolveRequestedAbilityIds(body);
     const projectId = String(body.projectId || '').trim();
     if (!projectId) throw new ValidationError('projectId is required');
 
     const project = await projectRepository.findById(projectId);
     if (!project) throw new ValidationError('Project not found');
 
-    const abilities = await listCatalogAbilities(false, getAuthHeader(req));
-    const ability = abilities.find((item) => item.id === abilityId && item.enabled);
-    if (!ability) throw new ValidationError('Invalid ability selection');
-
     const projectSkillsDir = path.join(project.path, '.superengineer-v5', '.claude', 'skills');
-    await installAbilityToTarget(ability, projectSkillsDir);
-    res.json({ success: true, abilityId: ability.id, abilityName: ability.name, skillsPath: projectSkillsDir, projectId });
+    const installed = await installSelectedAbilities(abilityIds, projectSkillsDir, getAuthHeader(req));
+    await markInstalledAbilityIds(projectSkillsDir, installed.map((item) => item.abilityId));
+    const primary = installed[0] || null;
+
+    res.json({
+      success: true,
+      abilityId: primary ? primary.abilityId : null,
+      abilityName: primary ? primary.abilityName : null,
+      installedAbilities: installed,
+      installedCount: installed.length,
+      skillsPath: projectSkillsDir,
+      projectId,
+    });
   }));
 
   return router;
