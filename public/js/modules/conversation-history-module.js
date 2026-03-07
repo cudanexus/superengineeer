@@ -38,27 +38,28 @@
     SearchModule = deps.SearchModule;
   }
 
-  function toggleConversationHistory() {
+  function toggleConversationHistory($anchor) {
     if (state.conversationHistoryOpen) {
       closeConversationHistory();
     } else {
-      openConversationHistory();
+      openConversationHistory($anchor);
     }
   }
 
-  function openConversationHistory() {
+  function openConversationHistory($anchor) {
     if (!state.selectedProjectId) return;
 
     state.conversationHistoryOpen = true;
 
-    // Position dropdown near the button
-    var $btn = $('#btn-show-history');
+    // Position dropdown near the button or as a right-side submenu
+    var $btn = ($anchor && $anchor.length) ? $anchor : $('#btn-show-history');
     var offset = $btn.offset();
     var $dropdown = $('#conversation-history-dropdown');
+    var isSubmenuTrigger = $btn.closest('.toolbar-demo-dropdown').length > 0;
 
     $dropdown.css({
-      top: offset.top + $btn.outerHeight() + 4,
-      left: offset.left
+      top: isSubmenuTrigger ? offset.top : offset.top + $btn.outerHeight() + 4,
+      left: isSubmenuTrigger ? offset.left + $btn.outerWidth() + 8 : offset.left
     });
 
     $dropdown.removeClass('hidden');
@@ -214,7 +215,7 @@
     // Toggle conversation history dropdown
     $('#btn-show-history').on('click', function(e) {
       e.stopPropagation();
-      toggleConversationHistory();
+      toggleConversationHistory($(this));
     });
 
     // Close button in history dropdown

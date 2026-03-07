@@ -80,6 +80,10 @@
     }
 
     updateSkipPermissionsWarning();
+
+    if (typeof window !== 'undefined' && typeof window.syncComposerPermissionMode === 'function') {
+      window.syncComposerPermissionMode();
+    }
   }
 
   function updateSkipPermissionsWarning() {
@@ -123,6 +127,10 @@
     } else {
       $('#permission-mode-selector').removeClass('opacity-50 pointer-events-none');
       $('#form-send-message').removeClass('opacity-50');
+    }
+
+    if (typeof window !== 'undefined' && typeof window.syncComposerPermissionMode === 'function') {
+      window.syncComposerPermissionMode();
     }
   }
 

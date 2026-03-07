@@ -546,19 +546,30 @@
     }
   }
 
-  var TOOLBAR_DROPDOWNS = ['optimizations-dropdown', 'github-dropdown', 'usage-dropdown'];
+  var TOOLBAR_DROPDOWNS = ['view-dropdown', 'tools-dropdown', 'actions-dropdown', 'optimizations-dropdown', 'github-dropdown', 'usage-dropdown'];
 
   function toggleToolbarDropdown(dropdownId, $btn) {
     var $dropdown = $('#' + dropdownId);
     var isOpen = !$dropdown.hasClass('hidden');
+    var isSubmenuTrigger = $btn.closest('.toolbar-demo-dropdown').length > 0;
+    var parentDropdownId = isSubmenuTrigger ? ($btn.closest('.toolbar-demo-dropdown').attr('id') || null) : null;
 
-    closeAllToolbarDropdowns();
+    if (isSubmenuTrigger) {
+      for (var i = 0; i < TOOLBAR_DROPDOWNS.length; i++) {
+        var currentId = TOOLBAR_DROPDOWNS[i];
+        if (currentId !== dropdownId && currentId !== parentDropdownId) {
+          $('#' + currentId).addClass('hidden');
+        }
+      }
+    } else {
+      closeAllToolbarDropdowns();
+    }
 
     if (!isOpen) {
       var offset = $btn.offset();
       $dropdown.css({
-        top: offset.top + $btn.outerHeight() + 4,
-        left: offset.left
+        top: isSubmenuTrigger ? offset.top : offset.top + $btn.outerHeight() + 4,
+        left: isSubmenuTrigger ? offset.left + $btn.outerWidth() + 8 : offset.left
       });
       $dropdown.removeClass('hidden');
     }
@@ -569,6 +580,25 @@
       $('#' + TOOLBAR_DROPDOWNS[i]).addClass('hidden');
     }
   }
+
+  function syncModelPills(modelValue) {
+    var selectedModel = modelValue || $('#project-model-select').val() || 'claude-sonnet-4-6';
+    $('.input-model-option').removeClass('active');
+    $('.input-model-option[data-model="' + selectedModel + '"]').addClass('active');
+    $('#btn-input-model').attr('title', 'Model: ' + getModelDisplayName(selectedModel));
+  }
+
+  function syncComposerPermissionMode() {
+    var isPlanMode = state.pendingPermissionMode
+      ? state.pendingPermissionMode === 'plan'
+      : state.permissionMode === 'plan';
+    var $btn = $('#btn-input-permission-mode');
+
+    $btn.toggleClass('active', isPlanMode);
+    $btn.attr('title', isPlanMode ? 'Plan mode enabled' : 'Accept Edits mode enabled');
+  }
+
+  window.syncComposerPermissionMode = syncComposerPermissionMode;
 
   function openToolDetailModal(toolData) {
     var $modal = $('#modal-tool-detail');
@@ -669,7 +699,7 @@
     $list.empty();
 
     if (state.projects.length === 0) {
-      $list.html('<div class="text-gray-500 text-sm text-center p-4">No projects yet</div>');
+      $list.html('<div class="text-gray-500 text-sm text-center p-4">No projects yet. Create one to start a workspace.</div>');
 
       // Also update overview if visible
       if (!state.selectedProjectId) {
@@ -799,13 +829,14 @@
 
     if (state.projects.length === 0) {
       $overview.html(
-        '<div class="flex flex-col items-center justify-center h-full text-center">' +
-        '<svg class="w-16 h-16 text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+        '<div class="flex flex-col items-center justify-center h-full text-center max-w-xl mx-auto">' +
+        '<div class="mb-6 inline-flex items-center rounded-full border border-teal-700/60 bg-teal-900/20 px-3 py-1 text-xs text-teal-200">Dashboard</div>' +
+        '<svg class="w-16 h-16 text-teal-400/70 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
         '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>' +
         '</svg>' +
-        '<h2 class="text-xl font-semibold text-gray-400 mb-2">No Projects Yet</h2>' +
-        '<p class="text-sm text-gray-500 mb-4">Create your first project to get started</p>' +
-        '<button id="btn-add-project-overview" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm">' +
+        '<h2 class="text-2xl font-semibold text-gray-100 mb-2">No projects yet</h2>' +
+        '<p class="text-sm text-gray-400 mb-6">Create your first workspace to start chatting with the agent, browse files, run shells, and manage git from one place.</p>' +
+        '<button id="btn-add-project-overview" class="text-white px-4 py-2 rounded-lg text-sm font-medium">' +
         'Add Project' +
         '</button>' +
         '</div>'
@@ -818,8 +849,9 @@
     }
 
     var html = '<div class="mb-6">' +
-      '<h2 class="text-xl font-semibold text-white mb-1">Projects</h2>' +
-      '<p class="text-sm text-gray-400">Select a project to start working</p>' +
+      '<div class="inline-flex items-center rounded-full border border-teal-700/60 bg-teal-900/20 px-3 py-1 text-xs text-teal-200 mb-3">Dashboard</div>' +
+      '<h2 class="text-2xl font-semibold text-white mb-1">Projects</h2>' +
+      '<p class="text-sm text-gray-400">Select a workspace from the left or open one below.</p>' +
       '</div>';
 
     html += '<div class="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">';
@@ -948,7 +980,17 @@
     });
 
     if (filteredMessages.length === 0) {
-      $conv.html('<div class="text-gray-500 text-center">No conversation yet</div>');
+      $conv.html(
+        '<div class="empty-conversation-state">' +
+        '<h3>No conversation yet</h3>' +
+        '<p>Start working in this project, jump to run configurations, or open the docs.</p>' +
+        '<div class="empty-conversation-actions">' +
+        '<button class="empty-state-action" data-action="new-chat">Start New Chat</button>' +
+        '<button class="empty-state-action" data-action="run-script">Run Script</button>' +
+        '<button class="empty-state-action" data-action="open-docs">Open Documentation</button>' +
+        '</div>' +
+        '</div>'
+      );
       return;
     }
 
@@ -2111,21 +2153,21 @@
     if (state.sendWithCtrlEnter) {
       if (isMobile) {
         $('#input-hint-text').text('Tap Send to send');
-        $('#input-message').attr('placeholder', 'Type a message to Superengineer...');
+        $('#input-message').attr('placeholder', 'Message Superengineer');
         $('#btn-send-message').attr('title', 'Send');
       } else {
         $('#input-hint-text').text('Ctrl+Enter to send, Enter for new line');
-        $('#input-message').attr('placeholder', 'Type a message to Superengineer... (Ctrl+Enter to send)');
+        $('#input-message').attr('placeholder', 'Message Superengineer');
         $('#btn-send-message').attr('title', 'Send (Ctrl+Enter)');
       }
     } else {
       if (isMobile) {
         $('#input-hint-text').text('Tap Send to send');
-        $('#input-message').attr('placeholder', 'Type a message to Superengineer...');
+        $('#input-message').attr('placeholder', 'Message Superengineer');
         $('#btn-send-message').attr('title', 'Send');
       } else {
         $('#input-hint-text').text('Enter to send, Shift+Enter for new line');
-        $('#input-message').attr('placeholder', 'Type a message to Superengineer... (Enter to send, Shift+Enter for new line)');
+        $('#input-message').attr('placeholder', 'Message Superengineer');
         $('#btn-send-message').attr('title', 'Send (Enter)');
       }
     }
@@ -2352,6 +2394,25 @@
       var action = $btn.data('action');
       var projectId = $btn.data('id');
       handleQuickAction(action, projectId);
+    });
+
+    $('#conversation').on('click', '.empty-state-action', function () {
+      var action = $(this).data('action');
+
+      if (action === 'new-chat') {
+        switchTab('agent-output');
+        $('#input-message').trigger('focus');
+        return;
+      }
+
+      if (action === 'run-script') {
+        switchTab('run-configs');
+        return;
+      }
+
+      if (action === 'open-docs') {
+        window.open('https://github.com/cudanexus/superengineeer#readme', '_blank', 'noopener');
+      }
     });
   }
 
@@ -2623,9 +2684,65 @@
 
     // Permission mode handlers are in PermissionModeModule.setupHandlers()
 
+    $('#btn-view-menu').on('click', function (e) {
+      e.stopPropagation();
+      toggleToolbarDropdown('view-dropdown', $(this));
+    });
+
+    $('#btn-tools-menu').on('click', function (e) {
+      e.stopPropagation();
+      toggleToolbarDropdown('tools-dropdown', $(this));
+    });
+
+    $('#btn-actions-menu').on('click', function (e) {
+      e.stopPropagation();
+      toggleToolbarDropdown('actions-dropdown', $(this));
+    });
+
     // Model selector handler
     $('#project-model-select').on('change', function () {
-      handleProjectModelChange($(this).val() || null);
+      var selectedModel = $(this).val() || null;
+      syncModelPills(selectedModel);
+      handleProjectModelChange(selectedModel);
+    });
+
+    $(document).on('click', '.input-model-option', function () {
+      var selectedModel = $(this).data('model');
+      $('#input-model-menu').addClass('hidden');
+      $('#project-model-select').val(selectedModel).trigger('change');
+    });
+
+    $('#btn-input-plus').on('click', function (e) {
+      e.stopPropagation();
+      $('#input-model-menu').addClass('hidden');
+      $('#input-plus-menu').toggleClass('hidden');
+    });
+
+    $('#btn-input-model').on('click', function (e) {
+      e.stopPropagation();
+      $('#input-plus-menu').addClass('hidden');
+      $('#input-model-menu').toggleClass('hidden');
+    });
+
+    $('#btn-input-attach-file').on('click', function () {
+      $('#input-plus-menu').addClass('hidden');
+      $('#file-upload-input').click();
+    });
+
+    $('#btn-input-compact').on('click', function () {
+      $('#input-plus-menu').addClass('hidden');
+      $('#input-message').val('/compact');
+      sendMessage();
+    });
+
+    $('#btn-input-permission-mode').on('click', function () {
+      var nextMode = state.permissionMode === 'plan' ? 'acceptEdits' : 'plan';
+
+      if (nextMode === 'plan') {
+        $('#btn-perm-plan').trigger('click');
+      } else {
+        $('#btn-perm-accept').trigger('click');
+      }
     });
 
     // Cancel button handler
@@ -2723,8 +2840,16 @@
         QuickActionsModule.closeQuickActions();
       }
 
-      if (!$(e.target).closest('#optimizations-dropdown, #btn-optimizations-menu, #github-dropdown, #btn-github-menu, #usage-dropdown, #btn-usage').length) {
+      if (!$(e.target).closest('#view-dropdown, #btn-view-menu, #tools-dropdown, #btn-tools-menu, #actions-dropdown, #btn-actions-menu, #optimizations-dropdown, #btn-optimizations-menu, #github-dropdown, #btn-github-menu, #usage-dropdown, #btn-usage').length) {
         closeAllToolbarDropdowns();
+      }
+
+      if (!$(e.target).closest('#input-plus-menu, #btn-input-plus').length) {
+        $('#input-plus-menu').addClass('hidden');
+      }
+
+      if (!$(e.target).closest('#input-model-menu, #btn-input-model').length) {
+        $('#input-model-menu').addClass('hidden');
       }
     });
 
@@ -2942,7 +3067,7 @@
     });
 
     // File upload link handler (using event delegation since link is dynamically created)
-    $(document).on('click', '#btn-attach-file, #btn-attach-image', function (e) {
+    $(document).on('click', '#btn-attach-file, #btn-attach-image, #btn-input-attach-file', function (e) {
       e.preventDefault();
       $('#file-upload-input').click();
     });
@@ -3442,7 +3567,7 @@
         $('#input-message').val('');
       }
     } else {
-      $('#input-message').attr('placeholder', 'Type a message to Superengineer...');
+      $('#input-message').attr('placeholder', 'Message Superengineer');
       $('#form-send-message').removeClass('opacity-50');
 
       // Restore the pending message if it was cleared due to a question
@@ -4308,6 +4433,7 @@
         // If no project override, default to Opus
         var modelValue = data.projectModel || 'claude-sonnet-4-6';
         $('#project-model-select').val(modelValue);
+        syncModelPills(modelValue);
         state.currentProjectModel = data.projectModel;
         state.effectiveModel = data.effectiveModel;
         state.globalDefaultModel = data.globalDefault;
@@ -4316,6 +4442,7 @@
       .fail(function () {
         // On failure, default to Opus
         $('#project-model-select').val('claude-sonnet-4-6');
+        syncModelPills('claude-sonnet-4-6');
         state.currentProjectModel = null;
       });
   }
@@ -4377,7 +4504,9 @@
       })
       .fail(function (xhr) {
         // Revert the selector to the previous value or Opus if no override
-        $('#project-model-select').val(state.currentProjectModel || 'claude-sonnet-4-6');
+        var revertModel = state.currentProjectModel || 'claude-sonnet-4-6';
+        $('#project-model-select').val(revertModel);
+        syncModelPills(revertModel);
         showErrorToast(xhr, 'Failed to change model');
       });
   }
@@ -7080,6 +7209,8 @@
     SearchModule.setupHandlers();
     ConversationHistoryModule.setupHandlers();
     ImageAttachmentModule.setupHandlers();
+    syncModelPills('claude-sonnet-4-6');
+    syncComposerPermissionMode();
     TaskDisplayModule.setupHandlers();
     PermissionModeModule.setupHandlers();
     FolderBrowserModule.setupHandlers();
