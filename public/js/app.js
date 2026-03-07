@@ -56,6 +56,8 @@
     websocket: null,
     wsConnected: false, // Track WebSocket connection state
     clientId: clientId, // Add clientId for multi-client debugging
+    agentProcessing: false, // True only while the selected agent is actively producing output
+    agentProcessingTimeout: null, // Debounce timer for transient processing state
     resourceStatus: {
       runningCount: 0,
       maxConcurrent: 3,
@@ -546,7 +548,7 @@
     }
   }
 
-  var TOOLBAR_DROPDOWNS = ['view-dropdown', 'tools-dropdown', 'actions-dropdown', 'optimizations-dropdown', 'github-dropdown', 'usage-dropdown'];
+  var TOOLBAR_DROPDOWNS = ['tools-dropdown', 'actions-dropdown', 'optimizations-dropdown', 'github-dropdown', 'usage-dropdown'];
 
   function toggleToolbarDropdown(dropdownId, $btn) {
     var $dropdown = $('#' + dropdownId);
@@ -567,11 +569,32 @@
 
     if (!isOpen) {
       var offset = $btn.offset();
-      $dropdown.css({
-        top: isSubmenuTrigger ? offset.top : offset.top + $btn.outerHeight() + 4,
-        left: isSubmenuTrigger ? offset.left + $btn.outerWidth() + 8 : offset.left
-      });
       $dropdown.removeClass('hidden');
+
+      var dropdownWidth = $dropdown.outerWidth();
+      var dropdownHeight = $dropdown.outerHeight();
+      var viewportWidth = $(window).width();
+      var viewportHeight = $(window).height();
+      var left = isSubmenuTrigger ? offset.left + $btn.outerWidth() + 8 : offset.left;
+      var top = isSubmenuTrigger ? offset.top : offset.top + $btn.outerHeight() + 4;
+      var minEdge = 8;
+
+      if (left + dropdownWidth > viewportWidth - minEdge) {
+        left = viewportWidth - dropdownWidth - minEdge;
+      }
+
+      if (left < minEdge) {
+        left = minEdge;
+      }
+
+      if (top + dropdownHeight > viewportHeight - minEdge) {
+        top = Math.max(minEdge, viewportHeight - dropdownHeight - minEdge);
+      }
+
+      $dropdown.css({
+        top: top,
+        left: left
+      });
     }
   }
 
@@ -638,13 +661,11 @@
   // Project card rendering
   function renderProjectCard(project) {
     var statusClass = project.status || 'stopped';
-    var statusText = capitalizeFirst(statusClass);
+    var statusText = getProjectStatusLabel(statusClass);
     var quickActions = renderQuickActions(project);
-    var isWaiting = project.isWaitingForInput || false;
-    var waitingClass = isWaiting ? ' waiting-for-input' : '';
-    var waitingIndicator = isWaiting ? '<span class="waiting-indicator" title="Waiting for your input"></span>' : '';
+    var isProcessing = statusClass === 'running' && !project.isWaitingForInput;
 
-    return '<div class="project-card' + waitingClass + '" data-id="' + project.id + '">' +
+    return '<div class="project-card" data-id="' + project.id + '">' +
       '<div class="flex justify-between items-start">' +
       '<div class="project-card-name flex-1 truncate">' + escapeHtml(project.name) + '</div>' +
       quickActions +
@@ -652,8 +673,7 @@
       '<div class="project-card-path">' + escapeHtml(project.path) + '</div>' +
       '<div class="project-card-status">' +
       '<span class="status-badge ' + statusClass + '">' + statusText + '</span>' +
-      waitingIndicator +
-      (statusClass === 'running' && !isWaiting ? '<span class="running-indicator"></span>' : '') +
+      (isProcessing ? '<span class="running-indicator"></span>' : '') +
       '</div>' +
       '</div>';
   }
@@ -679,6 +699,13 @@
 
   function capitalizeFirst(str) {
     return str.charAt(0).toUpperCase() + str.slice(1);
+  }
+
+  function getProjectStatusLabel(statusClass) {
+    if (statusClass === 'running') {
+      return 'Active';
+    }
+    return capitalizeFirst(statusClass);
   }
 
   // Project list rendering
@@ -890,14 +917,10 @@
 
   function renderProjectOverviewCard(project) {
     var statusClass = project.status || 'stopped';
-    var statusText = capitalizeFirst(statusClass);
-    var isWaiting = project.isWaitingForInput || false;
-    var waitingClass = isWaiting ? ' waiting-for-input' : '';
+    var statusText = getProjectStatusLabel(statusClass);
+    var isProcessing = statusClass === 'running' && !project.isWaitingForInput;
 
-    var waitingIndicator = isWaiting ?
-      '<span class="ml-2 text-yellow-400 text-xs">(waiting for input)</span>' : '';
-
-    var runningIndicator = (statusClass === 'running' && !isWaiting) ?
+    var runningIndicator = isProcessing ?
       '<span class="running-indicator ml-2"></span>' : '';
 
     var actionButton = '';
@@ -917,7 +940,7 @@
       '</svg>' +
       '</button>';
 
-    return '<div class="project-overview-card bg-gray-800 rounded-lg p-4 cursor-pointer hover:bg-gray-750 transition-colors border border-gray-700 hover:border-gray-600' + waitingClass + '" data-id="' + project.id + '">' +
+    return '<div class="project-overview-card bg-gray-800 rounded-lg p-4 cursor-pointer hover:bg-gray-750 transition-colors border border-gray-700 hover:border-gray-600" data-id="' + project.id + '">' +
       '<div class="flex justify-between items-start mb-2">' +
       '<h3 class="font-semibold text-white truncate flex-1">' + escapeHtml(project.name) + '</h3>' +
       '<div class="flex items-center gap-1 ml-2">' +
@@ -933,7 +956,6 @@
       '</div>' +
       '<div class="flex items-center">' +
       '<span class="status-badge ' + statusClass + '">' + statusText + '</span>' +
-      waitingIndicator +
       runningIndicator +
       '</div>' +
       '</div>';
@@ -945,7 +967,7 @@
 
     $badge.removeClass('stopped running error queued')
       .addClass(statusClass)
-      .text(capitalizeFirst(statusClass));
+      .text(getProjectStatusLabel(statusClass));
 
     if (statusClass === 'running') {
     } else if (statusClass === 'queued') {
@@ -1804,21 +1826,6 @@
       runSelectedRoadmapTasks();
     });
 
-    // Font size controls for agent output
-    $('#btn-font-decrease').on('click', function () {
-      if (state.fontSize > 10) {
-        state.fontSize -= 2;
-        updateFontSize();
-      }
-    });
-
-    $('#btn-font-increase').on('click', function () {
-      if (state.fontSize < 24) {
-        state.fontSize += 2;
-        updateFontSize();
-      }
-    });
-
     // Scroll lock toggle for agent output
     $('#btn-toggle-scroll-lock').on('click', function () {
       state.agentOutputScrollLock = !state.agentOutputScrollLock;
@@ -2633,8 +2640,6 @@
     // Set CSS variable on document root for global scaling
     document.documentElement.style.setProperty('--superengineer-font-size', size);
 
-    $('#font-size-display').text(size);
-
     // Sync one-off tab toolbars
     if (typeof OneOffToolbarModule !== 'undefined' && OneOffToolbarModule) {
       OneOffToolbarModule.syncFontSize(state.fontSize);
@@ -2645,12 +2650,7 @@
   }
 
   function loadFontSize() {
-    var savedSize = loadFromLocalStorage(LOCAL_STORAGE_KEYS.FONT_SIZE, 14);
-    state.fontSize = savedSize;
-
-    if (state.fontSize < 10) state.fontSize = 10;
-    if (state.fontSize > 24) state.fontSize = 24;
-
+    state.fontSize = 14;
     updateFontSize();
   }
 
@@ -2683,11 +2683,6 @@
 
 
     // Permission mode handlers are in PermissionModeModule.setupHandlers()
-
-    $('#btn-view-menu').on('click', function (e) {
-      e.stopPropagation();
-      toggleToolbarDropdown('view-dropdown', $(this));
-    });
 
     $('#btn-tools-menu').on('click', function (e) {
       e.stopPropagation();
@@ -2840,7 +2835,7 @@
         QuickActionsModule.closeQuickActions();
       }
 
-      if (!$(e.target).closest('#view-dropdown, #btn-view-menu, #tools-dropdown, #btn-tools-menu, #actions-dropdown, #btn-actions-menu, #optimizations-dropdown, #btn-optimizations-menu, #github-dropdown, #btn-github-menu, #usage-dropdown, #btn-usage').length) {
+      if (!$(e.target).closest('#tools-dropdown, #btn-tools-menu, #actions-dropdown, #btn-actions-menu, #optimizations-dropdown, #btn-optimizations-menu, #github-dropdown, #btn-github-menu, #usage-dropdown, #btn-usage').length) {
         closeAllToolbarDropdowns();
       }
 
@@ -3865,6 +3860,7 @@
     var project = findProjectById(projectId);
 
     state.messageSending = true;
+    pulseAgentProcessingIndicator();
 
     // Mark as no longer waiting for input since we're sending a message
     // Increment version to ignore stale updates from server
@@ -3961,6 +3957,7 @@
         state.currentAgentMode = 'interactive';
         updateProjectStatusById(projectId, 'running');
         startAgentStatusPolling(projectId);
+        pulseAgentProcessingIndicator();
 
         // Update session and conversation IDs from response
         if (response && response.sessionId) {
@@ -4339,7 +4336,8 @@
         if (data.status === 'running' && data.mode) {
           state.currentAgentMode = data.mode;
           state.queuedMessageCount = data.queuedMessageCount || 0;
-          showAgentRunningIndicator(true);
+          state.agentProcessing = state.queuedMessageCount > 0;
+          showAgentRunningIndicator(true, null, data.isWaitingForInput === true);
           updateQueuedMessagesDisplay();
           startAgentStatusPolling(projectId); // Start polling as fallback
         } else {
@@ -4511,16 +4509,43 @@
       });
   }
 
-  function showAgentRunningIndicator(isRunning, statusText) {
-    var spinner = $('#agent-output-spinner');
-    var label = $('#agent-status-label');
+  function pulseAgentProcessingIndicator() {
+    if (!state.selectedProjectId) return;
+    var selectedProject = findProjectById(state.selectedProjectId);
+    if (selectedProject && selectedProject.isWaitingForInput) {
+      state.agentProcessing = false;
+      if (state.agentProcessingTimeout) {
+        clearTimeout(state.agentProcessingTimeout);
+        state.agentProcessingTimeout = null;
+      }
+      return;
+    }
 
-    if (isRunning) {
-      spinner.removeClass('hidden');
-      label.text(statusText || 'Agent running...').removeClass('hidden');
-    } else {
-      spinner.addClass('hidden');
-      label.addClass('hidden');
+    state.agentProcessing = true;
+
+    if (state.agentProcessingTimeout) {
+      clearTimeout(state.agentProcessingTimeout);
+    }
+
+    state.agentProcessingTimeout = setTimeout(function () {
+      state.agentProcessing = false;
+      state.agentProcessingTimeout = null;
+
+      if (!state.selectedProjectId) return;
+      var project = findProjectById(state.selectedProjectId);
+      var isRunning = !!(project && project.status === 'running');
+      var waitingForInput = !!(project && project.isWaitingForInput);
+      showAgentRunningIndicator(isRunning, null, waitingForInput);
+    }, 1200);
+  }
+
+  function showAgentRunningIndicator(isRunning, statusText, isWaitingForInput, forceProcessing) {
+    if (!isRunning) {
+      state.agentProcessing = false;
+      if (state.agentProcessingTimeout) {
+        clearTimeout(state.agentProcessingTimeout);
+        state.agentProcessingTimeout = null;
+      }
     }
   }
 
@@ -5433,6 +5458,7 @@
 
   function updateQueuedMessagesDisplay() {
     var $indicator = $('#queued-messages-indicator');
+    var $target = $('#conversation-stats');
     var count = state.queuedMessageCount;
     var messageText = count === 1 ? 'message' : 'messages';
 
@@ -5445,7 +5471,9 @@
           '</svg>' +
           '<span class="queued-text">' + count + ' queued ' + messageText + '</span>' +
           '</button>';
-        $('#agent-status-label').after(html);
+        if ($target.length > 0) {
+          $target.before(html);
+        }
       } else {
         $indicator.find('.queued-text').text(count + ' queued ' + messageText);
       }
@@ -5944,7 +5972,7 @@
     } else {
       // Show Ralph Loop status in agent status label
       var statusText = formatRalphLoopStatusForLabel(status);
-      showAgentRunningIndicator(true, statusText);
+      showAgentRunningIndicator(true, statusText, false, true);
 
       // Show appropriate buttons
       $('#btn-stop-agent').removeClass('hidden');
@@ -6296,6 +6324,14 @@
         state.waitingVersion = serverVersion;
         updateWaitingIndicator(isWaiting);
         updateCancelButton();
+        if (isWaiting) {
+          state.agentProcessing = false;
+          if (state.agentProcessingTimeout) {
+            clearTimeout(state.agentProcessingTimeout);
+            state.agentProcessingTimeout = null;
+          }
+          showAgentRunningIndicator(true, null, true);
+        }
 
         // If agent became idle and there's a pending mode change, apply it
         if (isWaiting) {
@@ -6372,6 +6408,18 @@
   }
 
   function handleAgentMessage(projectId, message) {
+    var shouldPulseProcessing = message && (
+      message.type === 'assistant' ||
+      message.type === 'stdout' ||
+      message.type === 'result' ||
+      message.type === 'tool_use' ||
+      message.type === 'tool_result'
+    );
+
+    if (projectId === state.selectedProjectId && shouldPulseProcessing) {
+      pulseAgentProcessingIndicator();
+    }
+
     appendMessage(projectId, message);
 
     if (message && (message.type === 'assistant' || message.type === 'stdout' || message.type === 'result')) {
@@ -6418,8 +6466,8 @@
       }
     }
 
-    // Clear waiting indicator when receiving agent messages (Claude is actively working)
-    if (projectId === state.selectedProjectId) {
+    // Clear waiting indicator only when the agent is actively continuing work (not user prompts)
+    if (projectId === state.selectedProjectId && shouldPulseProcessing) {
       var project = findProjectById(projectId);
 
       if (project && project.isWaitingForInput) {
@@ -6479,7 +6527,18 @@
 
     // Update running indicator for selected project
     if (projectId === state.selectedProjectId) {
-      showAgentRunningIndicator(status === 'running');
+      var selectedProject = findProjectById(projectId);
+      var waitingForInput = fullStatus
+        ? fullStatus.isWaitingForInput === true
+        : !!(selectedProject && selectedProject.isWaitingForInput === true);
+      if (fullStatus && (fullStatus.queuedMessageCount || 0) > 0) {
+        pulseAgentProcessingIndicator();
+      }
+      showAgentRunningIndicator(
+        status === 'running',
+        null,
+        waitingForInput
+      );
       updateStartStopButtons();
       updateCancelButton();
 

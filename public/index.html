@@ -342,6 +342,17 @@
               <span id="project-status" class="status-badge"></span>
             </div>
             <div class="flex items-center gap-1.5">
+              <button id="btn-tasks"
+                class="bg-gray-700 hover:bg-gray-600 text-white h-7 px-2.5 rounded flex items-center justify-center gap-1.5 text-sm transition-colors"
+                title="View current tasks">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                </svg>
+                <span>Tasks</span>
+                <span id="tasks-badge"
+                  class="hidden bg-teal-400 text-[#051413] text-[10px] rounded-full min-w-4 h-4 px-1 flex items-center justify-center font-semibold">0</span>
+              </button>
               <button id="btn-view-roadmap"
                 class="bg-gray-700 hover:bg-gray-600 text-white h-7 px-2.5 rounded flex items-center justify-center gap-1.5 text-sm transition-colors">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -443,26 +454,6 @@
                 <div class="toolbar-row toolbar-row-top">
                   <div class="toolbar-menu-strip">
                     <div class="toolbar-dropdown-anchor">
-                      <button id="btn-view-menu" class="toolbar-menu-trigger" title="View options">
-                        View
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </button>
-                      <div id="view-dropdown" class="hidden toolbar-demo-dropdown">
-                        <button id="btn-toggle-tools" class="toolbar-dropdown-item" title="Toggle tool call visibility">
-                          <span id="toggle-tools-text">Hide Tools</span>
-                        </button>
-                        <button id="btn-tasks" class="toolbar-dropdown-item toolbar-dropdown-item-badge" title="View current tasks">
-                          <span>Tasks</span>
-                          <span id="tasks-badge"
-                            class="hidden bg-teal-400 text-[#051413] text-[10px] rounded-full min-w-4 h-4 px-1 flex items-center justify-center font-semibold">0</span>
-                        </button>
-                        <button id="btn-search" class="toolbar-dropdown-item" title="Search conversation (Ctrl+F)">Search</button>
-                      </div>
-                    </div>
-
-                    <div class="toolbar-dropdown-anchor">
                       <button id="btn-tools-menu" class="toolbar-menu-trigger" title="Tools menu">
                         Tools
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -491,6 +482,10 @@
                           title="Clear context (same as /clear in Claude Code)">Clear</button>
                         <button id="btn-show-history" class="toolbar-dropdown-item"
                           title="View conversation history">History</button>
+                        <button id="btn-toggle-tools" class="toolbar-dropdown-item" title="Toggle tool call visibility">
+                          <span id="toggle-tools-text">Hide Tools</span>
+                        </button>
+                        <button id="btn-search" class="toolbar-dropdown-item" title="Search conversation (Ctrl+F)">Search</button>
                         <button id="btn-optimizations-menu"
                           class="toolbar-dropdown-item toolbar-dropdown-item-badge relative"
                           title="Optimizations menu">
@@ -512,20 +507,11 @@
                   </div>
 
                   <div class="toolbar-action-strip">
-                    <button id="btn-toggle-preview" class="toolbar-action-button" title="Toggle Preview Pane">
-                      Preview
-                    </button>
-                    <button id="btn-start-agent" class="toolbar-action-button toolbar-action-button-primary hidden">
-                      Start
-                    </button>
                     <button id="btn-stop-agent" class="toolbar-action-button hidden">
                       Stop
                     </button>
                     <button id="btn-restart-agent" class="toolbar-action-button hidden">
                       Restart
-                    </button>
-                    <button id="btn-rewind-agent" class="toolbar-action-button hidden" title="Rewind to commit">
-                      Rewind
                     </button>
                     <button id="btn-ralph-loop-pause" class="toolbar-action-button hidden">
                       Pause
@@ -533,22 +519,18 @@
                     <button id="btn-agent-mode" class="toolbar-action-button hidden" title="Switch to Agent Mode">
                       Agent Mode
                     </button>
+                    <button id="btn-toggle-preview" class="toolbar-action-button" title="Toggle Preview Pane">
+                      Preview
+                    </button>
+                    <button id="btn-start-agent" class="toolbar-action-button toolbar-action-button-primary hidden">
+                      Start
+                    </button>
+                    <button id="btn-rewind-agent" class="toolbar-action-button hidden" title="Rewind to commit">
+                      Rewind
+                    </button>
                   </div>
 
                   <div class="toolbar-live-strip">
-                    <div class="toolbar-font-box">
-                      <button id="btn-font-decrease" class="toolbar-font-stepper" title="Decrease font size">
-                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" />
-                        </svg>
-                      </button>
-                      <span id="font-size-display" class="toolbar-font-display">14px</span>
-                      <button id="btn-font-increase" class="toolbar-font-stepper" title="Increase font size">
-                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                        </svg>
-                      </button>
-                    </div>
                     <span id="active-issue-indicator" class="hidden flex items-center gap-1 text-xs text-green-400">
                       <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -558,8 +540,6 @@
                       <button id="btn-finish-issue-toolbar"
                         class="bg-green-600 hover:bg-green-500 text-white text-xs px-2 py-0.5 rounded transition-colors">Finish</button>
                     </span>
-                    <div id="agent-output-spinner" class="loading-spinner small hidden"></div>
-                    <span id="agent-status-label" class="text-xs text-gray-400 hidden">Agent running...</span>
                     <span id="pending-mode-label" class="text-xs text-yellow-400 hidden">(mode change pending)</span>
                     <span id="conversation-stats" class="text-xs text-gray-500 flex items-center gap-3"></span>
                   </div>
@@ -602,20 +582,6 @@
                         <option value="claude-sonnet-4-5-20250929" class="bg-gray-700 text-white">Sonnet 4.5</option>
                         <option value="claude-haiku-4-5-20251001" class="bg-gray-700 text-white">Haiku 4.5</option>
                       </select>
-                    </div>
-
-                    <div class="toolbar-font-box">
-                      <button id="btn-font-decrease" class="toolbar-font-stepper" title="Decrease font size">
-                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" />
-                        </svg>
-                      </button>
-                      <span id="font-size-display" class="toolbar-font-display">14px</span>
-                      <button id="btn-font-increase" class="toolbar-font-stepper" title="Increase font size">
-                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                        </svg>
-                      </button>
                     </div>
                   </div>
                 </div>
@@ -3007,8 +2973,8 @@
           </button>
         </div>
         <div class="p-3 space-y-3">
-          <p class="text-sm text-gray-300">Select an ability package to clone and install into
-            <code>.superengineer-v5/.claude/skills</code>.
+          <p class="text-sm text-gray-300">An ability defines a skill or capability that extends what the AI can do.
+            <!-- <code>.superengineer-v5/.claude/skills</code>. -->
           </p>
           <div class="space-y-1">
             <label for="abilities-select" class="block text-sm font-medium text-gray-300">Ability</label>
@@ -3016,14 +2982,14 @@
               class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-purple-500"></select>
             <p id="abilities-help" class="text-xs text-gray-400"></p>
           </div>
-          <div class="space-y-1">
+          <!-- <div class="space-y-1">
             <label for="abilities-install-target" class="block text-sm font-medium text-gray-300">Install Target</label>
             <select id="abilities-install-target"
               class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-purple-500">
               <option value="project">Current Project (.superengineer-v5/.claude/skills)</option>
               <option value="user">User Home (~/.claude/skills)</option>
             </select>
-          </div>
+          </div> -->
         </div>
         <div class="p-3 border-t border-gray-700 flex justify-end gap-2">
           <button type="button" class="modal-close px-3 py-1.5 text-sm text-gray-300 hover:text-white transition-colors">Cancel</button>
