@@ -1014,7 +1014,6 @@
         '<div class="empty-conversation-actions">' +
         '<button class="empty-state-action" data-action="new-chat">Start New Chat</button>' +
         '<button class="empty-state-action" data-action="run-script">Run Script</button>' +
-        '<button class="empty-state-action" data-action="open-docs">Open Documentation</button>' +
         '</div>' +
         '</div>'
       );
