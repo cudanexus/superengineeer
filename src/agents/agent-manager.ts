@@ -283,6 +283,98 @@ const INTERNAL_RUNTIME_PATHS = [
 ];
 const DEFAULT_AUTO_COMMIT_NAME = 'Superengineer';
 const DEFAULT_AUTO_COMMIT_EMAIL = 'superengineer@example.com';
+const AUTO_COMMIT_MESSAGE_TIMEOUT_MS = 120000;
+const AUTO_COMMIT_CONTENT_MESSAGE_TYPES = new Set(['stdout', 'result']);
+
+function buildAutoCommitMessagePrompt(userMessage: string): string {
+  const compactUserMessage = String(userMessage || '').trim();
+
+  return `Generate a concise git commit message based ONLY on the user's request below.
+
+User request:
+${compactUserMessage || 'workspace update'}
+
+Rules:
+- Follow conventional commit format: type(scope): description
+- Types: feat, fix, refactor, docs, style, test, chore, perf, ci, build
+- Keep the first line under 72 characters
+- Be specific about what changed
+- Use present tense ("add" not "added")
+- Output a SINGLE line only
+- Do not include footers (e.g., Co-Authored-By, Signed-off-by)
+
+Output ONLY the commit message, nothing else.`;
+}
+
+function looksLikeCommitMessageRefusal(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("i cannot generate a commit message") ||
+    normalized.includes("i can't generate a commit message") ||
+    normalized.includes('not a clear code change') ||
+    normalized.includes("isn't a clear code change") ||
+    normalized.includes('not a code change') ||
+    normalized.includes("isn't a code change")
+  );
+}
+
+function extractCommitMessage(rawOutput: string): string {
+  let message = String(rawOutput || '').trim();
+  if (!message) return 'chore: conversation update';
+
+  message = message.replace(/^```[\w-]*\s*/m, '').replace(/```$/m, '').trim();
+  const lines = message
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .filter((line) => !/^co-authored-by:/i.test(line))
+    .filter((line) => !/^signed-off-by:/i.test(line))
+    .filter((line) => !/^\[pair:[^\]]+\]$/i.test(line));
+
+  const firstLine = (lines[0] || '').trim();
+  const unquoted = firstLine.replace(/^["'`]+|["'`]+$/g, '').trim();
+  const withoutPairSuffix = unquoted.replace(/\s*\[pair:[^\]]+\]\s*$/i, '').trim();
+  const compact = withoutPairSuffix.replace(/\s+/g, ' ');
+
+  if (!compact || looksLikeCommitMessageRefusal(compact)) {
+    return 'chore: conversation update';
+  }
+
+  return compact;
+}
+
+function fallbackCommitMessageFromHint(hint: string): string {
+  const cleaned = String(hint || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/[.?!]+$/g, '');
+
+  if (!cleaned) {
+    return 'chore: conversation update';
+  }
+
+  const lower = cleaned.toLowerCase();
+  const type = (
+    /(bug|fix|error|issue|broken|fails?)/.test(lower) ? 'fix' :
+    /(refactor|cleanup|clean up|restructure)/.test(lower) ? 'refactor' :
+    /(test|spec)/.test(lower) ? 'test' :
+    /(docs?|readme|documentation)/.test(lower) ? 'docs' :
+    /(style|css|ui|ux)/.test(lower) ? 'style' :
+    /(perf|performance|optimi[sz]e)/.test(lower) ? 'perf' :
+    'feat'
+  );
+
+  const description = cleaned
+    .replace(/^please\s+/i, '')
+    .replace(/^can you\s+/i, '')
+    .replace(/^could you\s+/i, '')
+    .replace(/^i need\s+/i, '')
+    .trim()
+    .slice(0, 60)
+    .replace(/\s+$/g, '');
+
+  return `${type}: ${description || 'conversation update'}`;
+}
 
 const ZERO_TOKENS: TokenTotals = {
   inputTokens: 0,
@@ -1601,6 +1693,128 @@ export class DefaultAgentManager implements AgentManager {
     }
   }
 
+  private async collectOneOffOutput(options: {
+    projectId: string;
+    message: string;
+    label: string;
+  }): Promise<string> {
+    const { projectId, message, label } = options;
+    const oneOffId = await this.startOneOffAgent({ projectId, message, label });
+
+    return new Promise<string>((resolve, reject) => {
+      let fullContent = '';
+      let finished = false;
+
+      const timeout = setTimeout(() => {
+        cleanup();
+        void this.stopOneOffAgent(oneOffId);
+        reject(new Error(`${label} timed out`));
+      }, AUTO_COMMIT_MESSAGE_TIMEOUT_MS);
+
+      const getFinalOutput = (): string => {
+        const streamingOutput = fullContent.trim();
+        if (streamingOutput.length > 0) {
+          return streamingOutput;
+        }
+        return String(this.getOneOffCollectedOutput(oneOffId) || '').trim();
+      };
+
+      const finish = (output: string): void => {
+        if (finished) return;
+        finished = true;
+        cleanup();
+        resolve(output.trim());
+      };
+
+      const cleanup = (): void => {
+        clearTimeout(timeout);
+        this.off('oneOffMessage', messageHandler);
+        this.off('oneOffStatus', statusHandler);
+        this.off('oneOffWaiting', waitingHandler);
+      };
+
+      const messageHandler: AgentManagerEvents['oneOffMessage'] = (msgOneOffId, msg) => {
+        if (msgOneOffId !== oneOffId) return;
+        if (AUTO_COMMIT_CONTENT_MESSAGE_TYPES.has(msg.type) && msg.content) {
+          fullContent += msg.content;
+        }
+      };
+
+      const statusHandler: AgentManagerEvents['oneOffStatus'] = (msgOneOffId, status) => {
+        if (msgOneOffId !== oneOffId) return;
+        if (status === 'stopped') {
+          finish(getFinalOutput());
+        } else if (status === 'error') {
+          if (finished) return;
+          cleanup();
+          reject(new Error('Agent encountered an error'));
+        }
+      };
+
+      const waitingHandler: AgentManagerEvents['oneOffWaiting'] = (msgOneOffId, isWaiting, _version) => {
+        if (msgOneOffId !== oneOffId || !isWaiting) return;
+        setTimeout(() => finish(getFinalOutput()), 150);
+        void this.stopOneOffAgent(oneOffId);
+      };
+
+      this.on('oneOffMessage', messageHandler);
+      this.on('oneOffStatus', statusHandler);
+      this.on('oneOffWaiting', waitingHandler);
+    });
+  }
+
+  private async generateWaitingAutoCommitMessage(
+    projectId: string,
+    waitingVersion: number,
+    fallbackHint: string
+  ): Promise<string> {
+    let latestUserMessage = '';
+
+    try {
+      const project = await this.projectRepository.findById(projectId);
+      const conversationId = project?.currentConversationId;
+      if (conversationId) {
+        const messages = await this.conversationRepository.getMessages(projectId, conversationId, 80);
+        for (let i = messages.length - 1; i >= 0; i -= 1) {
+          const candidate = messages[i];
+          if (candidate?.type === 'user' && String(candidate.content || '').trim()) {
+            latestUserMessage = String(candidate.content).trim();
+            break;
+          }
+        }
+      }
+    } catch (error) {
+      this.logger.warn('Failed to read conversation context for auto-commit message', {
+        projectId,
+        waitingVersion,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    const hint = latestUserMessage || String(fallbackHint || '').trim() || 'workspace update';
+    const prompt = buildAutoCommitMessagePrompt(hint);
+
+    try {
+      const rawOutput = await this.collectOneOffOutput({
+        projectId,
+        message: prompt,
+        label: 'Auto-commit message generation',
+      });
+      const extracted = extractCommitMessage(rawOutput);
+      if (extracted === 'chore: conversation update' && hint) {
+        return fallbackCommitMessageFromHint(hint);
+      }
+      return extracted;
+    } catch (error) {
+      this.logger.warn('Failed to generate AI auto-commit message; using fallback', {
+        projectId,
+        waitingVersion,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return fallbackCommitMessageFromHint(hint);
+    }
+  }
+
   private async autoPushWhenWaiting(projectId: string, waitingVersion: number): Promise<void> {
     const agent = this.agents.get(projectId);
     if (!agent || agent.mode !== 'interactive' || !this.gitService) return;
@@ -1656,10 +1870,15 @@ export class DefaultAgentManager implements AgentManager {
           await this.gitService.stageAll(project.path);
 
           const stamp = new Date().toISOString().replace('T', ' ').slice(0, 19);
+          const autoCommitMessage = await this.generateWaitingAutoCommitMessage(
+            projectId,
+            waitingVersion,
+            `auto-save before waiting ${stamp}`
+          );
           try {
             await this.gitService.commit(
               project.path,
-              `chore: auto-save before waiting (${stamp})`
+              autoCommitMessage
             );
           } catch (commitError) {
             // Keep push flow alive even if there were no staged changes to commit.
@@ -1706,10 +1925,15 @@ export class DefaultAgentManager implements AgentManager {
 
             await this.gitService.stageAll(project.path);
             const followupStamp = new Date().toISOString().replace('T', ' ').slice(0, 19);
+            const followupCommitMessage = await this.generateWaitingAutoCommitMessage(
+              projectId,
+              waitingVersion,
+              `follow-up auto-save before waiting ${followupStamp}`
+            );
             try {
               await this.gitService.commit(
                 project.path,
-                `chore: auto-save before waiting (${followupStamp})`
+                followupCommitMessage
               );
             } catch (followupCommitError) {
               this.logger.warn('Follow-up auto-commit skipped/failed during waiting sync', {
