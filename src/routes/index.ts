@@ -55,9 +55,12 @@ let sharedRunConfigurationService: RunConfigurationService | null = null;
 let sharedRunProcessManager: RunProcessManager | null = null;
 let sharedInventifyService: InventifyService | null = null;
 const FILE_UPLOAD_LAMBDA_URL = 'https://n3uzo744vw6qsk6iv2kqclkqdq0ylgqp.lambda-url.ap-southeast-1.on.aws/';
+const LAMBDA_INVOKE_PAYLOAD_LIMIT_BYTES = 6 * 1024 * 1024; // 6,291,456 bytes
+const SAFE_UPLOAD_FILE_LIMIT_BYTES = 4 * 1024 * 1024; // base64 + JSON overhead safety margin
 
-function sanitizeUploadFileName(input: string): string {
-  const trimmed = (input || '').trim();
+function sanitizeUploadFileName(input: unknown): string {
+  const raw = typeof input === 'string' ? input : (input == null ? '' : String(input));
+  const trimmed = raw.trim();
   const fallback = 'attachment.bin';
   const candidate = trimmed.length > 0 ? trimmed : fallback;
   const base = candidate.split(/[\\/]/).pop() || fallback;
@@ -66,6 +69,13 @@ function sanitizeUploadFileName(input: string): string {
     .replace(/\s+/g, ' ')
     .trim();
   return cleaned.length > 0 ? cleaned : fallback;
+}
+
+function estimateBase64DecodedBytes(base64: string): number {
+  const clean = String(base64 || '').replace(/\s/g, '');
+  if (!clean) return 0;
+  const padding = clean.endsWith('==') ? 2 : (clean.endsWith('=') ? 1 : 0);
+  return Math.max(0, Math.floor((clean.length * 3) / 4) - padding);
 }
 
 export interface ApiRouterDependencies {
@@ -157,80 +167,209 @@ export function createApiRouter(deps: ApiRouterDependencies = {}): Router {
   });
 
   // File upload proxy (avoids browser CORS issues for direct Lambda calls)
-  router.post('/attachments/upload', (req, res) => {
-    const body = req.body as {
-      fileData?: string;
-      fileDataBase64?: string;
-      dataUrl?: string;
-      fileName?: string;
-      mimeType?: string;
-      contentType?: string;
-    };
-    const fileData = body.fileData;
-    const fileName = body.fileName;
-    const mimeType = String(body.mimeType || body.contentType || '').trim();
-    const dataUrl = String(body.dataUrl || '').trim();
+  router.post('/attachments/presign', (req, res) => {
+    try {
+      const body = (req.body && typeof req.body === 'object'
+        ? req.body
+        : {}) as {
+          fileName?: string;
+          fileType?: string;
+          mimeType?: string;
+          contentType?: string;
+          fileSize?: number | string;
+        };
 
-    if (!fileData || !fileName) {
-      res.status(400).json({ error: 'fileData and fileName are required' });
-      return;
-    }
+      const fileName = sanitizeUploadFileName(body.fileName);
+      const fileType = String(body.fileType || body.mimeType || body.contentType || 'application/octet-stream').trim();
+      const fileSize = Number(body.fileSize || 0);
 
-    const safeFileName = sanitizeUploadFileName(fileName);
-    const payload = JSON.stringify({
-      // Keep legacy keys used by existing Lambda handler.
-      fileData,
-      fileName: safeFileName,
-      // Forward richer metadata for handlers that infer extension/content-type.
-      fileDataBase64: String(body.fileDataBase64 || fileData),
-      dataUrl,
-      mimeType,
-      contentType: mimeType,
-    });
-    const upstreamReq = https.request(FILE_UPLOAD_LAMBDA_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(payload),
-      },
-    }, (upstreamRes) => {
-      const chunks: Buffer[] = [];
+      if (!fileName) {
+        res.status(400).json({ error: 'fileName is required' });
+        return;
+      }
 
-      upstreamRes.on('data', (chunk) => {
-        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      const payload = JSON.stringify({
+        fileName,
+        fileType,
+        fileSize: Number.isFinite(fileSize) && fileSize >= 0 ? fileSize : 0,
       });
 
-      upstreamRes.on('end', () => {
-        const raw = Buffer.concat(chunks).toString('utf-8');
-        let parsed: { message?: string; url?: string; error?: string } | null = null;
+      const upstreamReq = https.request(FILE_UPLOAD_LAMBDA_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(payload),
+        },
+      }, (upstreamRes) => {
+        const chunks: Buffer[] = [];
 
-        try {
-          parsed = raw ? JSON.parse(raw) : null;
-        } catch {
-          parsed = null;
-        }
+        upstreamRes.on('data', (chunk) => {
+          chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        });
 
-        const statusCode = upstreamRes.statusCode || 502;
-        if (statusCode >= 200 && statusCode < 300 && parsed && parsed.url) {
-          res.json({
-            message: parsed.message || 'File uploaded successfully',
-            url: parsed.url,
+        upstreamRes.on('end', () => {
+          const raw = Buffer.concat(chunks).toString('utf-8');
+          let parsed: { uploadUrl?: string; url?: string; key?: string; message?: string; error?: string } | null = null;
+
+          try {
+            parsed = raw ? JSON.parse(raw) : null;
+          } catch {
+            parsed = null;
+          }
+
+          const statusCode = upstreamRes.statusCode || 502;
+          if (statusCode >= 200 && statusCode < 300 && parsed && parsed.uploadUrl) {
+            res.json({
+              uploadUrl: parsed.uploadUrl,
+              url: parsed.url,
+              key: parsed.key,
+            });
+            return;
+          }
+
+          const upstreamMessage = (parsed && (parsed.error || parsed.message))
+            || (raw && raw.trim().length > 0 ? raw.trim().slice(0, 500) : '');
+
+          if (statusCode >= 400 && statusCode < 500) {
+            res.status(statusCode).json({
+              error: upstreamMessage || 'Upload rejected by upstream service',
+              upstreamStatus: statusCode,
+            });
+            return;
+          }
+
+          res.status(502).json({
+            error: upstreamMessage || 'Failed to request upload URL',
+            upstreamStatus: statusCode,
           });
-          return;
-        }
-
-        res.status(502).json({
-          error: (parsed && parsed.error) || 'Failed to upload file',
         });
       });
-    });
 
-    upstreamReq.on('error', () => {
-      res.status(502).json({ error: 'Upload service unavailable' });
-    });
+      upstreamReq.on('error', () => {
+        res.status(502).json({ error: 'Upload service unavailable' });
+      });
 
-    upstreamReq.write(payload);
-    upstreamReq.end();
+      upstreamReq.setTimeout(45000, () => {
+        upstreamReq.destroy(new Error('Presign request timed out'));
+      });
+
+      upstreamReq.write(payload);
+      upstreamReq.end();
+    } catch {
+      res.status(400).json({ error: 'Invalid presign payload' });
+    }
+  });
+
+  // Legacy file upload proxy (base64 via backend, retained for compatibility)
+  router.post('/attachments/upload', (req, res) => {
+    try {
+      const body = (req.body && typeof req.body === 'object'
+        ? req.body
+        : {}) as {
+          fileData?: string;
+          fileDataBase64?: string;
+          dataUrl?: string;
+          fileName?: string;
+          mimeType?: string;
+          contentType?: string;
+        };
+      const fileData = String(body.fileData || body.fileDataBase64 || '').trim();
+      const fileName = sanitizeUploadFileName(body.fileName);
+      const mimeType = String(body.mimeType || body.contentType || '').trim();
+      const dataUrl = String(body.dataUrl || '').trim();
+
+      if (!fileData || !fileName) {
+        res.status(400).json({ error: 'fileData and fileName are required' });
+        return;
+      }
+
+      const estimatedFileBytes = estimateBase64DecodedBytes(fileData);
+      if (estimatedFileBytes > SAFE_UPLOAD_FILE_LIMIT_BYTES) {
+        res.status(413).json({
+          error: 'File is too large. Max supported size is 4 MB per file.',
+          code: 'PAYLOAD_TOO_LARGE',
+          maxFileBytes: SAFE_UPLOAD_FILE_LIMIT_BYTES,
+          lambdaPayloadLimitBytes: LAMBDA_INVOKE_PAYLOAD_LIMIT_BYTES,
+        });
+        return;
+      }
+
+      const payload = JSON.stringify({
+        // Keep legacy keys used by existing Lambda handler.
+        fileData,
+        fileName,
+        // Forward richer metadata for handlers that infer extension/content-type.
+        fileDataBase64: String(body.fileDataBase64 || fileData),
+        dataUrl,
+        mimeType,
+        contentType: mimeType,
+      });
+
+      const upstreamReq = https.request(FILE_UPLOAD_LAMBDA_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(payload),
+        },
+      }, (upstreamRes) => {
+        const chunks: Buffer[] = [];
+
+        upstreamRes.on('data', (chunk) => {
+          chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        });
+
+        upstreamRes.on('end', () => {
+          const raw = Buffer.concat(chunks).toString('utf-8');
+          let parsed: { message?: string; url?: string; error?: string } | null = null;
+
+          try {
+            parsed = raw ? JSON.parse(raw) : null;
+          } catch {
+            parsed = null;
+          }
+
+          const statusCode = upstreamRes.statusCode || 502;
+          if (statusCode >= 200 && statusCode < 300 && parsed && parsed.url) {
+            res.json({
+              message: parsed.message || 'File uploaded successfully',
+              url: parsed.url,
+            });
+            return;
+          }
+
+          const upstreamMessage = (parsed && (parsed.error || parsed.message))
+            || (raw && raw.trim().length > 0 ? raw.trim().slice(0, 500) : '');
+
+          // Preserve upstream client errors (4xx) instead of collapsing to 502.
+          if (statusCode >= 400 && statusCode < 500) {
+            res.status(statusCode).json({
+              error: upstreamMessage || 'Upload rejected by upstream service',
+              upstreamStatus: statusCode,
+            });
+            return;
+          }
+
+          // Upstream 5xx/network-like behavior maps to bad gateway.
+          res.status(502).json({
+            error: upstreamMessage || 'Failed to upload file',
+            upstreamStatus: statusCode,
+          });
+        });
+      });
+
+      upstreamReq.on('error', () => {
+        res.status(502).json({ error: 'Upload service unavailable' });
+      });
+
+      upstreamReq.setTimeout(45000, () => {
+        upstreamReq.destroy(new Error('Upload request timed out'));
+      });
+
+      upstreamReq.write(payload);
+      upstreamReq.end();
+    } catch {
+      res.status(400).json({ error: 'Invalid upload payload' });
+    }
   });
 
   // Dev mode status

@@ -36,7 +36,7 @@
 
   // Alias for backward compatibility within this file
   var api = ApiClient;
-  var FILE_UPLOAD_API_URL = '/api/attachments/upload';
+  var FILE_UPLOAD_PRESIGN_API_URL = '/api/attachments/presign';
 
   // Generate unique client ID for this session
   var clientId = sessionStorage.getItem('superengineer-client-id');
@@ -2250,6 +2250,35 @@
     renderPendingFiles();
   }
 
+  function setFileUploadProgress(visible, processedCount, totalCount, currentFileName) {
+    var $wrap = $('#file-upload-progress');
+    var $text = $('#file-upload-progress-text');
+
+    if (!$wrap.length || !$text.length) {
+      return;
+    }
+
+    if (!visible) {
+      $wrap.addClass('hidden');
+      return;
+    }
+
+    var processed = Math.max(0, Number(processedCount) || 0);
+    var total = Math.max(0, Number(totalCount) || 0);
+    var current = String(currentFileName || '').trim();
+    var label = 'Uploading files...';
+
+    if (total > 0) {
+      label = 'Uploading ' + processed + '/' + total + ' file(s)';
+      if (current) {
+        label += ' - ' + current;
+      }
+    }
+
+    $text.text(label);
+    $wrap.removeClass('hidden');
+  }
+
   function uploadFileToSharedStorage(file) {
     return new Promise(function (resolve, reject) {
       function extensionFromMime(mimeType) {
@@ -2280,64 +2309,80 @@
         return ext ? ('attachment.' + ext) : 'attachment.bin';
       }
 
-      var reader = new FileReader();
+      var safeName = sanitizeClientFileName(file && file.name);
+      var fileType = String((file && file.type) || 'application/octet-stream');
+      var fileSize = Number((file && file.size) || 0);
 
-      reader.onload = function (e) {
-        var dataUrl = String((e && e.target && e.target.result) || '');
-        var base64 = dataUrl.split(',')[1];
-
-        if (!base64) {
-          reject(new Error('Failed to read file data'));
-          return;
-        }
-
-        $.ajax({
-          url: FILE_UPLOAD_API_URL,
-          method: 'POST',
-          contentType: 'application/json',
-          dataType: 'json',
-          timeout: 120000,
-          data: JSON.stringify({
-            // Keep legacy payload field for existing Lambda behavior.
-            fileData: base64,
-            // Also provide richer metadata for content-type aware backends.
-            fileDataBase64: base64,
-            dataUrl: dataUrl,
-            fileName: sanitizeClientFileName(file && file.name),
-            mimeType: String((file && file.type) || ''),
-            contentType: String((file && file.type) || '')
-          })
+      $.ajax({
+        url: FILE_UPLOAD_PRESIGN_API_URL,
+        method: 'POST',
+        contentType: 'application/json',
+        dataType: 'json',
+        timeout: 120000,
+        data: JSON.stringify({
+          fileName: safeName,
+          fileType: fileType,
+          fileSize: fileSize
         })
-          .done(function (response) {
-            if (response && response.url) {
-              resolve(response);
-            } else {
-              reject(new Error('Upload API did not return a file URL'));
-            }
+      })
+        .done(function (response) {
+          if (!response || !response.uploadUrl) {
+            reject(new Error('Upload API did not return a presigned upload URL'));
+            return;
+          }
+
+          fetch(response.uploadUrl, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': fileType
+            },
+            body: file
           })
-          .fail(function (xhr) {
-            var msg = 'Upload failed';
-            if (xhr && xhr.responseJSON && xhr.responseJSON.error) {
-              msg = xhr.responseJSON.error;
-            } else if (xhr && xhr.responseText) {
-              try {
-                var parsed = JSON.parse(xhr.responseText);
-                msg = parsed.error || parsed.message || xhr.responseText;
-              } catch (_) {
-                msg = xhr.responseText;
+            .then(function (putRes) {
+              if (!putRes.ok) {
+                return putRes.text()
+                  .then(function (text) {
+                    throw new Error(text || ('Upload failed with status ' + putRes.status));
+                  })
+                  .catch(function () {
+                    throw new Error('Upload failed with status ' + putRes.status);
+                  });
               }
-            } else if (xhr && xhr.responseText) {
+
+              var finalUrl = response.url;
+              if (!finalUrl) {
+                try {
+                  var uploadUrlObj = new URL(String(response.uploadUrl));
+                  finalUrl = uploadUrlObj.origin + uploadUrlObj.pathname;
+                } catch (_) {
+                  finalUrl = '';
+                }
+              }
+
+              if (!finalUrl) {
+                throw new Error('Upload completed but no file URL was returned');
+              }
+
+              resolve({ url: finalUrl });
+            })
+            .catch(function (err) {
+              reject(err instanceof Error ? err : new Error(String(err || 'Upload failed')));
+            });
+        })
+        .fail(function (xhr) {
+          var msg = 'Upload failed';
+          if (xhr && xhr.responseJSON && xhr.responseJSON.error) {
+            msg = xhr.responseJSON.error;
+          } else if (xhr && xhr.responseText) {
+            try {
+              var parsed = JSON.parse(xhr.responseText);
+              msg = parsed.error || parsed.message || xhr.responseText;
+            } catch (_) {
               msg = xhr.responseText;
             }
-            reject(new Error(msg));
-          });
-      };
-
-      reader.onerror = function () {
-        reject(new Error('Failed to read file'));
-      };
-
-      reader.readAsDataURL(file);
+          }
+          reject(new Error(msg));
+        });
     });
   }
 
@@ -2349,12 +2394,15 @@
     var selectedFiles = Array.prototype.slice.call(files);
     var uploadedCount = 0;
     var failedCount = 0;
+    var processedCount = 0;
     var chain = Promise.resolve();
 
+    setFileUploadProgress(true, 0, selectedFiles.length, '');
     showToast('Uploading ' + selectedFiles.length + ' file(s)...', 'info');
 
     selectedFiles.forEach(function (file) {
       chain = chain.then(function () {
+        setFileUploadProgress(true, processedCount, selectedFiles.length, file && file.name ? file.name : '');
         return uploadFileToSharedStorage(file)
           .then(function (result) {
             state.pendingFiles.push({
@@ -2368,15 +2416,22 @@
           .catch(function (error) {
             failedCount += 1;
             showToast('Failed to upload ' + file.name + ': ' + (error && error.message ? error.message : 'Unknown error'), 'error');
+          })
+          .finally(function () {
+            processedCount += 1;
+            setFileUploadProgress(true, processedCount, selectedFiles.length, '');
           });
       });
     });
 
     chain.then(function () {
+      setFileUploadProgress(false, 0, 0, '');
       if (uploadedCount > 0 && failedCount === 0) {
         showToast('Attached ' + uploadedCount + ' file(s)', 'success');
       } else if (uploadedCount > 0) {
         showToast('Attached ' + uploadedCount + ' file(s), failed ' + failedCount, 'warning');
+      } else if (failedCount > 0) {
+        showToast('Failed to attach file(s)', 'error');
       }
     });
   }
@@ -3086,8 +3141,83 @@
       }
     });
 
+    function eventHasFiles(e) {
+      var original = e && e.originalEvent ? e.originalEvent : e;
+      var dt = original && original.dataTransfer ? original.dataTransfer : null;
+      if (!dt || !dt.types) return false;
+
+      if (typeof dt.types.indexOf === 'function') {
+        return dt.types.indexOf('Files') !== -1;
+      }
+
+      try {
+        return Array.prototype.indexOf.call(dt.types, 'Files') !== -1;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    function setInputDropActive(active) {
+      $('#interactive-input-area').toggleClass('file-drop-active', !!active);
+    }
+
+    var inputDragDepth = 0;
+
+    $('#interactive-input-area').on('dragenter', function (e) {
+      if (!eventHasFiles(e)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      inputDragDepth += 1;
+      setInputDropActive(true);
+    });
+
+    $('#interactive-input-area').on('dragover', function (e) {
+      if (!eventHasFiles(e)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      var original = e.originalEvent;
+      if (original && original.dataTransfer) {
+        original.dataTransfer.dropEffect = 'copy';
+      }
+      setInputDropActive(true);
+    });
+
+    $('#interactive-input-area').on('dragleave', function (e) {
+      if (!eventHasFiles(e)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      inputDragDepth = Math.max(0, inputDragDepth - 1);
+      if (inputDragDepth === 0) {
+        setInputDropActive(false);
+      }
+    });
+
+    $('#interactive-input-area').on('drop', function (e) {
+      if (!eventHasFiles(e)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      inputDragDepth = 0;
+      setInputDropActive(false);
+      var original = e.originalEvent;
+      var droppedFiles = original && original.dataTransfer ? original.dataTransfer.files : null;
+      if (droppedFiles && droppedFiles.length > 0) {
+        handleFileAttachments(droppedFiles);
+      }
+    });
+
+    $(document).on('dragover', function (e) {
+      if (!eventHasFiles(e)) return;
+      e.preventDefault();
+    });
+
+    $(document).on('drop', function (e) {
+      if (!eventHasFiles(e)) return;
+      if ($(e.target).closest('#interactive-input-area').length > 0) return;
+      e.preventDefault();
+    });
+
     // File upload link handler (using event delegation since link is dynamically created)
-    $(document).on('click', '#btn-attach-file, #btn-attach-image, #btn-input-attach-file', function (e) {
+    $(document).on('click', '#btn-attach-file, #btn-attach-image', function (e) {
       e.preventDefault();
       $('#file-upload-input').click();
     });

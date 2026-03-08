@@ -1094,6 +1094,16 @@
               <!-- Image previews will be added here -->
             </div>
           </div>
+          <div id="file-upload-progress" class="hidden mb-2">
+            <div class="flex items-center gap-2 text-xs text-cyan-300 bg-cyan-900/20 border border-cyan-700/40 rounded px-2 py-1">
+              <svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
+                <path class="opacity-90" fill="currentColor"
+                  d="M4 12a8 8 0 018-8v3a5 5 0 00-5 5H4z"></path>
+              </svg>
+              <span id="file-upload-progress-text">Uploading files...</span>
+            </div>
+          </div>
           <!-- File Attachment Area (hidden by default) -->
           <div id="file-attachment-container" class="hidden mb-2">
             <div class="flex flex-wrap gap-2" id="file-attachments">

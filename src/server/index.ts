@@ -33,9 +33,10 @@ export interface ExpressAppOptions {
 
 export function createExpressApp(options: ExpressAppOptions = {}): Application {
   const app = express();
+  const bodyLimit = '200mb';
 
-  app.use(express.json({ limit: '50mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+  app.use(express.json({ limit: bodyLimit }));
+  app.use(express.urlencoded({ extended: true, limit: bodyLimit }));
 
   const publicPath = path.join(__dirname, '../../public');
 

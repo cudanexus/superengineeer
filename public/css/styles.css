@@ -4577,6 +4577,11 @@ body {
   color: var(--se-text);
 }
 
+#interactive-input-area.file-drop-active .input-composer-shell {
+  border-color: rgba(59, 246, 198, 0.75);
+  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.22), 0 16px 34px rgba(0, 0, 0, 0.22);
+}
+
 @media (max-width: 640px) {
   #interactive-input-area {
     padding: 0.65rem;

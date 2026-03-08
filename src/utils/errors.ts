@@ -51,6 +51,40 @@ export interface ErrorResponse {
   details?: unknown;
 }
 
+interface HttpLikeError extends Error {
+  status?: number;
+  statusCode?: number;
+  type?: string;
+}
+
+function getGenericHttpErrorDetails(err: Error): { statusCode: number; response: ErrorResponse } | null {
+  const httpErr = err as HttpLikeError;
+  const statusCode = Number(httpErr.statusCode || httpErr.status || 0);
+  const errorType = String(httpErr.type || '').toLowerCase();
+
+  if (errorType === 'entity.too.large' || statusCode === 413) {
+    return {
+      statusCode: 413,
+      response: {
+        error: 'Request payload too large',
+        code: 'PAYLOAD_TOO_LARGE',
+      },
+    };
+  }
+
+  if (statusCode === 400 || errorType === 'entity.parse.failed') {
+    return {
+      statusCode: 400,
+      response: {
+        error: 'Invalid JSON request body',
+        code: 'INVALID_JSON',
+      },
+    };
+  }
+
+  return null;
+}
+
 function formatErrorResponse(err: Error): ErrorResponse {
   if (err instanceof AppError) {
     return {
@@ -86,7 +120,10 @@ export function createErrorHandler(): ErrorRequestHandler {
   const logger = getLogger('error-handler');
 
   return (err: Error, req: Request, res: Response, _next: NextFunction): void => {
-    const statusCode = err instanceof AppError ? err.statusCode : 500;
+    const genericHttpError = getGenericHttpErrorDetails(err);
+    const statusCode = err instanceof AppError
+      ? err.statusCode
+      : (genericHttpError ? genericHttpError.statusCode : 500);
     const isOperational = err instanceof AppError && err.isOperational;
 
     // Build detailed error context
@@ -115,7 +152,7 @@ export function createErrorHandler(): ErrorRequestHandler {
       });
     }
 
-    const response = formatErrorResponse(err);
+    const response = genericHttpError ? genericHttpError.response : formatErrorResponse(err);
     res.status(statusCode).json(response);
   };
 }
