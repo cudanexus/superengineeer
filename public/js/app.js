@@ -37,6 +37,8 @@
   // Alias for backward compatibility within this file
   var api = ApiClient;
   var FILE_UPLOAD_PRESIGN_API_URL = '/api/attachments/presign';
+  var PARENT_ACTIVITY_THROTTLE_MS = 2000;
+  var lastParentActivitySentAt = 0;
 
   // Generate unique client ID for this session
   var clientId = sessionStorage.getItem('superengineer-client-id');
@@ -4005,6 +4007,29 @@
     });
   }
 
+  function postUserActivityToParent() {
+    if (!window.parent || window.parent === window) return;
+
+    var now = Date.now();
+    if (now - lastParentActivitySentAt < PARENT_ACTIVITY_THROTTLE_MS) {
+      return;
+    }
+    lastParentActivitySentAt = now;
+
+    window.parent.postMessage({
+      type: 'superengineer_user_activity',
+      source: 'superengineer',
+      activityAt: new Date(now).toISOString()
+    }, '*');
+  }
+
+  function setupParentActivityBridge() {
+    var activityEvents = ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart', 'scroll'];
+    activityEvents.forEach(function (eventName) {
+      document.addEventListener(eventName, postUserActivityToParent, { passive: true });
+    });
+  }
+
   function doSendMessage(message) {
     if (state.messageSending) return;
 
@@ -7540,6 +7565,7 @@
 
     setupEventHandlers();
     setupParentUsageSyncBridge();
+    setupParentActivityBridge();
     setupTabHandlers();
     FileBrowser.setupHandlers();
     FileBrowser.setupDragAndDrop();
