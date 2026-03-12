@@ -39,6 +39,8 @@
   var FILE_UPLOAD_PRESIGN_API_URL = '/api/attachments/presign';
   var PARENT_ACTIVITY_THROTTLE_MS = 2000;
   var lastParentActivitySentAt = 0;
+  var SUPABASE_MCP_ABILITY_ID = '__supabase_mcp_connect__';
+  var SUPABASE_TOKEN_PAGE_URL = 'https://supabase.com/dashboard/account/tokens';
 
   // Generate unique client ID for this session
   var clientId = sessionStorage.getItem('superengineer-client-id');
@@ -187,7 +189,8 @@
     selectedAbilityIds: [],
     installedAbilityIds: [],
     abilitiesPage: 1,
-    abilitiesPageSize: 10
+    abilitiesPageSize: 10,
+    supabaseMcpActionLoading: false
   };
 
   // Local storage keys - use module's KEYS
@@ -1453,6 +1456,9 @@
     });
 
     $(document).on('click', '.ability-card', function () {
+      if ($(this).data('specialAction') === 'supabase-mcp') {
+        return;
+      }
       var abilityId = String($(this).data('abilityId') || '').trim();
       if (!abilityId) return;
       var selected = Array.isArray(state.selectedAbilityIds) ? state.selectedAbilityIds.slice() : [];
@@ -1473,6 +1479,28 @@
       }
       state.abilitiesPage = nextPage;
       renderAbilitiesOptions(state.abilitiesCatalog);
+    });
+
+    $(document).on('click', '.btn-connect-supabase-mcp', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if ($(this).data('busy') === true || state.supabaseMcpActionLoading) {
+        return;
+      }
+      if (isSupabaseMcpConnected()) {
+        disconnectSupabaseMcp();
+      } else {
+        openSupabaseMcpConnectModal();
+      }
+    });
+
+    $('#btn-open-supabase-token-page').on('click', function () {
+      window.open(SUPABASE_TOKEN_PAGE_URL, '_blank', 'noopener,noreferrer');
+    });
+
+    $('#form-supabase-mcp-connect').on('submit', function (e) {
+      e.preventDefault();
+      saveSupabaseMcpFromModal();
     });
 
 
@@ -5319,13 +5347,17 @@
       var imageUrl = String(ability.imageUrl || ability.image || ability.logoUrl || '/favicon-32x32.png');
       var isSelected = selectedSet.has(id);
       var isInstalled = installedSet.has(id);
+      var isSupabaseMcpCard = id === SUPABASE_MCP_ABILITY_ID;
+      var isSupabaseConnected = isSupabaseMcpCard ? isSupabaseMcpConnected() : false;
+      var isSupabaseBusy = isSupabaseMcpCard && state.supabaseMcpActionLoading === true;
       var selectedClass = isSelected ? ' is-selected' : '';
-      return '<button type="button" class="ability-card' + selectedClass + '" data-ability-id="' + escapeHtml(id) + '" role="option" aria-selected="' + (isSelected ? 'true' : 'false') + '">' +
+      return '<button type="button" class="ability-card' + selectedClass + '" data-ability-id="' + escapeHtml(id) + '" data-special-action="' + (isSupabaseMcpCard ? 'supabase-mcp' : '') + '" role="option" aria-selected="' + (isSelected ? 'true' : 'false') + '">' +
         '<span class="ability-card-check" aria-hidden="true">' + (isSelected ? '&#10003;' : '') + '</span>' +
         '<img class="ability-card-media" src="' + escapeHtml(imageUrl) + '" alt="' + escapeHtml(name) + ' icon" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src=\'/favicon-32x32.png\';">' +
         '<span class="ability-card-content">' +
         '<span class="ability-card-title">' + escapeHtml(name) + (isInstalled ? '<span class="ability-card-installed">&#10003; Installed</span>' : '') + '</span>' +
         '<span class="ability-card-description">' + escapeHtml(description) + '</span>' +
+        (isSupabaseMcpCard ? '<span class="pt-2"><span class="btn-connect-supabase-mcp inline-flex px-2 py-1 text-xs ' + (isSupabaseBusy ? 'bg-gray-600 cursor-not-allowed' : (isSupabaseConnected ? 'bg-red-700 hover:bg-red-600' : 'bg-emerald-600 hover:bg-emerald-500')) + ' text-white rounded" ' + (isSupabaseBusy ? 'data-busy="true"' : '') + '>' + (isSupabaseBusy ? 'Working...' : (isSupabaseConnected ? 'Disconnect' : 'Connect MCP')) + '</span></span>' : '') +
         '</span>' +
       '</button>';
     }).join('');
@@ -5360,12 +5392,25 @@
 
     api.getGlobalAbilitiesCatalog()
       .done(function (response) {
-        state.abilitiesCatalog = (response && response.abilities) || [];
+        var catalog = (response && response.abilities) || [];
+        state.abilitiesCatalog = addBuiltInMcpAbility(catalog);
         var projectId = state.selectedProjectId;
         if (!projectId) {
           renderAbilitiesOptions(state.abilitiesCatalog);
           return;
         }
+
+        api.getProjectMcpOverrides(projectId)
+          .done(function (mcpOverrides) {
+            var projectForMcp = findProjectById(projectId);
+            if (projectForMcp) {
+              projectForMcp.mcpOverrides = mcpOverrides;
+            }
+            renderAbilitiesOptions(state.abilitiesCatalog);
+          })
+          .fail(function () {
+            // Ignore; UI will use current in-memory state.
+          });
 
         api.getInstalledProjectAbilities(projectId)
           .done(function (installedResponse) {
@@ -5389,6 +5434,7 @@
 
   function installSelectedAbility() {
     var selected = Array.isArray(state.selectedAbilityIds) ? state.selectedAbilityIds : [];
+    selected = selected.filter(function (id) { return id !== SUPABASE_MCP_ABILITY_ID; });
     if (selected.length === 0) {
       showToast('Select at least one ability first', 'warning');
       return;
@@ -5429,6 +5475,339 @@
       .always(function () {
         $('#btn-install-ability').prop('disabled', false).text('Install');
       });
+  }
+
+  function addBuiltInMcpAbility(catalog) {
+    var list = Array.isArray(catalog) ? catalog.slice() : [];
+    var hasSupabase = list.some(function (ability) {
+      return String((ability && ability.id) || '') === SUPABASE_MCP_ABILITY_ID;
+    });
+    if (!hasSupabase) {
+      list.unshift({
+        id: SUPABASE_MCP_ABILITY_ID,
+        name: 'Supabase MCP',
+        description: 'Connect Supabase MCP with project ref and token',
+        imageUrl: 'https://avatars.githubusercontent.com/u/54469796?v=4',
+        repoUrl: '',
+        sourceSubdir: '',
+        enabled: true
+      });
+    }
+    return list;
+  }
+
+  function extractSupabaseProjectRef(url) {
+    if (!url) return '';
+    try {
+      var parsed = new URL(url);
+      return parsed.searchParams.get('project_ref') || '';
+    } catch (_err) {
+      return '';
+    }
+  }
+
+  function getExistingSupabaseServer() {
+    var servers = (state.settings && state.settings.mcp && state.settings.mcp.servers) || [];
+    for (var i = 0; i < servers.length; i += 1) {
+      var server = servers[i];
+      if (server && server.type === 'http' && String(server.name || '').toLowerCase() === 'supabase') {
+        return server;
+      }
+      if (server && server.type === 'http' && String(server.url || '').indexOf('mcp.supabase.com/mcp') !== -1) {
+        return server;
+      }
+    }
+    return null;
+  }
+
+  function isSupabaseMcpConnected() {
+    var server = getExistingSupabaseServer();
+    if (!server || server.enabled === false) {
+      return false;
+    }
+
+    if (!state.selectedProjectId) {
+      return true;
+    }
+
+    var project = findProjectById(state.selectedProjectId);
+    if (!project || !project.mcpOverrides) {
+      return false;
+    }
+
+    if (project.mcpOverrides.enabled === false) {
+      return false;
+    }
+
+    var override = project.mcpOverrides.serverOverrides && project.mcpOverrides.serverOverrides[server.id];
+    return !!(override && override.enabled === true);
+  }
+
+  function openSupabaseMcpConnectModal() {
+    var existing = getExistingSupabaseServer();
+    var projectRef = existing ? extractSupabaseProjectRef(existing.url) : '';
+    var token = '';
+    if (existing && existing.headers && existing.headers.Authorization) {
+      var auth = String(existing.headers.Authorization || '');
+      token = auth.replace(/^Bearer\s+/i, '');
+    }
+
+    $('#input-supabase-project-ref').val(projectRef);
+    $('#input-supabase-access-token').val(token);
+    openModal('modal-supabase-mcp-connect');
+    $('#input-supabase-project-ref').focus();
+  }
+
+  function disconnectSupabaseMcp() {
+    var server = getExistingSupabaseServer();
+    if (!server) {
+      showToast('Supabase MCP is not configured', 'warning');
+      return;
+    }
+
+    var projectId = state.selectedProjectId;
+    state.supabaseMcpActionLoading = true;
+    renderAbilitiesOptions(state.abilitiesCatalog);
+
+    // If no project selected, disable globally.
+    if (!projectId) {
+      var currentSettings = state.settings || {};
+      var currentMcp = currentSettings.mcp || { enabled: true, servers: [] };
+      var servers = Array.isArray(currentMcp.servers) ? currentMcp.servers.slice() : [];
+      var idx = servers.findIndex(function (item) { return item && item.id === server.id; });
+      if (idx >= 0) {
+        servers[idx] = Object.assign({}, servers[idx], { enabled: false });
+      }
+
+      api.updateSettings({
+        mcp: {
+          enabled: currentMcp.enabled !== false,
+          servers: servers
+        }
+      })
+        .done(function (updatedSettings) {
+          state.settings = updatedSettings;
+          renderAbilitiesOptions(state.abilitiesCatalog);
+          showToast('Supabase MCP disconnected globally', 'success');
+        })
+        .fail(function (xhr) {
+          showErrorToast(xhr, 'Failed to disconnect Supabase MCP');
+        })
+        .always(function () {
+          state.supabaseMcpActionLoading = false;
+          renderAbilitiesOptions(state.abilitiesCatalog);
+        });
+      return;
+    }
+
+    api.getProjectMcpOverrides(projectId)
+      .done(function (overrides) {
+        var serverOverrides = (overrides && overrides.serverOverrides) ? Object.assign({}, overrides.serverOverrides) : {};
+        serverOverrides[server.id] = { enabled: false };
+
+        api.updateProjectMcpOverrides(projectId, {
+          enabled: true,
+          serverOverrides: serverOverrides
+        })
+          .done(function (_result) {
+            var project = findProjectById(projectId);
+            if (project) {
+              project.mcpOverrides = {
+                enabled: true,
+                serverOverrides: serverOverrides
+              };
+            }
+            renderAbilitiesOptions(state.abilitiesCatalog);
+            showToast('Supabase MCP disconnected for this project', 'success');
+          })
+          .fail(function (xhr) {
+            showErrorToast(xhr, 'Failed to disconnect Supabase MCP');
+          })
+          .always(function () {
+            state.supabaseMcpActionLoading = false;
+            renderAbilitiesOptions(state.abilitiesCatalog);
+          });
+      })
+      .fail(function () {
+        var fallbackOverrides = {};
+        fallbackOverrides[server.id] = { enabled: false };
+
+        api.updateProjectMcpOverrides(projectId, {
+          enabled: true,
+          serverOverrides: fallbackOverrides
+        })
+          .done(function (_result) {
+            var project = findProjectById(projectId);
+            if (project) {
+              project.mcpOverrides = {
+                enabled: true,
+                serverOverrides: fallbackOverrides
+              };
+            }
+            renderAbilitiesOptions(state.abilitiesCatalog);
+            showToast('Supabase MCP disconnected for this project', 'success');
+          })
+          .fail(function (xhr) {
+            showErrorToast(xhr, 'Failed to disconnect Supabase MCP');
+          })
+          .always(function () {
+            state.supabaseMcpActionLoading = false;
+            renderAbilitiesOptions(state.abilitiesCatalog);
+          });
+      });
+  }
+
+  function saveSupabaseMcpFromModal() {
+    var projectRef = String($('#input-supabase-project-ref').val() || '').trim();
+    var token = String($('#input-supabase-access-token').val() || '').trim();
+
+    if (!projectRef) {
+      showToast('Project ref is required', 'error');
+      return;
+    }
+    if (!token) {
+      showToast('Access token is required', 'error');
+      return;
+    }
+
+    var existing = getExistingSupabaseServer();
+    var serverId = existing && existing.id ? existing.id : ('mcp-supabase-' + Date.now());
+    var serverName = existing && existing.name ? existing.name : 'supabase';
+    var server = {
+      id: serverId,
+      name: serverName,
+      description: 'Supabase MCP',
+      type: 'http',
+      enabled: true,
+      autoApproveTools: true,
+      url: 'https://mcp.supabase.com/mcp?project_ref=' + encodeURIComponent(projectRef),
+      headers: {
+        Authorization: 'Bearer ' + token
+      }
+    };
+
+    var currentSettings = state.settings || {};
+    var currentMcp = currentSettings.mcp || { enabled: true, servers: [] };
+    var servers = Array.isArray(currentMcp.servers) ? currentMcp.servers.slice() : [];
+    var existingIndex = servers.findIndex(function (item) { return item && item.id === serverId; });
+    if (existingIndex >= 0) {
+      servers[existingIndex] = server;
+    } else {
+      servers.push(server);
+    }
+
+    var settingsUpdate = {
+      mcp: {
+        enabled: true,
+        servers: servers
+      }
+    };
+
+    setSupabaseConnectModalLoading(true);
+    state.supabaseMcpActionLoading = true;
+    renderAbilitiesOptions(state.abilitiesCatalog);
+    api.updateSettings(settingsUpdate)
+      .done(function (updatedSettings) {
+        state.settings = updatedSettings;
+        renderAbilitiesOptions(state.abilitiesCatalog);
+        var projectId = state.selectedProjectId;
+        if (!projectId) {
+          state.supabaseMcpActionLoading = false;
+          renderAbilitiesOptions(state.abilitiesCatalog);
+          closeModal('modal-supabase-mcp-connect');
+          showToast('Supabase MCP configured globally. Select a project to enable it there.', 'success');
+          return;
+        }
+
+        api.getProjectMcpOverrides(projectId)
+          .done(function (overrides) {
+            var serverOverrides = (overrides && overrides.serverOverrides) ? Object.assign({}, overrides.serverOverrides) : {};
+            serverOverrides[serverId] = { enabled: true };
+
+            api.updateProjectMcpOverrides(projectId, {
+              enabled: true,
+              serverOverrides: serverOverrides
+            })
+              .done(function (_result) {
+                var project = findProjectById(projectId);
+                if (project) {
+                  project.mcpOverrides = {
+                    enabled: true,
+                    serverOverrides: serverOverrides
+                  };
+                }
+                state.supabaseMcpActionLoading = false;
+                renderAbilitiesOptions(state.abilitiesCatalog);
+                closeModal('modal-supabase-mcp-connect');
+                showToast('Supabase MCP connected and enabled for this project', 'success');
+              })
+              .fail(function (xhr) {
+                state.supabaseMcpActionLoading = false;
+                renderAbilitiesOptions(state.abilitiesCatalog);
+                showSupabaseMcpError(xhr, 'Supabase MCP saved, but failed to enable for project');
+              });
+          })
+          .fail(function () {
+            var fallbackOverrides = {};
+            fallbackOverrides[serverId] = { enabled: true };
+            api.updateProjectMcpOverrides(projectId, {
+              enabled: true,
+              serverOverrides: fallbackOverrides
+            })
+              .done(function (_result) {
+                var project = findProjectById(projectId);
+                if (project) {
+                  project.mcpOverrides = {
+                    enabled: true,
+                    serverOverrides: fallbackOverrides
+                  };
+                }
+                state.supabaseMcpActionLoading = false;
+                renderAbilitiesOptions(state.abilitiesCatalog);
+                closeModal('modal-supabase-mcp-connect');
+                showToast('Supabase MCP connected and enabled for this project', 'success');
+              })
+              .fail(function (xhr) {
+                state.supabaseMcpActionLoading = false;
+                renderAbilitiesOptions(state.abilitiesCatalog);
+                showSupabaseMcpError(xhr, 'Supabase MCP saved, but failed to enable for project');
+              });
+          });
+      })
+      .fail(function (xhr) {
+        state.supabaseMcpActionLoading = false;
+        renderAbilitiesOptions(state.abilitiesCatalog);
+        showSupabaseMcpError(xhr, 'Failed to configure Supabase MCP');
+      })
+      .always(function () {
+        setSupabaseConnectModalLoading(false);
+      });
+  }
+
+  function setSupabaseConnectModalLoading(isLoading) {
+    var loading = !!isLoading;
+    $('#btn-save-supabase-mcp').prop('disabled', loading);
+    $('#input-supabase-project-ref').prop('disabled', loading);
+    $('#input-supabase-access-token').prop('disabled', loading);
+    $('#btn-open-supabase-token-page').prop('disabled', loading);
+    $('#modal-supabase-mcp-connect .modal-close').prop('disabled', loading);
+
+    if (loading) {
+      $('#btn-save-supabase-mcp').html('<span class="inline-flex items-center gap-2"><svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-30" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle><path class="opacity-90" fill="currentColor" d="M22 12a10 10 0 00-10-10v3a7 7 0 017 7h3z"></path></svg><span>Connecting...</span></span>');
+    } else {
+      $('#btn-save-supabase-mcp').text('Connect MCP');
+    }
+  }
+
+  function showSupabaseMcpError(xhr, fallbackMessage) {
+    var detail = '';
+    if (xhr && xhr.responseJSON) {
+      detail = String(xhr.responseJSON.error || xhr.responseJSON.message || '').trim();
+    }
+    if (!detail && xhr && typeof xhr.responseText === 'string') {
+      detail = xhr.responseText.trim();
+    }
+    showToast(detail ? (fallbackMessage + ': ' + detail) : fallbackMessage, 'error');
   }
 
   function formatRewindCommitOption(commit) {

@@ -3015,6 +3015,51 @@
     </div>
   </div>
 
+  <!-- Supabase MCP Connect Modal -->
+  <div id="modal-supabase-mcp-connect" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-lg">
+        <div class="p-3 border-b border-gray-700 flex items-center justify-between">
+          <h3 class="font-semibold text-white">Connect Supabase MCP</h3>
+          <button class="modal-close text-gray-400 hover:text-white">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <form id="form-supabase-mcp-connect" class="p-3 space-y-3">
+          <p class="text-sm text-gray-300">
+            Connect Supabase MCP using a project ref and access token. This will auto-configure MCP in Settings.
+          </p>
+          <div>
+            <label class="block text-xs font-medium text-gray-300 mb-1">Project Ref</label>
+            <input type="text" id="input-supabase-project-ref" required
+              class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm font-mono focus:outline-none focus:border-purple-500"
+              placeholder="ilpzruqrnohvfqvcepjo">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-300 mb-1">Access Token</label>
+            <input type="password" id="input-supabase-access-token" required
+              class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm font-mono focus:outline-none focus:border-purple-500"
+              placeholder="sbp_...">
+          </div>
+          <div class="flex items-center justify-between gap-3 p-2 bg-gray-700/50 rounded">
+            <p class="text-xs text-gray-400">Need a token first?</p>
+            <button type="button" id="btn-open-supabase-token-page"
+              class="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-500 text-white rounded transition-colors">Open Supabase Auth Page</button>
+          </div>
+          <div class="flex justify-end gap-2 pt-2 border-t border-gray-700">
+            <button type="button"
+              class="modal-close px-3 py-1.5 text-sm text-gray-300 hover:text-white transition-colors">Cancel</button>
+            <button type="submit" id="btn-save-supabase-mcp"
+              class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded text-sm transition-colors">Connect MCP</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
   <!-- Rewind Commit Modal -->
   <div id="modal-rewind-commit" class="modal hidden">
     <div class="modal-backdrop"></div>
@@ -3538,6 +3583,13 @@
               <input type="url" id="input-mcp-server-url"
                 class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm font-mono focus:outline-none focus:border-purple-500"
                 placeholder="http://localhost:8080">
+            </div>
+            <div class="mt-3">
+              <label class="block text-xs font-medium text-gray-300 mb-1">HTTP Headers (optional)</label>
+              <textarea id="input-mcp-server-headers" rows="3"
+                class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm font-mono focus:outline-none focus:border-purple-500"
+                placeholder="Authorization=Bearer token&#10;X-API-KEY=value"></textarea>
+              <p class="text-xs text-gray-400 mt-1">Format: KEY=value (one per line)</p>
             </div>
           </div>
 

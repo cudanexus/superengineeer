@@ -301,7 +301,8 @@ export function createCoreRouter(deps: ProjectRouterDependencies): Router {
       // Restart agent if running
       const agentStatus = agentManager.getAgentStatus(id);
       if (agentStatus === 'running') {
-        await agentManager.restartProjectAgent(id);
+        // Use a fresh session so MCP capability changes are reflected immediately.
+        await agentManager.restartProjectAgent(id, true);
       }
 
       res.json({
@@ -320,7 +321,8 @@ export function createCoreRouter(deps: ProjectRouterDependencies): Router {
     // Restart agent if running
     const agentStatus = agentManager.getAgentStatus(id);
     if (agentStatus === 'running') {
-      await agentManager.restartProjectAgent(id);
+      // Use a fresh session so MCP capability changes are reflected immediately.
+      await agentManager.restartProjectAgent(id, true);
     }
 
     res.json({

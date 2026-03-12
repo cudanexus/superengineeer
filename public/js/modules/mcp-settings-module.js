@@ -18,6 +18,42 @@
   var closeModal = null;
   var closeAllModals = null;
 
+  function formatKeyValueText(record) {
+    var text = '';
+    if (!record) {
+      return text;
+    }
+    for (var key in record) {
+      if (Object.prototype.hasOwnProperty.call(record, key)) {
+        text += key + '=' + record[key] + '\n';
+      }
+    }
+    return text.trim();
+  }
+
+  function parseKeyValueText(text) {
+    var result = {};
+    var value = String(text || '').trim();
+
+    if (!value) {
+      return result;
+    }
+
+    value.split('\n').forEach(function(line) {
+      var trimmed = line.trim();
+      if (trimmed && trimmed.includes('=')) {
+        var parts = trimmed.split('=');
+        var key = parts[0].trim();
+        var itemValue = parts.slice(1).join('=').trim();
+        if (key) {
+          result[key] = itemValue;
+        }
+      }
+    });
+
+    return result;
+  }
+
   function init(deps) {
     state = deps.state;
     escapeHtml = deps.escapeHtml;
@@ -84,23 +120,20 @@
       if (server.type === 'stdio') {
         $('#input-mcp-server-command').val(server.command || '');
         $('#input-mcp-server-args').val((server.args || []).join('\n'));
+        $('#input-mcp-server-headers').val('');
       } else {
         $('#input-mcp-server-url').val(server.url || '');
+        $('#input-mcp-server-headers').val(formatKeyValueText(server.headers));
       }
 
       // Environment variables
-      var envText = '';
-      if (server.env) {
-        for (var key in server.env) {
-          envText += key + '=' + server.env[key] + '\n';
-        }
-      }
-      $('#input-mcp-server-env').val(envText.trim());
+      $('#input-mcp-server-env').val(formatKeyValueText(server.env));
     } else {
       // Clear fields for new server
       $('#input-mcp-server-command').val('');
       $('#input-mcp-server-args').val('');
       $('#input-mcp-server-url').val('');
+      $('#input-mcp-server-headers').val('');
       $('#input-mcp-server-env').val('');
     }
 
@@ -170,26 +203,17 @@
         return;
       }
       server.url = url;
+
+      var headers = parseKeyValueText($('#input-mcp-server-headers').val());
+      if (Object.keys(headers).length > 0) {
+        server.headers = headers;
+      }
     }
 
     // Environment variables
-    var envText = $('#input-mcp-server-env').val().trim();
-    if (envText) {
-      var env = {};
-      envText.split('\n').forEach(function(line) {
-        var trimmed = line.trim();
-        if (trimmed && trimmed.includes('=')) {
-          var parts = trimmed.split('=');
-          var key = parts[0].trim();
-          var value = parts.slice(1).join('=').trim();
-          if (key) {
-            env[key] = value;
-          }
-        }
-      });
-      if (Object.keys(env).length > 0) {
-        server.env = env;
-      }
+    var env = parseKeyValueText($('#input-mcp-server-env').val());
+    if (Object.keys(env).length > 0) {
+      server.env = env;
     }
 
     // Update servers list

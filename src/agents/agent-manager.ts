@@ -167,7 +167,7 @@ export interface AgentManager {
   getTrackedProcesses(): TrackedProcessInfo[];
   cleanupOrphanProcesses(): Promise<OrphanCleanupResult>;
   restartAllRunningAgents(): Promise<void>;
-  restartProjectAgent(projectId: string): Promise<void>;
+  restartProjectAgent(projectId: string, freshSession?: boolean): Promise<void>;
   getRunningProjectIds(): string[];
   startOneOffAgent(options: OneOffAgentOptions): Promise<string>;
   stopOneOffAgent(oneOffId: string): Promise<void>;
@@ -1129,7 +1129,7 @@ export class DefaultAgentManager implements AgentManager {
     }
   }
 
-  async restartProjectAgent(projectId: string): Promise<void> {
+  async restartProjectAgent(projectId: string, freshSession = false): Promise<void> {
     const agent = this.agents.get(projectId);
     if (!agent || agent.status !== 'running') {
       this.logger.warn('Cannot restart agent that is not running', { projectId });
@@ -1139,12 +1139,12 @@ export class DefaultAgentManager implements AgentManager {
     const agentInfo = {
       projectId,
       mode: agent.mode,
-      sessionId: agent.sessionId,
-      isNewSession: false,
+      sessionId: freshSession ? null : agent.sessionId,
+      isNewSession: freshSession,
       permissionMode: agent.permissionMode,
     };
 
-    this.logger.info('Restarting project agent', { projectId });
+    this.logger.info('Restarting project agent', { projectId, freshSession });
 
     // Stop the agent
     await this.stopAgent(projectId);

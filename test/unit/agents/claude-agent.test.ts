@@ -371,11 +371,9 @@ describe('DefaultClaudeAgent', () => {
 
       const writtenConfig = JSON.parse(mockFs.writeFileSync.mock.calls[0]?.[1] as string || '{}');
       expect(writtenConfig.mcpServers['api-server']).toEqual({
-        transport: {
-          type: 'http',
-          url: 'localhost:8080',
-          headers: { Authorization: 'Bearer token123' }
-        }
+        type: 'http',
+        url: 'localhost:8080',
+        headers: { Authorization: 'Bearer token123' }
       });
     });
 
@@ -448,7 +446,8 @@ describe('DefaultClaudeAgent', () => {
       expect(writtenConfig.mcpServers).toHaveProperty('server1');
       expect(writtenConfig.mcpServers).toHaveProperty('server2');
       expect(writtenConfig.mcpServers.server1.command).toBe('command1');
-      expect(writtenConfig.mcpServers.server2.transport.url).toBe('localhost:8081');
+      expect(writtenConfig.mcpServers.server2.url).toBe('localhost:8081');
+      expect(writtenConfig.mcpServers.server2.type).toBe('http');
     });
 
     it('should clean up MCP config file on stop', async () => {

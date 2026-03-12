@@ -137,17 +137,52 @@ export class MessageBuilder {
       return null;
     }
 
-    interface McpTransport {
-      type: string;
+    interface McpServerEntry {
+      type?: string;
       url?: string;
       headers?: Record<string, string>;
-    }
-
-    interface McpServerEntry {
       command?: string;
       args?: string[];
       env?: Record<string, string>;
-      transport?: McpTransport;
+    }
+
+    function resolveTemplateString(value: string, vars: Record<string, string>): { value: string; missing: string[] } {
+      const missing = new Set<string>();
+      const resolved = String(value).replace(/\$\{([^}]+)\}/g, (_match, varName: string) => {
+        if (Object.prototype.hasOwnProperty.call(vars, varName) && vars[varName] !== undefined) {
+          return String(vars[varName]);
+        }
+        missing.add(varName);
+        return '';
+      });
+
+      return {
+        value: resolved,
+        missing: Array.from(missing),
+      };
+    }
+
+    function resolveTemplateRecord(
+      record: Record<string, string> | undefined,
+      vars: Record<string, string>
+    ): { record: Record<string, string> | undefined; missing: string[] } {
+      if (!record || Object.keys(record).length === 0) {
+        return { record: undefined, missing: [] };
+      }
+
+      const resolved: Record<string, string> = {};
+      const missing = new Set<string>();
+
+      for (const [key, value] of Object.entries(record)) {
+        const result = resolveTemplateString(value, vars);
+        resolved[key] = result.value;
+        result.missing.forEach((name) => missing.add(name));
+      }
+
+      return {
+        record: resolved,
+        missing: Array.from(missing),
+      };
     }
 
     // Build the config object
@@ -155,23 +190,54 @@ export class MessageBuilder {
 
     for (const server of servers) {
       const serverConfig: McpServerEntry = {};
+      const serverVars: Record<string, string> = {
+        ...Object.fromEntries(
+          Object.entries(process.env)
+            .filter(([, v]) => v !== undefined)
+            .map(([k, v]) => [k, String(v)])
+        ),
+        ...(server.env || {}),
+      };
 
       if (server.type === 'stdio') {
-        serverConfig.command = server.command;
-        if (server.args && server.args.length > 0) {
-          serverConfig.args = server.args;
+        const command = resolveTemplateString(String(server.command || ''), serverVars);
+        const args = (server.args || []).map((arg) => resolveTemplateString(arg, serverVars));
+        const envResult = resolveTemplateRecord(server.env, serverVars);
+        const missing = new Set<string>([
+          ...command.missing,
+          ...args.flatMap((arg) => arg.missing),
+          ...envResult.missing,
+        ]);
+
+        if (missing.size > 0) {
+          throw new Error(
+            `MCP server "${server.name}" has unresolved variables: ${Array.from(missing).join(', ')}`
+          );
         }
-        if (server.env && Object.keys(server.env).length > 0) {
-          serverConfig.env = server.env;
+
+        serverConfig.command = command.value;
+        if (server.args && server.args.length > 0) {
+          serverConfig.args = args.map((arg) => arg.value);
+        }
+        if (envResult.record && Object.keys(envResult.record).length > 0) {
+          serverConfig.env = envResult.record;
         }
       } else if (server.type === 'http') {
-        // For HTTP servers, we need to handle the URL and headers differently
-        serverConfig.transport = {
-          type: 'http',
-          url: server.url
-        };
-        if (server.headers && Object.keys(server.headers).length > 0) {
-          serverConfig.transport.headers = server.headers;
+        const urlResult = resolveTemplateString(String(server.url || ''), serverVars);
+        const headersResult = resolveTemplateRecord(server.headers, serverVars);
+        const missing = new Set<string>([...urlResult.missing, ...headersResult.missing]);
+
+        if (missing.size > 0) {
+          throw new Error(
+            `MCP server "${server.name}" has unresolved variables: ${Array.from(missing).join(', ')}`
+          );
+        }
+
+        // Use top-level HTTP format expected by Claude MCP config.
+        serverConfig.type = 'http';
+        serverConfig.url = urlResult.value;
+        if (headersResult.record && Object.keys(headersResult.record).length > 0) {
+          serverConfig.headers = headersResult.record;
         }
       }
 

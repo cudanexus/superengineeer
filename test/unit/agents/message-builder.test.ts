@@ -133,11 +133,9 @@ describe('MessageBuilder', () => {
       const config = JSON.parse(writtenContent);
 
       expect(config.mcpServers['API Server']).toEqual({
-        transport: {
-          type: 'http',
-          url: 'http://localhost:8080',
-          headers: { 'Authorization': 'Bearer token' },
-        },
+        type: 'http',
+        url: 'http://localhost:8080',
+        headers: { 'Authorization': 'Bearer token' },
       });
     });
 
@@ -166,7 +164,24 @@ describe('MessageBuilder', () => {
 
       expect(Object.keys(config.mcpServers)).toHaveLength(2);
       expect(config.mcpServers['Stdio Server']).toHaveProperty('command');
-      expect(config.mcpServers['HTTP Server']).toHaveProperty('transport');
+      expect(config.mcpServers['HTTP Server']).toHaveProperty('type', 'http');
+      expect(config.mcpServers['HTTP Server']).toHaveProperty('url', 'http://api.example.com');
+    });
+
+    it('should throw when MCP variables are unresolved', () => {
+      const servers = [{
+        id: 'server-http',
+        name: 'Supabase',
+        enabled: true,
+        type: 'http' as const,
+        url: 'https://mcp.supabase.com/mcp?project_ref=${SUPABASE_PROJECT_REF}',
+        headers: { Authorization: 'Bearer ${SUPABASE_ACCESS_TOKEN}' },
+      }];
+
+      expect(() => MessageBuilder.generateMcpConfig(servers, 'test-project')).toThrow(
+        'MCP server "Supabase" has unresolved variables: SUPABASE_PROJECT_REF, SUPABASE_ACCESS_TOKEN'
+      );
+      expect(mockFs.writeFileSync).not.toHaveBeenCalled();
     });
 
     it('should include servers with enabled: false', () => {
