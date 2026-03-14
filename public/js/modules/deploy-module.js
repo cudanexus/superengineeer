@@ -30,6 +30,7 @@
   var activeLogTab = 'deploy';
   var appLogsLoaded = false;
   var externalDeployment = null;
+  var externalProjectName = '';
   var parentBridgeAttached = false;
 
   function init(deps) {
@@ -99,6 +100,7 @@
     currentAppName = null;
     currentAppUrl = null;
     externalDeployment = null;
+    externalProjectName = '';
     lastKnownStatus = 'idle';
     lastStatusMessage = '';
     activeLogTab = 'deploy';
@@ -438,6 +440,7 @@
     }
 
     externalDeployment = normalizeDeployment(data.flyDeployment);
+    externalProjectName = typeof data.projectName === 'string' ? data.projectName.trim() : '';
     applyExternalDeploymentFallback();
     updateButtonState(active);
     updateAppLink();
@@ -508,7 +511,17 @@
       lastDeployedAt: externalDeployment && externalDeployment.lastDeployedAt
     });
 
-    return deployment ? { existingDeployment: deployment } : {};
+    var payload = {};
+
+    if (deployment) {
+      payload.existingDeployment = deployment;
+    }
+
+    if (externalProjectName) {
+      payload.projectNameOverride = externalProjectName;
+    }
+
+    return payload;
   }
 
   function getXhrErrorMessage(xhr) {

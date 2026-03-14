@@ -81,11 +81,18 @@ export function createDeployRouter(deps: ProjectRouterDependencies): Router {
     }
 
     const project = req.project!;
-    const existingDeployment = parseExternalDeployment((req.body as { existingDeployment?: unknown } | undefined)?.existingDeployment);
+    const body = (req.body as { existingDeployment?: unknown; projectNameOverride?: unknown } | undefined) || {};
+    const existingDeployment = parseExternalDeployment(body.existingDeployment);
+    const projectNameOverride = typeof body.projectNameOverride === 'string' ? body.projectNameOverride.trim() : '';
     let deployment;
 
     try {
-      deployment = await flyDeployService.deploy(project.id, project.path, project.name, existingDeployment);
+      deployment = await flyDeployService.deploy(
+        project.id,
+        project.path,
+        projectNameOverride || project.name,
+        existingDeployment,
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
 
