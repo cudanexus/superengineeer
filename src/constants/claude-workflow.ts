@@ -44,18 +44,19 @@ These deployment defaults apply on every message by default unless the user expl
 6. Detect the real runnable app root before generating deployment files. Do not guess.
 7. The runnable app may live in the repository root or in a nested folder. Handle both correctly.
 8. Always identify which folder actually contains the app entrypoint, dependency manifest, build files, and production start command before writing Docker or Fly.io config.
+9. Always write \`fly.toml\` and \`Dockerfile\` to the repository root folder. Never write them to a subfolder, nested directory, or subdirectory. This is mandatory on every response.
+10. Do not use \`git commit\` in generated commands or instructions unless the user explicitly asks for it.
 
 ### Fly.io Template
 
-- Keep a valid \`fly.toml\` in the project root when Fly.io deployment is relevant.
-- Keep all Fly.io deployment files in the main project folder/root directory, not in nested subfolders.
+- Keep a valid \`fly.toml\` in the repository root folder on every response, no exceptions.
+- Never place \`fly.toml\` in a subfolder or nested directory.
 - The Fly.io config must target the actual runnable app, even if that app lives in a nested subfolder.
 - Ensure the app binds to \`0.0.0.0\` and uses a real runtime port.
 - Match Fly.io internal port to the application port.
 - Add health/service settings when the app type needs them.
 
 Use this Fly.io template shape when generating or repairing config:
-
 \`\`\`toml
 app = "replace-with-app-name"
 primary_region = "sin"
@@ -76,7 +77,8 @@ primary_region = "sin"
 
 ### Docker Template
 
-- Keep a production-ready \`Dockerfile\` in the project root when containerization is relevant.
+- Keep a production-ready \`Dockerfile\` in the repository root folder on every response, no exceptions.
+- Never place \`Dockerfile\` in a subfolder or nested directory.
 - Use a base image appropriate to the app language/runtime.
 - Install dependencies deterministically.
 - Run any required build step only if the project actually has one.
@@ -87,9 +89,9 @@ primary_region = "sin"
 - Do not generate \`COPY . .\` blindly unless the repository root itself is the runnable app root.
 - Do not assume the main app folder is named \`app\`, \`src\`, \`frontend\`, or \`backend\`. Detect it from the project structure.
 - The Dockerfile must be accurate for the detected app root, not just syntactically valid.
+- Do not include \`git commit\` in Dockerfile comments, scripts, or generated instructions unless the user explicitly asks for it.
 
 Use this Docker template shape and adapt the base image/build commands/runtime command to the app language:
-
 \`\`\`dockerfile
 FROM <runtime-base-image>
 WORKDIR /app
@@ -103,17 +105,19 @@ WORKDIR /app
 
 ENV PORT=3000
 EXPOSE 3000
-
 CMD ["<production-start-command>"]
 \`\`\`
 
 ### Mandatory Deployment Detection Rules
 
+- On every single message, check if deployment files are needed and apply these rules without waiting to be asked.
 - First identify the runnable app root.
-- Then generate \`fly.toml\` and \`Dockerfile\` in the repository root/main folder.
+- Then generate \`fly.toml\` and \`Dockerfile\` always in the repository root folder, never in subfolders.
 - The generated files must reference and copy the actual runnable app root correctly.
 - For monorepos or split frontend/backend repos, do not deploy the wrong folder.
 - If multiple runnable apps exist, choose the one the prompt is asking to deploy and make that choice explicit.
+- Never skip or omit these deployment files on any message unless the user has explicitly said deployment is not needed.
+- Do not use \`git commit\` in generated commands or instructions unless the user explicitly asks for it.
 
 Always follow this deployment template guidance on every message by default.
 

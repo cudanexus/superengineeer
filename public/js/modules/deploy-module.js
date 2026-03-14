@@ -435,7 +435,7 @@
       return;
     }
 
-    if (!state || !state.selectedProjectId || data.projectId !== state.selectedProjectId) {
+    if (!state || !state.selectedProjectId) {
       return;
     }
 
