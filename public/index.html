@@ -522,6 +522,14 @@
                     <button id="btn-toggle-preview" class="toolbar-action-button" title="Toggle Preview Pane">
                       Preview
                     </button>
+                    <span id="deploy-toolbar-status"
+                      class="hidden items-center gap-2 rounded-md border border-gray-700 bg-gray-800/80 px-3 py-2 text-xs text-gray-300">
+                      <span class="inline-flex h-2 w-2 rounded-full bg-purple-400"></span>
+                      <span id="deploy-toolbar-status-text">Deploying...</span>
+                    </span>
+                    <button id="btn-deploy-project" class="toolbar-action-button" title="Open deploy actions">
+                      Deploy
+                    </button>
                     <button id="btn-start-agent" class="toolbar-action-button toolbar-action-button-primary hidden">
                       Start
                     </button>
@@ -4310,6 +4318,84 @@
     </div>
   </div>
 
+  <!-- Fly Deploy Modal -->
+  <div id="modal-fly-deploy" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl">
+        <div class="flex items-center justify-between p-3 border-b border-gray-700">
+          <div>
+            <h3 class="text-sm font-semibold">Fly.io Deployment</h3>
+            <p class="text-xs text-gray-400 mt-1">App: <span id="fly-deploy-app-name">Pending</span></p>
+            <p class="text-xs text-gray-400 mt-1">URL:
+              <a id="fly-deploy-app-link" class="text-blue-400 hover:text-blue-300 hidden" href="#" target="_blank"
+                rel="noopener noreferrer"></a>
+              <span id="fly-deploy-app-link-empty">Not available yet</span>
+            </p>
+          </div>
+          <button id="btn-close-fly-deploy" class="text-gray-400 hover:text-white">&times;</button>
+        </div>
+        <div class="px-3 pt-3">
+          <div id="fly-deploy-status" class="text-xs text-gray-400 mb-3">Ready to deploy</div>
+          <div class="flex items-center gap-2 mb-3">
+            <button id="tab-fly-deploy-output"
+              class="toolbar-action-button toolbar-action-button-primary text-xs min-h-0 px-3 py-2">Deploy Logs</button>
+            <button id="tab-fly-app-logs"
+              class="toolbar-action-button text-xs min-h-0 px-3 py-2">App Logs</button>
+          </div>
+          <pre id="fly-deploy-output"
+            class="bg-gray-900 border border-gray-700 rounded p-3 text-xs text-gray-200 font-mono whitespace-pre-wrap break-words h-96 overflow-auto"></pre>
+          <pre id="fly-app-logs-output"
+            class="hidden bg-gray-900 border border-gray-700 rounded p-3 text-xs text-gray-200 font-mono whitespace-pre-wrap break-words h-96 overflow-auto"></pre>
+        </div>
+        <div class="p-3 border-t border-gray-700 flex justify-end gap-2">
+          <button
+            class="hidden bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded text-sm transition-colors"
+            id="btn-retry-fly-deploy">Retry Deploy</button>
+          <button class="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1.5 rounded text-sm transition-colors"
+            id="btn-close-fly-deploy-footer">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fly Deploy Actions Modal -->
+  <div id="modal-fly-deploy-actions" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-sm">
+        <div class="flex items-center justify-between p-3 border-b border-gray-700">
+          <div>
+            <h3 class="text-sm font-semibold">Fly.io</h3>
+          </div>
+          <button id="btn-close-fly-deploy-actions" class="text-gray-400 hover:text-white">&times;</button>
+        </div>
+        <div class="p-3 space-y-3">
+          <div class="rounded border border-gray-700 bg-gray-900/60 p-3">
+            <div id="fly-deploy-actions-app-name" class="text-sm text-gray-200 font-medium">Not deployed yet</div>
+            <a id="fly-deploy-actions-app-link" class="hidden text-xs text-blue-400 hover:text-blue-300 mt-1 break-all" href="#"
+              target="_blank" rel="noopener noreferrer"></a>
+            <div id="fly-deploy-actions-app-link-empty" class="text-xs text-gray-500 mt-1">No app link yet</div>
+          </div>
+          <div class="grid grid-cols-1 gap-2">
+            <a id="btn-open-deployed-app"
+              class="hidden toolbar-action-button toolbar-action-button-primary justify-center"
+              href="#"
+              target="_blank"
+              rel="noopener noreferrer">
+              Open App
+            </a>
+            <button id="btn-trigger-fly-deploy"
+              class="toolbar-action-button toolbar-action-button-primary justify-center">
+              Deploy
+            </button>
+          </div>
+          <div id="fly-deploy-actions-status" class="text-[11px] text-gray-500"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Container -->
   <div id="toast-container" class="fixed bottom-4 right-4 space-y-2 z-50"></div>
 
@@ -4324,6 +4410,7 @@
   <script src="/js/modules/escape-utils.js"></script>
   <script src="/js/modules/git-module.js"></script>
   <script src="/js/modules/shell-module.js"></script>
+  <script src="/js/modules/deploy-module.js"></script>
   <script src="/js/modules/ralph-loop-module.js"></script>
   <script src="/js/modules/debug-modal.js"></script>
   <!-- Memory Management Modules -->

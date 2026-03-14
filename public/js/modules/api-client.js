@@ -191,6 +191,18 @@
     return $.get(baseUrl + '/api/projects/' + id + '/debug');
   };
 
+  ApiClient.getFlyDeployStatus = function (id) {
+    return $.get(baseUrl + '/api/projects/' + id + '/deploy/status');
+  };
+
+  ApiClient.startFlyDeploy = function (id) {
+    return $.post(baseUrl + '/api/projects/' + id + '/deploy/start');
+  };
+
+  ApiClient.getFlyAppLogs = function (id) {
+    return $.get(baseUrl + '/api/projects/' + id + '/deploy/app-logs');
+  };
+
   /**
    * Get installable abilities catalog for a project
    * @param {string} id - Project UUID

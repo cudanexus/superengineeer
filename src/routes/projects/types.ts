@@ -10,7 +10,8 @@ import {
   RoadmapGenerator,
   InstructionGenerator,
   RoadmapEditor,
-  ShellService
+  ShellService,
+  FlyDeployService,
 } from '../../services';
 import { GitService } from '../../services/git-service';
 import { AgentManager } from '../../agents';
@@ -33,6 +34,7 @@ export interface ProjectRouterDependencies {
   settingsRepository: SettingsRepository;
   gitService: GitService;
   shellService?: ShellService | null;
+  flyDeployService?: FlyDeployService | null;
   shellEnabled?: boolean;
   ralphLoopService?: RalphLoopService | null;
   projectDiscoveryService?: ProjectDiscoveryService | null;

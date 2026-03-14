@@ -5,7 +5,7 @@ import path from 'path';
 import os from 'os';
 import { AppConfig } from '../config';
 import { getDefaultWorkflowRules } from '../constants/claude-workflow';
-import { createApiRouter, getAgentManager, getRoadmapGenerator, getShellService, getRalphLoopService, getConversationRepository, getProjectRepository, setWebSocketServer, getRunProcessManager } from '../routes';
+import { createApiRouter, getAgentManager, getRoadmapGenerator, getShellService, getRalphLoopService, getConversationRepository, getProjectRepository, setWebSocketServer, getRunProcessManager, getFlyDeployService } from '../routes';
 import { createAuthRouter } from '../routes/auth';
 import { DefaultWebSocketServer, ProjectWebSocketServer } from '../websocket';
 import { createErrorHandler, formatAccessibleUrls } from '../utils';
@@ -285,6 +285,12 @@ export class ExpressHttpServer implements HttpServer {
       await runProcessManager.shutdown();
     }
 
+    const flyDeployService = getFlyDeployService();
+
+    if (flyDeployService) {
+      flyDeployService.stopAllDeployments();
+    }
+
     // Stop all agents
     const agentManager = getAgentManager();
 
@@ -320,6 +326,7 @@ export class ExpressHttpServer implements HttpServer {
     const roadmapGenerator = getRoadmapGenerator();
     const shellService = getShellService();
     const ralphLoopService = getRalphLoopService();
+    const flyDeployService = getFlyDeployService();
 
     if (!agentManager || !this.httpServer) {
       return;
@@ -332,6 +339,7 @@ export class ExpressHttpServer implements HttpServer {
       roadmapGenerator: roadmapGenerator || undefined,
       authService: undefined,
       shellService: shellService || undefined,
+      flyDeployService: flyDeployService || undefined,
       ralphLoopService: ralphLoopService || undefined,
       runProcessManager: runProcessManager || undefined,
       conversationRepository: getConversationRepository() || undefined,

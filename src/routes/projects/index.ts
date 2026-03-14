@@ -4,6 +4,7 @@ import { createRoadmapRouter } from './roadmap';
 import { createAgentRouter } from './agent';
 import { createConversationRouter } from './conversation';
 import { createShellRouter } from './shell';
+import { createDeployRouter } from './deploy';
 import { createRalphLoopRouter } from './ralph-loop';
 import { createGitRouter } from './git';
 import { createOptimizationRouter } from './optimization';
@@ -31,6 +32,7 @@ export function createProjectsRouter(deps: ProjectRouterDependencies): Router {
   router.use('/:id/conversation', createConversationRouter(deps));
   router.use('/:id/conversations', createConversationRouter(deps));
   router.use('/:id/shell', createShellRouter(deps));
+  router.use('/:id/deploy', createDeployRouter(deps));
   router.use('/:id/ralph-loop', createRalphLoopRouter(deps));
   router.use('/:id/git', createGitRouter(deps));
   router.use('/:id/abilities', createAbilitiesRouter(deps));

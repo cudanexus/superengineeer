@@ -1,7 +1,7 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { Server, IncomingMessage } from 'http';
 import { AgentManager, AgentMessage, QueuedProject, AgentResourceStatus, ContextUsage, WaitingStatus, FullAgentStatus } from '../agents';
-import { RoadmapGenerator, RoadmapMessage, AuthService, ShellService } from '../services';
+import { RoadmapGenerator, RoadmapMessage, AuthService, ShellService, FlyDeployService } from '../services';
 import { RunProcessManager, RunProcessStatus } from '../services/run-config/run-process-types';
 import { RalphLoopService, RalphLoopStatus, IterationSummary, ReviewerFeedback, RalphLoopFinalStatus } from '../services/ralph-loop/types';
 import { ConversationRepository, ProjectRepository } from '../repositories';
@@ -130,6 +130,25 @@ export interface RunConfigStatusData {
   status: RunProcessStatus;
 }
 
+export interface FlyDeployOutputData {
+  deploymentId: string;
+  appName: string;
+  stage: 'validating' | 'creating_app' | 'deploying';
+  data: string;
+}
+
+export interface FlyDeployStatusData {
+  deploymentId: string;
+  appName: string;
+  status: 'idle' | 'validating' | 'creating_app' | 'deploying' | 'completed' | 'failed';
+  stage: 'validating' | 'creating_app' | 'deploying' | null;
+  isActive: boolean;
+  message: string;
+  startedAt: string;
+  completedAt?: string;
+  missingFiles?: string[];
+}
+
 export interface AgentMessageWithContext extends AgentMessage {
   contextUsage?: ContextUsage;
 }
@@ -162,6 +181,8 @@ export type WebSocketMessageData =
   | GitHubCloneProgressData
   | RunConfigOutputData
   | RunConfigStatusData
+  | FlyDeployOutputData
+  | FlyDeployStatusData
   | string; // Covers 'connected' messages and simple loop events
 
 export interface SessionRecoveryData {
@@ -198,6 +219,8 @@ export interface WebSocketMessage {
     | 'github_clone_progress'
     | 'run_config_output'
     | 'run_config_status'
+    | 'fly_deploy_output'
+    | 'fly_deploy_status'
 ;
   projectId?: string;
   data?: WebSocketMessageData | SessionRecoveryData;
@@ -217,6 +240,7 @@ export interface WebSocketServerDependencies {
   roadmapGenerator?: RoadmapGenerator;
   authService?: AuthService;
   shellService?: ShellService;
+  flyDeployService?: FlyDeployService;
   ralphLoopService?: RalphLoopService;
   runProcessManager?: RunProcessManager;
   conversationRepository?: ConversationRepository;
@@ -230,6 +254,7 @@ export class DefaultWebSocketServer implements ProjectWebSocketServer {
   private readonly roadmapGenerator?: RoadmapGenerator;
   private readonly authService?: AuthService;
   private readonly shellService?: ShellService;
+  private readonly flyDeployService?: FlyDeployService;
   private readonly ralphLoopService?: RalphLoopService;
   private readonly runProcessManager?: RunProcessManager;
   private readonly conversationRepository?: ConversationRepository;
@@ -245,6 +270,7 @@ export class DefaultWebSocketServer implements ProjectWebSocketServer {
     this.roadmapGenerator = deps.roadmapGenerator;
     this.authService = deps.authService;
     this.shellService = deps.shellService;
+    this.flyDeployService = deps.flyDeployService;
     this.ralphLoopService = deps.ralphLoopService;
     this.runProcessManager = deps.runProcessManager;
     this.conversationRepository = deps.conversationRepository;
@@ -253,6 +279,7 @@ export class DefaultWebSocketServer implements ProjectWebSocketServer {
     this.setupAgentListeners();
     this.setupRoadmapListeners();
     this.setupShellListeners();
+    this.setupFlyDeployListeners();
     this.setupRalphLoopListeners();
     this.setupOneOffListeners();
     this.setupRunConfigListeners();
@@ -756,6 +783,31 @@ export class DefaultWebSocketServer implements ProjectWebSocketServer {
 
       // Save tool use message to conversation
       void this.saveRalphLoopMessage(projectId, 'ralph_loop_tool_use', data);
+    });
+  }
+
+  private setupFlyDeployListeners(): void {
+    if (!this.flyDeployService) {
+      this.logger.debug('No fly deploy service provided, skipping listener setup');
+      return;
+    }
+
+    this.logger.info('Setting up fly deploy service listeners');
+
+    this.flyDeployService.on('output', (projectId, data) => {
+      this.broadcastToProject(projectId, {
+        type: 'fly_deploy_output',
+        projectId,
+        data,
+      });
+    });
+
+    this.flyDeployService.on('status', (projectId, data) => {
+      this.broadcastToProject(projectId, {
+        type: 'fly_deploy_status',
+        projectId,
+        data,
+      });
     });
   }
 

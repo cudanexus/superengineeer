@@ -34,6 +34,13 @@ export interface McpOverrides {
   };
 }
 
+export interface FlyDeploymentInfo {
+  appName: string;
+  appUrl: string;
+  lastDeploymentStatus: 'created' | 'deployed' | 'failed';
+  lastDeployedAt: string | null;
+}
+
 export interface ProjectStatus {
   id: string;
   name: string;
@@ -48,6 +55,8 @@ export interface ProjectStatus {
   modelOverride: string | null;
   /** Project-specific MCP server overrides */
   mcpOverrides: McpOverrides | null;
+  /** Persisted Fly.io deployment metadata for this project */
+  flyDeployment?: FlyDeploymentInfo | null;
   /** Run configurations for this project */
   runConfigurations?: RunConfiguration[];
   createdAt: string;
@@ -93,6 +102,7 @@ export interface ProjectRepository {
   updatePermissionOverrides(id: string, overrides: ProjectPermissionOverrides | null): Promise<ProjectStatus | null>;
   updateModelOverride(id: string, model: string | null): Promise<ProjectStatus | null>;
   updateMcpOverrides(id: string, overrides: McpOverrides | null): Promise<ProjectStatus | null>;
+  updateFlyDeployment?(id: string, deployment: FlyDeploymentInfo | null): Promise<ProjectStatus | null>;
   updateRunConfigurations(id: string, configs: RunConfiguration[]): Promise<ProjectStatus | null>;
   updateProjectPath(id: string, newName: string, newPath: string): Promise<ProjectStatus | null>;
   delete(id: string): Promise<boolean>;
@@ -359,6 +369,7 @@ export class FileProjectRepository implements ProjectRepository {
       permissionOverrides: null,
       modelOverride: null,
       mcpOverrides: null,
+      flyDeployment: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -464,6 +475,18 @@ export class FileProjectRepository implements ProjectRepository {
     }
 
     status.mcpOverrides = overrides;
+    this.saveStatus(status);
+    return Promise.resolve({ ...status });
+  }
+
+  updateFlyDeployment(id: string, deployment: FlyDeploymentInfo | null): Promise<ProjectStatus | null> {
+    const status = this.loadStatus(id);
+
+    if (!status) {
+      return Promise.resolve(null);
+    }
+
+    status.flyDeployment = deployment;
     this.saveStatus(status);
     return Promise.resolve({ ...status });
   }

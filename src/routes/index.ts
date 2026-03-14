@@ -23,6 +23,8 @@ import {
   DefaultRunConfigImportService,
   InventifyService,
   DefaultInventifyService,
+  FlyDeployService,
+  getOrCreateFlyDeployService as getOrCreateFlyDeployServiceInstance,
 } from '../services';
 import { RunProcessManager } from '../services/run-config/run-process-types';
 import { createGitService, GitService } from '../services/git-service';
@@ -54,6 +56,7 @@ let sharedGitHubCLIService: GitHubCLIService | null = null;
 let sharedRunConfigurationService: RunConfigurationService | null = null;
 let sharedRunProcessManager: RunProcessManager | null = null;
 let sharedInventifyService: InventifyService | null = null;
+let sharedFlyDeployService: FlyDeployService | null = null;
 const FILE_UPLOAD_LAMBDA_URL = 'https://n3uzo744vw6qsk6iv2kqclkqdq0ylgqp.lambda-url.ap-southeast-1.on.aws/';
 const LAMBDA_INVOKE_PAYLOAD_LIMIT_BYTES = 6 * 1024 * 1024; // 6,291,456 bytes
 const SAFE_UPLOAD_FILE_LIMIT_BYTES = 4 * 1024 * 1024; // base64 + JSON overhead safety margin
@@ -476,6 +479,7 @@ export function createApiRouter(deps: ApiRouterDependencies = {}): Router {
   // Shell service (singleton for WebSocket integration) - only create if enabled
   const shellEnabled = deps.shellEnabled !== false;
   const shellService = shellEnabled ? getOrCreateShellService() : null;
+  const flyDeployService = getOrCreateFlyDeployService();
 
   // Optimization service
   const optimizationService = getOrCreateOptimizationService(agentManager);
@@ -512,6 +516,7 @@ export function createApiRouter(deps: ApiRouterDependencies = {}): Router {
     settingsRepository,
     gitService,
     shellService,
+    flyDeployService,
     shellEnabled,
     ralphLoopService,
     projectDiscoveryService: getOrCreateProjectDiscoveryService(projectRepository),
@@ -711,4 +716,19 @@ function getOrCreateInventifyService(
 
 export function getInventifyService(): InventifyService | null {
   return sharedInventifyService;
+}
+
+function getOrCreateFlyDeployService(): FlyDeployService {
+  if (!sharedFlyDeployService) {
+    if (!sharedProjectRepository) {
+      throw new Error('Project repository must exist before Fly deploy service initialization');
+    }
+    sharedFlyDeployService = getOrCreateFlyDeployServiceInstance(sharedProjectRepository);
+  }
+
+  return sharedFlyDeployService;
+}
+
+export function getFlyDeployService(): FlyDeployService | null {
+  return sharedFlyDeployService;
 }

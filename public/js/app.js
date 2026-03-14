@@ -15,6 +15,7 @@
   var EscapeUtils = window.EscapeUtils;
   var GitModule = window.GitModule;
   var ShellModule = window.ShellModule;
+  var DeployModule = window.DeployModule;
   var RalphLoopModule = window.RalphLoopModule;
   var DebugModal = window.DebugModal;
   var FileBrowser = window.FileBrowser;
@@ -4461,6 +4462,10 @@
 
     state.selectedProjectId = projectId;
 
+    if (DeployModule) {
+      DeployModule.onProjectChanged(projectId);
+    }
+
     // Restore per-project permission mode
     PermissionModeModule.onProjectChanged(projectId);
 
@@ -6900,6 +6905,16 @@
       case 'shell_error':
         ShellModule.handleShellError(message.data);
         break;
+      case 'fly_deploy_output':
+        if (DeployModule) {
+          DeployModule.handleDeployOutput(message.data);
+        }
+        break;
+      case 'fly_deploy_status':
+        if (DeployModule) {
+          DeployModule.handleDeployStatus(message.data);
+        }
+        break;
       case 'ralph_loop_status':
       case 'ralph_loop_iteration':
       case 'ralph_loop_output':
@@ -7638,6 +7653,26 @@
       showErrorToast: showErrorToast
     });
 
+    if (DeployModule) {
+      DeployModule.init({
+        state: state,
+        api: api,
+        showToast: showToast,
+        showErrorToast: showErrorToast,
+        openModal: openModal,
+        showConfirm: showConfirm,
+        sendDeployFixMessage: function(message) {
+          var project = findProjectById(state.selectedProjectId);
+
+          if (project && project.status === 'running') {
+            doSendMessage(message);
+          } else {
+            startInteractiveAgentWithMessage(message);
+          }
+        }
+      });
+    }
+
     // Initialize RalphLoopModule with dependencies
     if (RalphLoopModule) {
       RalphLoopModule.init({
@@ -7950,6 +7985,9 @@
     FileBrowser.setupDragAndDrop();
     GitModule.setupGitHandlers();
     ShellModule.setupHandlers();
+    if (DeployModule) {
+      DeployModule.setupHandlers();
+    }
     DebugModal.setupHandlers();
     RoadmapModule.setupHandlers();
     ModalsModule.setupHandlers();
