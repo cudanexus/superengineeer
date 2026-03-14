@@ -65,6 +65,23 @@ export interface FlyDeployService {
   off<K extends keyof FlyDeployServiceEvents>(event: K, listener: FlyDeployServiceEvents[K]): void;
 }
 
+class FlyCommandError extends Error {
+  readonly command: string;
+  readonly args: string[];
+  readonly exitCode?: number | null;
+  readonly output: string;
+
+  constructor(command: string, args: string[], output: string, exitCode?: number | null) {
+    const trimmedOutput = String(output || '').trim();
+    super(trimmedOutput || `${command} exited with code ${exitCode ?? 'unknown'}`);
+    this.name = 'FlyCommandError';
+    this.command = command;
+    this.args = args;
+    this.exitCode = exitCode;
+    this.output = trimmedOutput;
+  }
+}
+
 function appUrlFromName(appName: string): string {
   return `https://${appName}.fly.dev`;
 }
@@ -90,6 +107,26 @@ function generateAppName(projectName: string): string {
   const rawName = `${projectSlug}-${suffix}`;
   const trimmed = rawName.slice(0, 30).replace(/-+$/g, '');
   return trimmed || `app-${suffix}`;
+}
+
+function getErrorText(error: unknown): string {
+  if (error instanceof FlyCommandError) {
+    return `${error.message}\n${error.output}`.trim();
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return String(error);
+}
+
+function isFlyAppNotFoundError(error: unknown): boolean {
+  return /app not found/i.test(getErrorText(error));
+}
+
+function isFlyAppAlreadyExistsError(error: unknown): boolean {
+  return /already exists|name is already taken|app.*already exists/i.test(getErrorText(error));
 }
 
 async function fileExists(filePath: string): Promise<boolean> {
@@ -250,19 +287,8 @@ export class DefaultFlyDeployService extends EventEmitter implements FlyDeploySe
     const projectLogger = this.logger.withProject(deployment.projectId);
 
     try {
-      if (!deployment.reuseExistingApp) {
-        deployment.status = 'creating_app';
-        deployment.stage = 'creating_app';
-        deployment.message = `Creating Fly.io app ${deployment.appName}`;
-        this.emitStatus(deployment.projectId, deployment);
-        await this.runCommand(deployment, 'creating_app', 'flyctl', ['apps', 'create', deployment.appName]);
-      }
-
-      deployment.status = 'deploying';
-      deployment.stage = 'deploying';
-      deployment.message = `${deployment.reuseExistingApp ? 'Updating' : 'Deploying'} ${deployment.appName} on Fly.io`;
-      this.emitStatus(deployment.projectId, deployment);
-      await this.runCommand(deployment, 'deploying', 'flyctl', ['deploy', '-a', deployment.appName, '--remote-only']);
+      await this.ensureAppReadyForDeployment(deployment);
+      await this.runDeployCommand(deployment);
 
       deployment.status = 'completed';
       deployment.stage = null;
@@ -297,6 +323,7 @@ export class DefaultFlyDeployService extends EventEmitter implements FlyDeploySe
     );
 
     return new Promise((resolve, reject) => {
+      let combinedOutput = '';
       const child = spawn(command, args, {
         cwd: deployment.projectPath,
         env: process.env,
@@ -305,11 +332,15 @@ export class DefaultFlyDeployService extends EventEmitter implements FlyDeploySe
       deployment.process = child;
 
       child.stdout.on('data', (chunk: Buffer | string) => {
-        this.emitOutput(deployment.projectId, deployment, stage, chunk.toString());
+        const text = chunk.toString();
+        combinedOutput += text;
+        this.emitOutput(deployment.projectId, deployment, stage, text);
       });
 
       child.stderr.on('data', (chunk: Buffer | string) => {
-        this.emitOutput(deployment.projectId, deployment, stage, chunk.toString());
+        const text = chunk.toString();
+        combinedOutput += text;
+        this.emitOutput(deployment.projectId, deployment, stage, text);
       });
 
       child.on('error', (error) => {
@@ -317,7 +348,7 @@ export class DefaultFlyDeployService extends EventEmitter implements FlyDeploySe
           ? 'flyctl is not installed or not available in PATH'
           : `Failed to start ${command}: ${error.message}`;
         this.emitOutput(deployment.projectId, deployment, stage, `${message}\n`);
-        reject(new Error(message));
+        reject(new FlyCommandError(command, args, `${combinedOutput}\n${message}`.trim(), null));
       });
 
       child.on('close', (code) => {
@@ -326,9 +357,69 @@ export class DefaultFlyDeployService extends EventEmitter implements FlyDeploySe
           return;
         }
 
-        reject(new Error(`${command} exited with code ${code ?? 'unknown'}`));
+        reject(new FlyCommandError(command, args, combinedOutput, code));
       });
     });
+  }
+
+  private async ensureAppReadyForDeployment(deployment: FlyDeploymentRecord): Promise<void> {
+    if (!deployment.reuseExistingApp) {
+      await this.createApp(deployment);
+    }
+  }
+
+  private async createApp(deployment: FlyDeploymentRecord): Promise<void> {
+    deployment.status = 'creating_app';
+    deployment.stage = 'creating_app';
+    deployment.message = `Creating Fly.io app ${deployment.appName}`;
+    this.emitStatus(deployment.projectId, deployment);
+
+    try {
+      await this.runCommand(deployment, 'creating_app', 'flyctl', ['apps', 'create', deployment.appName]);
+    } catch (error) {
+      if (isFlyAppAlreadyExistsError(error)) {
+        this.emitOutput(
+          deployment.projectId,
+          deployment,
+          'creating_app',
+          `[deploy] Fly.io app ${deployment.appName} already exists, continuing with deployment...\n`
+        );
+        deployment.reuseExistingApp = true;
+        return;
+      }
+
+      throw error;
+    }
+  }
+
+  private async runDeployCommand(deployment: FlyDeploymentRecord): Promise<void> {
+    deployment.status = 'deploying';
+    deployment.stage = 'deploying';
+    deployment.message = `${deployment.reuseExistingApp ? 'Updating' : 'Deploying'} ${deployment.appName} on Fly.io`;
+    this.emitStatus(deployment.projectId, deployment);
+
+    try {
+      await this.runCommand(deployment, 'deploying', 'flyctl', ['deploy', '-a', deployment.appName, '--remote-only']);
+    } catch (error) {
+      if (deployment.reuseExistingApp && isFlyAppNotFoundError(error)) {
+        this.emitOutput(
+          deployment.projectId,
+          deployment,
+          'creating_app',
+          `[deploy] Fly.io app ${deployment.appName} was not found during update, creating it and retrying once...\n`
+        );
+        deployment.reuseExistingApp = false;
+        await this.createApp(deployment);
+        deployment.status = 'deploying';
+        deployment.stage = 'deploying';
+        deployment.message = `Deploying ${deployment.appName} on Fly.io`;
+        this.emitStatus(deployment.projectId, deployment);
+        await this.runCommand(deployment, 'deploying', 'flyctl', ['deploy', '-a', deployment.appName, '--remote-only']);
+        return;
+      }
+
+      throw error;
+    }
   }
 
   private emitOutput(projectId: string, deployment: FlyDeploymentRecord, stage: FlyDeployStage, data: string): void {

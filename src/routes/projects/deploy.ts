@@ -70,7 +70,7 @@ export function createDeployRouter(deps: ProjectRouterDependencies): Router {
       completedAt: deployment.completedAt,
       missingFiles: deployment.missingFiles || [],
       isActive: deployment.status === 'validating' || deployment.status === 'creating_app' || deployment.status === 'deploying',
-      hasExistingApp: true,
+      hasExistingApp: deployment.reuseExistingApp,
     });
   });
 
@@ -108,7 +108,7 @@ export function createDeployRouter(deps: ProjectRouterDependencies): Router {
       completedAt: deployment.completedAt,
       missingFiles: deployment.missingFiles || [],
       isActive: deployment.status === 'validating' || deployment.status === 'creating_app' || deployment.status === 'deploying',
-      hasExistingApp: true,
+      hasExistingApp: deployment.reuseExistingApp || deployment.status === 'completed',
     });
   }));
 
