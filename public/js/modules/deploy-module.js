@@ -1,6 +1,6 @@
 /**
- * Fly Deploy Module
- * Starts Fly.io deployments and streams live logs into a modal.
+ * SuperEngineer Deploy Module
+ * Starts SuperEngineer deployments and streams live logs into a modal.
  */
 (function(root, factory) {
   if (typeof module !== 'undefined' && module.exports) {
@@ -206,7 +206,7 @@
     lastStatusMessage = 'Starting deployment...';
     appLogsLoaded = false;
     resetOutput();
-    appendOutput('[deploy] starting Fly.io deployment...\n');
+    appendOutput('[deploy] starting SuperEngineer deployment...\n');
     updateStatusBadge('Starting deployment...', 'text-yellow-400');
     updateButtonState(true);
     updateToolbarStatus(true);
@@ -243,7 +243,7 @@
         updateButtonState(false);
         updateToolbarStatus(false);
         updateActionsModal();
-        showErrorToast(xhr, 'Failed to start Fly.io deployment');
+        showErrorToast(xhr, 'Failed to start SuperEngineer deployment');
         appendOutput('[deploy] failed to start deployment\n');
       });
   }
@@ -293,7 +293,7 @@
         lastDeployedAt: data.completedAt || new Date().toISOString()
       });
       appendOutput('[deploy] deployment completed successfully\n');
-      showToast('Fly.io deploy completed for ' + data.appName, 'success');
+      showToast('SuperEngineer deploy completed for ' + data.appName, 'success');
     } else if (data.status === 'failed') {
       appLogsLoaded = false;
       postDeploymentStateToParent({
@@ -303,7 +303,7 @@
         lastDeployedAt: data.completedAt || new Date().toISOString()
       });
       appendOutput('[deploy] deployment failed: ' + (data.message || 'unknown error') + '\n');
-      showToast('Fly.io deploy failed', 'error');
+      showToast('SuperEngineer deploy failed', 'error');
     }
   }
 
@@ -340,13 +340,13 @@
   function buildDeployFixPrompt() {
     var deployLogs = getLogText('#fly-deploy-output');
     var lines = [
-      'Fix the Fly.io deployment for this project.',
-      'Review the Fly.io config, Docker setup, build/start commands, and deployment behavior.',
+      'Fix the SuperEngineer deployment for this project.',
+      'Review the deployment config, Docker setup, build/start commands, and deployment behavior.',
       'Use the deployment logs below as debugging context.'
     ];
 
     if (currentAppName) {
-      lines.push('Existing Fly.io app name: ' + currentAppName + '.');
+      lines.push('Existing SuperEngineer app name: ' + currentAppName + '.');
     }
 
     if (lastStatusMessage) {
@@ -357,7 +357,7 @@
       lines.push('Deployment logs:\n```text\n' + deployLogs + '\n```');
     }
 
-    lines.push('Keep Fly.io files in the project root, preserve the existing app name, fix the deployment issue, and make the next deploy succeed.');
+    lines.push('Keep deployment files in the project root, preserve the existing app name, fix the deployment issue, and make the next deploy succeed.');
 
     return lines.join(' ');
   }
@@ -602,7 +602,7 @@
       statusText = 'Updates the current deployed app';
     } else {
       actionLabel = 'Deploy';
-      statusText = 'Creates a new Fly.io app';
+      statusText = 'Creates a new SuperEngineer app';
     }
 
     $('#fly-deploy-actions-app-name').text(appName);
