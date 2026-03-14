@@ -3,6 +3,34 @@ import { asyncHandler } from '../../utils';
 import { validateProjectExists } from '../../middleware/project';
 import { strictRateLimit } from '../../middleware/rate-limit';
 import { ProjectRouterDependencies } from './types';
+import { FlyDeploymentInfo } from '../../repositories/project';
+
+function parseExternalDeployment(value: unknown): FlyDeploymentInfo | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const raw = value as Record<string, unknown>;
+  const appName = typeof raw.appName === 'string' ? raw.appName.trim() : '';
+  const appUrl = typeof raw.appUrl === 'string' ? raw.appUrl.trim() : '';
+  const lastDeploymentStatus = raw.lastDeploymentStatus;
+  const lastDeployedAt = raw.lastDeployedAt;
+
+  if (!appName) {
+    return null;
+  }
+
+  if (lastDeploymentStatus !== 'created' && lastDeploymentStatus !== 'deployed' && lastDeploymentStatus !== 'failed') {
+    return null;
+  }
+
+  return {
+    appName,
+    appUrl,
+    lastDeploymentStatus,
+    lastDeployedAt: typeof lastDeployedAt === 'string' ? lastDeployedAt : null,
+  };
+}
 
 export function createDeployRouter(deps: ProjectRouterDependencies): Router {
   const router = Router({ mergeParams: true });
@@ -24,9 +52,9 @@ export function createDeployRouter(deps: ProjectRouterDependencies): Router {
       res.json({
         status: 'idle',
         isActive: false,
-        appName: req.project?.flyDeployment?.appName || null,
-        appUrl: req.project?.flyDeployment?.appUrl || null,
-        hasExistingApp: !!req.project?.flyDeployment?.appName,
+        appName: null,
+        appUrl: null,
+        hasExistingApp: false,
       });
       return;
     }
@@ -53,10 +81,11 @@ export function createDeployRouter(deps: ProjectRouterDependencies): Router {
     }
 
     const project = req.project!;
+    const existingDeployment = parseExternalDeployment((req.body as { existingDeployment?: unknown } | undefined)?.existingDeployment);
     let deployment;
 
     try {
-      deployment = await flyDeployService.deploy(project.id, project.path, project.name);
+      deployment = await flyDeployService.deploy(project.id, project.path, project.name, existingDeployment);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
 
@@ -90,7 +119,15 @@ export function createDeployRouter(deps: ProjectRouterDependencies): Router {
     }
 
     try {
-      const result = await flyDeployService.getAppLogs(req.project!.id);
+      const result = await flyDeployService.getAppLogs(
+        req.project!.id,
+        parseExternalDeployment({
+          appName: typeof req.query['appName'] === 'string' ? req.query['appName'] : '',
+          appUrl: typeof req.query['appUrl'] === 'string' ? req.query['appUrl'] : '',
+          lastDeploymentStatus: 'deployed',
+          lastDeployedAt: null,
+        }),
+      );
 
       res.json({
         appName: result.appName,

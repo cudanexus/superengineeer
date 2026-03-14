@@ -29,6 +29,8 @@
   var lastStatusMessage = '';
   var activeLogTab = 'deploy';
   var appLogsLoaded = false;
+  var externalDeployment = null;
+  var parentBridgeAttached = false;
 
   function init(deps) {
     state = deps.state;
@@ -38,6 +40,10 @@
     openModal = deps.openModal;
     showConfirm = deps.showConfirm;
     sendDeployFixMessage = deps.sendDeployFixMessage;
+    if (!parentBridgeAttached && typeof window !== 'undefined') {
+      window.addEventListener('message', handleParentMessage);
+      parentBridgeAttached = true;
+    }
   }
 
   function setupHandlers() {
@@ -92,11 +98,13 @@
     hasExistingApp = false;
     currentAppName = null;
     currentAppUrl = null;
+    externalDeployment = null;
     lastKnownStatus = 'idle';
     lastStatusMessage = '';
     activeLogTab = 'deploy';
     appLogsLoaded = false;
     resetOutput();
+    requestExternalDeploymentState();
     syncStatus();
   }
 
@@ -127,6 +135,7 @@
         hasExistingApp = !!(data && data.hasExistingApp);
         currentAppName = data && data.appName ? data.appName : null;
         currentAppUrl = data && data.appUrl ? data.appUrl : null;
+        applyExternalDeploymentFallback();
         updateButtonState(active);
         updateToolbarStatus(active);
         updateAppLink();
@@ -139,6 +148,7 @@
         hasExistingApp = false;
         currentAppName = null;
         currentAppUrl = null;
+        applyExternalDeploymentFallback();
         lastKnownStatus = 'failed';
         lastStatusMessage = 'Deploy status unavailable';
         updateButtonState(false);
@@ -200,7 +210,7 @@
     updateToolbarStatus(true);
     openDeployModal();
 
-    api.startFlyDeploy(state.selectedProjectId)
+    api.startFlyDeploy(state.selectedProjectId, getExistingDeploymentPayload())
       .done(function(data) {
         currentDeploymentId = data.deploymentId || null;
         lastKnownStatus = data.status || 'deploying';
@@ -208,6 +218,12 @@
         hasExistingApp = !!data.hasExistingApp;
         currentAppName = data.appName || null;
         currentAppUrl = data.appUrl || null;
+        postDeploymentStateToParent({
+          appName: currentAppName,
+          appUrl: currentAppUrl,
+          lastDeploymentStatus: hasExistingApp ? 'deployed' : 'created',
+          lastDeployedAt: null
+        });
         updateAppLink();
         updateActionsModal();
         updateToolbarStatus(active);
@@ -268,10 +284,22 @@
 
     if (data.status === 'completed') {
       appLogsLoaded = false;
+      postDeploymentStateToParent({
+        appName: currentAppName,
+        appUrl: currentAppUrl,
+        lastDeploymentStatus: 'deployed',
+        lastDeployedAt: data.completedAt || new Date().toISOString()
+      });
       appendOutput('[deploy] deployment completed successfully\n');
       showToast('Fly.io deploy completed for ' + data.appName, 'success');
     } else if (data.status === 'failed') {
       appLogsLoaded = false;
+      postDeploymentStateToParent({
+        appName: currentAppName,
+        appUrl: currentAppUrl,
+        lastDeploymentStatus: 'failed',
+        lastDeployedAt: data.completedAt || new Date().toISOString()
+      });
       appendOutput('[deploy] deployment failed: ' + (data.message || 'unknown error') + '\n');
       showToast('Fly.io deploy failed', 'error');
     }
@@ -376,7 +404,10 @@
 
     $('#fly-app-logs-output').text('Loading app logs...');
 
-    api.getFlyAppLogs(state.selectedProjectId)
+    api.getFlyAppLogs(state.selectedProjectId, {
+      appName: currentAppName || (externalDeployment && externalDeployment.appName) || '',
+      appUrl: currentAppUrl || (externalDeployment && externalDeployment.appUrl) || ''
+    })
       .done(function(data) {
         appLogsLoaded = true;
         if (data.appName) {
@@ -393,6 +424,91 @@
         appLogsLoaded = false;
         $('#fly-app-logs-output').text('Failed to load app logs: ' + getXhrErrorMessage(xhr));
       });
+  }
+
+  function handleParentMessage(event) {
+    var data = event.data || {};
+
+    if (!data || data.type !== 'superweb_fly_deployment_state') {
+      return;
+    }
+
+    if (!state || !state.selectedProjectId || data.projectId !== state.selectedProjectId) {
+      return;
+    }
+
+    externalDeployment = normalizeDeployment(data.flyDeployment);
+    applyExternalDeploymentFallback();
+    updateButtonState(active);
+    updateAppLink();
+    updateActionsModal();
+  }
+
+  function normalizeDeployment(value) {
+    if (!value || typeof value !== 'object' || !value.appName) {
+      return null;
+    }
+
+    return {
+      appName: String(value.appName || ''),
+      appUrl: String(value.appUrl || ''),
+      lastDeploymentStatus: String(value.lastDeploymentStatus || 'deployed'),
+      lastDeployedAt: value.lastDeployedAt ? String(value.lastDeployedAt) : null
+    };
+  }
+
+  function applyExternalDeploymentFallback() {
+    if (!externalDeployment) {
+      return;
+    }
+
+    if (!currentAppName) {
+      currentAppName = externalDeployment.appName;
+    }
+
+    if (!currentAppUrl) {
+      currentAppUrl = externalDeployment.appUrl;
+    }
+
+    hasExistingApp = !!(currentAppName || externalDeployment.appName);
+  }
+
+  function requestExternalDeploymentState() {
+    if (!window.parent || window.parent === window || !state || !state.selectedProjectId) {
+      return;
+    }
+
+    window.parent.postMessage({
+      type: 'superengineer_fly_deployment_sync_request',
+      source: 'superengineer',
+      projectId: state.selectedProjectId
+    }, '*');
+  }
+
+  function postDeploymentStateToParent(deployment) {
+    externalDeployment = normalizeDeployment(deployment);
+
+    if (!window.parent || window.parent === window || !state || !state.selectedProjectId || !externalDeployment) {
+      return;
+    }
+
+    window.parent.postMessage({
+      type: 'superengineer_fly_deployment_update',
+      source: 'superengineer',
+      projectId: state.selectedProjectId,
+      flyDeployment: externalDeployment
+    }, '*');
+  }
+
+  function getExistingDeploymentPayload() {
+    var deployment = normalizeDeployment({
+      appName: currentAppName || (externalDeployment && externalDeployment.appName),
+      appUrl: currentAppUrl || (externalDeployment && externalDeployment.appUrl),
+      lastDeploymentStatus: (externalDeployment && externalDeployment.lastDeploymentStatus) || 'deployed',
+      lastDeployedAt: externalDeployment && externalDeployment.lastDeployedAt
+    });
+
+    return deployment ? { existingDeployment: deployment } : {};
   }
 
   function getXhrErrorMessage(xhr) {

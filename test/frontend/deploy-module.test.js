@@ -103,7 +103,7 @@ describe('Deploy Module', () => {
 
     DeployModule.startDeploy();
 
-    expect(mockApi.startFlyDeploy).toHaveBeenCalledWith('project-1');
+    expect(mockApi.startFlyDeploy).toHaveBeenCalledWith('project-1', {});
     expect(mockOpenModal).toHaveBeenCalledWith('modal-fly-deploy');
   });
 

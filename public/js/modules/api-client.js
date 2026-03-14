@@ -195,12 +195,17 @@
     return $.get(baseUrl + '/api/projects/' + id + '/deploy/status');
   };
 
-  ApiClient.startFlyDeploy = function (id) {
-    return $.post(baseUrl + '/api/projects/' + id + '/deploy/start');
+  ApiClient.startFlyDeploy = function (id, payload) {
+    return $.ajax({
+      url: baseUrl + '/api/projects/' + id + '/deploy/start',
+      method: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify(payload || {})
+    });
   };
 
-  ApiClient.getFlyAppLogs = function (id) {
-    return $.get(baseUrl + '/api/projects/' + id + '/deploy/app-logs');
+  ApiClient.getFlyAppLogs = function (id, params) {
+    return $.get(baseUrl + '/api/projects/' + id + '/deploy/app-logs', params || {});
   };
 
   /**

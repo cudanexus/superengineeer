@@ -52,9 +52,14 @@ export interface FlyDeployServiceEvents {
 }
 
 export interface FlyDeployService {
-  deploy(projectId: string, projectPath: string, projectName: string): Promise<FlyDeploymentRecord>;
+  deploy(
+    projectId: string,
+    projectPath: string,
+    projectName: string,
+    existingDeployment?: FlyDeploymentInfo | null,
+  ): Promise<FlyDeploymentRecord>;
   getDeploymentByProject(projectId: string): FlyDeploymentRecord | undefined;
-  getAppLogs(projectId: string): Promise<{ appName: string; appUrl: string; logs: string }>;
+  getAppLogs(projectId: string, existingDeployment?: FlyDeploymentInfo | null): Promise<{ appName: string; appUrl: string; logs: string }>;
   stopAllDeployments(): void;
   on<K extends keyof FlyDeployServiceEvents>(event: K, listener: FlyDeployServiceEvents[K]): void;
   off<K extends keyof FlyDeployServiceEvents>(event: K, listener: FlyDeployServiceEvents[K]): void;
@@ -139,17 +144,21 @@ export class DefaultFlyDeployService extends EventEmitter implements FlyDeploySe
     this.logger = getLogger('fly-deploy-service');
   }
 
-  async deploy(projectId: string, projectPath: string, projectName: string): Promise<FlyDeploymentRecord> {
+  async deploy(
+    projectId: string,
+    projectPath: string,
+    projectName: string,
+    existingFlyDeployment?: FlyDeploymentInfo | null,
+  ): Promise<FlyDeploymentRecord> {
     const existingDeployment = this.activeDeployments.get(projectId);
 
     if (existingDeployment) {
       throw new Error(`Deployment already running for project ${projectId}`);
     }
 
-    const project = await this.projectRepository.findById(projectId);
-    const existingFlyDeployment = project?.flyDeployment || null;
-    const appName = existingFlyDeployment?.appName || generateAppName(projectName);
-    const appUrl = existingFlyDeployment?.appUrl || appUrlFromName(appName);
+    const savedFlyDeployment = existingFlyDeployment || null;
+    const appName = savedFlyDeployment?.appName || generateAppName(projectName);
+    const appUrl = savedFlyDeployment?.appUrl || appUrlFromName(appName);
 
     const deployment: FlyDeploymentRecord = {
       deploymentId: randomUUID(),
@@ -157,7 +166,7 @@ export class DefaultFlyDeployService extends EventEmitter implements FlyDeploySe
       projectPath,
       appName,
       appUrl,
-      reuseExistingApp: !!existingFlyDeployment?.appName,
+      reuseExistingApp: !!savedFlyDeployment?.appName,
       status: 'validating',
       stage: 'validating',
       startedAt: new Date().toISOString(),
@@ -191,9 +200,9 @@ export class DefaultFlyDeployService extends EventEmitter implements FlyDeploySe
     return this.activeDeployments.get(projectId) || this.lastDeployments.get(projectId);
   }
 
-  async getAppLogs(projectId: string): Promise<{ appName: string; appUrl: string; logs: string }> {
+  async getAppLogs(projectId: string, existingDeployment?: FlyDeploymentInfo | null): Promise<{ appName: string; appUrl: string; logs: string }> {
     const project = await this.projectRepository.findById(projectId);
-    const flyDeployment = project?.flyDeployment;
+    const flyDeployment = existingDeployment || this.activeDeployments.get(projectId) || this.lastDeployments.get(projectId);
 
     if (!flyDeployment?.appName) {
       throw new Error('No deployed Fly.io app found for this project');
@@ -247,12 +256,6 @@ export class DefaultFlyDeployService extends EventEmitter implements FlyDeploySe
         deployment.message = `Creating Fly.io app ${deployment.appName}`;
         this.emitStatus(deployment.projectId, deployment);
         await this.runCommand(deployment, 'creating_app', 'flyctl', ['apps', 'create', deployment.appName]);
-        await this.persistFlyDeployment(deployment.projectId, {
-          appName: deployment.appName,
-          appUrl: deployment.appUrl,
-          lastDeploymentStatus: 'created',
-          lastDeployedAt: null,
-        });
       }
 
       deployment.status = 'deploying';
@@ -265,12 +268,6 @@ export class DefaultFlyDeployService extends EventEmitter implements FlyDeploySe
       deployment.stage = null;
       deployment.message = `Deployment finished for ${deployment.appName}`;
       deployment.completedAt = new Date().toISOString();
-      await this.persistFlyDeployment(deployment.projectId, {
-        appName: deployment.appName,
-        appUrl: deployment.appUrl,
-        lastDeploymentStatus: 'deployed',
-        lastDeployedAt: deployment.completedAt,
-      });
       this.emitStatus(deployment.projectId, deployment);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -278,12 +275,6 @@ export class DefaultFlyDeployService extends EventEmitter implements FlyDeploySe
       deployment.status = 'failed';
       deployment.message = message;
       deployment.completedAt = new Date().toISOString();
-      await this.persistFlyDeployment(deployment.projectId, {
-        appName: deployment.appName,
-        appUrl: deployment.appUrl,
-        lastDeploymentStatus: 'failed',
-        lastDeployedAt: deployment.completedAt,
-      });
       this.emitStatus(deployment.projectId, deployment);
     } finally {
       deployment.process = undefined;
@@ -338,14 +329,6 @@ export class DefaultFlyDeployService extends EventEmitter implements FlyDeploySe
         reject(new Error(`${command} exited with code ${code ?? 'unknown'}`));
       });
     });
-  }
-
-  private async persistFlyDeployment(projectId: string, deployment: FlyDeploymentInfo): Promise<void> {
-    if (!this.projectRepository.updateFlyDeployment) {
-      return;
-    }
-
-    await this.projectRepository.updateFlyDeployment(projectId, deployment);
   }
 
   private emitOutput(projectId: string, deployment: FlyDeploymentRecord, stage: FlyDeployStage, data: string): void {
