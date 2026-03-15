@@ -59,6 +59,7 @@ export interface TurnUsageEvent {
   outputTokens: number;
   cacheCreationInputTokens: number;
   cacheReadInputTokens: number;
+  totalCostUsd?: number;
 }
 
 export interface AskUserQuestionData {

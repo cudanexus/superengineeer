@@ -198,7 +198,8 @@ export class DefaultClaudeAgent implements ClaudeAgent {
     this.streamHandler = new StreamHandler(
       this.logger,
       this.projectId,
-      this._configuredSessionId
+      this._configuredSessionId,
+      this.projectPath
     );
 
     this.setupHandlers();

@@ -1,5 +1,8 @@
 import { EventEmitter } from 'events';
+import * as fs from 'fs/promises';
+import * as path from 'path';
 import { Logger } from '../utils';
+import { buildProjectDataPath } from '../utils/path-utils';
 import {
   AgentMessage,
   ToolUseInfo,
@@ -96,11 +99,14 @@ export class StreamHandler extends EventEmitter {
   private lastEmittedQuestion = '';
   private currentModel: string | null = null;
   private emittedResultIds = new Set<string>();
+  private resultSequence = 0;
+  private lastObservedTotalCostUsd: number | null = null;
 
   constructor(
     private readonly logger: Logger,
     private readonly projectId: string,
-    private readonly sessionId: string | null
+    private readonly sessionId: string | null,
+    private readonly projectPath?: string
   ) {
     super();
   }
@@ -821,6 +827,21 @@ export class StreamHandler extends EventEmitter {
     const outputTokens = usage.output_tokens || 0;
     const cacheCreationInputTokens = usage.cache_creation_input_tokens || 0;
     const cacheReadInputTokens = usage.cache_read_input_tokens || 0;
+    const totalCostUsd = typeof (cliEvent as { total_cost_usd?: unknown }).total_cost_usd === 'number'
+      && Number.isFinite((cliEvent as { total_cost_usd?: number }).total_cost_usd)
+      ? (cliEvent as { total_cost_usd?: number }).total_cost_usd
+      : undefined;
+    this.resultSequence += 1;
+    const streamCostDeltaUsd = typeof totalCostUsd === 'number'
+      ? (
+        this.lastObservedTotalCostUsd !== null && totalCostUsd >= this.lastObservedTotalCostUsd
+          ? totalCostUsd - this.lastObservedTotalCostUsd
+          : totalCostUsd
+      )
+      : undefined;
+    if (typeof totalCostUsd === 'number') {
+      this.lastObservedTotalCostUsd = totalCostUsd;
+    }
 
     this.emit('usageUpdate', {
       resultId,
@@ -830,7 +851,68 @@ export class StreamHandler extends EventEmitter {
       outputTokens,
       cacheCreationInputTokens,
       cacheReadInputTokens,
+      totalCostUsd,
     });
+
+    void this.appendRawUsageLog({
+      resultId,
+      sessionId: cliEvent.session_id || event.session_id || this.sessionId || null,
+      model: this.currentModel,
+      totalCostUsd,
+      resultSequence: this.resultSequence,
+      streamCostDeltaUsd,
+      usage,
+      rawEventType: event.type,
+      rawUuid: cliEvent.uuid || event.uuid || null,
+    });
+  }
+
+  private async appendRawUsageLog(entry: {
+    resultId: string;
+    sessionId: string | null;
+    model: string | null;
+    totalCostUsd?: number;
+    resultSequence: number;
+    streamCostDeltaUsd?: number;
+    usage: StreamEventUsage;
+    rawEventType: string;
+    rawUuid: string | null;
+  }): Promise<void> {
+    if (!this.projectPath) {
+      return;
+    }
+
+    try {
+      const logsDir = buildProjectDataPath(this.projectPath, 'logs');
+      const logPath = path.join(logsDir, 'claude-usage-raw.jsonl');
+      await fs.mkdir(logsDir, { recursive: true });
+      await fs.appendFile(
+        logPath,
+        `${JSON.stringify({
+          timestamp: new Date().toISOString(),
+          projectId: this.projectId,
+          sessionId: entry.sessionId,
+          resultId: entry.resultId,
+          resultSequence: entry.resultSequence,
+          model: entry.model,
+          totalCostUsd: entry.totalCostUsd,
+          streamCostDeltaUsd: entry.streamCostDeltaUsd,
+          rawEventType: entry.rawEventType,
+          rawUuid: entry.rawUuid,
+          usage: {
+            input_tokens: entry.usage.input_tokens || 0,
+            output_tokens: entry.usage.output_tokens || 0,
+            cache_creation_input_tokens: entry.usage.cache_creation_input_tokens || 0,
+            cache_read_input_tokens: entry.usage.cache_read_input_tokens || 0,
+          },
+        })}\n`,
+        'utf-8'
+      );
+    } catch (error) {
+      this.logger.warn('Failed to append raw usage audit log', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   private handleResultErrors(errors: string[]): void {

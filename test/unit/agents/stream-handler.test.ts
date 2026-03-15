@@ -718,6 +718,37 @@ describe('StreamHandler', () => {
         cacheReadInputTokens: 18069,
       });
     });
+
+    it('should include totalCostUsd when Claude reports it', () => {
+      handler.processLine(JSON.stringify({
+        type: 'system',
+        subtype: 'init',
+        session_id: 'sess-1',
+        model: 'claude-sonnet-4-6',
+      }));
+
+      handler.processLine(JSON.stringify({
+        type: 'result',
+        uuid: 'result-with-cost',
+        total_cost_usd: 0.19,
+        usage: {
+          input_tokens: 10,
+          output_tokens: 3,
+        },
+      }));
+
+      expect(usageEvents).toHaveLength(1);
+      expect(usageEvents[0]).toEqual({
+        resultId: 'result-with-cost',
+        sessionId: 'test-session',
+        model: 'claude-sonnet-4-6',
+        inputTokens: 10,
+        outputTokens: 3,
+        cacheCreationInputTokens: 0,
+        cacheReadInputTokens: 0,
+        totalCostUsd: 0.19,
+      });
+    });
   });
 
   describe('assistant_event handling', () => {
