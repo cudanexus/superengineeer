@@ -77,10 +77,31 @@ export function createRunConfigsRouter(deps: ProjectRouterDependencies): Router 
       const body = req.body as CreateRunConfigData;
       const project = req.project!;
 
-      const config = await runConfigurationService.create(id, {
-        ...body,
-        cwd: normalizeCwd(body.cwd, project.path),
-      });
+      const targetName = body.name.trim().toLowerCase();
+      const existingConfigs = await runConfigurationService.list(id);
+      const existingConfig = existingConfigs.find(c => c.name.toLowerCase() === targetName);
+
+      const normalizedCwd = normalizeCwd(body.cwd, project.path);
+      let config;
+
+      if (existingConfig) {
+        // Update existing config instead of failing
+        const updated = await runConfigurationService.update(id, existingConfig.id, {
+          ...body,
+          cwd: normalizedCwd,
+        });
+        if (!updated) {
+          res.status(500).json({ error: 'Failed to update existing run configuration' });
+          return;
+        }
+        config = updated;
+      } else {
+        // Create new config
+        config = await runConfigurationService.create(id, {
+          ...body,
+          cwd: normalizedCwd,
+        });
+      }
 
       const status = await runProcessManager.start(id, project.path, config.id);
 

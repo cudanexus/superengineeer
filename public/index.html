@@ -439,8 +439,7 @@
               title="Install abilities">
               <svg class="w-4 h-4 mb-1 md:mb-0 md:inline-block md:mr-1.5" fill="none" stroke="currentColor"
                 viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                  d="M12 6v12m6-6H6" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v12m6-6H6" />
               </svg>
               <span class="text-xs md:text-sm">Abilities</span>
             </button>
@@ -464,9 +463,12 @@
                         <button id="btn-project-mcp" class="toolbar-dropdown-item hidden"
                           title="Configure MCP servers for this project">MCP Servers</button>
                         <button id="btn-toggle-chrome" class="toolbar-dropdown-item"
-                          title="Toggle Chrome browser usage for agents"><span id="chrome-toggle-label">Chrome</span></button>
-                        <button id="btn-github-menu" class="toolbar-dropdown-item hidden" title="GitHub menu">GitHub</button>
-                        <button id="btn-ralph-loop" class="toolbar-dropdown-item" title="Start Ralph Loop">Ralph Loop</button>
+                          title="Toggle Chrome browser usage for agents"><span
+                            id="chrome-toggle-label">Chrome</span></button>
+                        <button id="btn-github-menu" class="toolbar-dropdown-item hidden"
+                          title="GitHub menu">GitHub</button>
+                        <button id="btn-ralph-loop" class="toolbar-dropdown-item" title="Start Ralph Loop">Ralph
+                          Loop</button>
                       </div>
                     </div>
 
@@ -485,10 +487,10 @@
                         <button id="btn-toggle-tools" class="toolbar-dropdown-item" title="Toggle tool call visibility">
                           <span id="toggle-tools-text">Hide Tools</span>
                         </button>
-                        <button id="btn-search" class="toolbar-dropdown-item" title="Search conversation (Ctrl+F)">Search</button>
+                        <button id="btn-search" class="toolbar-dropdown-item"
+                          title="Search conversation (Ctrl+F)">Search</button>
                         <button id="btn-optimizations-menu"
-                          class="toolbar-dropdown-item toolbar-dropdown-item-badge relative"
-                          title="Optimizations menu">
+                          class="toolbar-dropdown-item toolbar-dropdown-item-badge relative" title="Optimizations menu">
                           <span>Optimizations!</span>
                           <span id="optimizations-menu-badge"
                             class="hidden bg-yellow-400 text-[#051413] text-[10px] rounded-full min-w-4 h-4 px-1 flex items-center justify-center font-bold">!</span>
@@ -496,8 +498,7 @@
                       </div>
                     </div>
 
-                    <button id="btn-quick-actions"
-                      class="toolbar-menu-trigger hidden"
+                    <button id="btn-quick-actions" class="toolbar-menu-trigger hidden"
                       title="Quick Actions - Run templates with one click">
                       Quick Actions
                       <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -521,6 +522,10 @@
                     </button>
                     <button id="btn-toggle-preview" class="toolbar-action-button" title="Toggle Preview Pane">
                       Preview
+                    </button>
+                    <button id="btn-run-preview-project" class="toolbar-action-button toolbar-action-button-primary"
+                      title="Start Config and Preview">
+                      Run
                     </button>
                     <span id="deploy-toolbar-status"
                       class="hidden items-center gap-2 rounded-md border border-gray-700 bg-gray-800/80 px-3 py-2 text-xs text-gray-300">
@@ -581,9 +586,9 @@
                       </button>
                     </div>
 
-                    <div id="model-selector" class="toolbar-model-pills hidden" title="Select AI model for this project">
-                      <select id="project-model-select"
-                        class="sr-only absolute pointer-events-none opacity-0"
+                    <div id="model-selector" class="toolbar-model-pills hidden"
+                      title="Select AI model for this project">
+                      <select id="project-model-select" class="sr-only absolute pointer-events-none opacity-0"
                         tabindex="-1" aria-hidden="true">
                         <option value="claude-sonnet-4-6" class="bg-gray-700 text-white">Sonnet 4.6</option>
                         <option value="claude-sonnet-4-6[1m]" class="bg-gray-700 text-white">Sonnet 4.6 1M</option>
@@ -597,29 +602,24 @@
 
                 <div id="search-controls" class="toolbar-search-strip hidden">
                   <input type="text" id="search-input"
-                          class="bg-gray-700 text-white text-xs px-2 py-1 rounded w-32 border border-gray-600 focus:border-purple-500 focus:outline-none"
-                          placeholder="Search...">
+                    class="bg-gray-700 text-white text-xs px-2 py-1 rounded w-32 border border-gray-600 focus:border-purple-500 focus:outline-none"
+                    placeholder="Search...">
                   <span id="search-counter" class="text-xs text-gray-400 w-16 text-center"></span>
-                  <button id="btn-search-prev"
-                    class="toolbar-font-stepper disabled:opacity-50"
+                  <button id="btn-search-prev" class="toolbar-font-stepper disabled:opacity-50"
                     title="Previous match (Shift+Enter)">
                     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
                     </svg>
                   </button>
-                  <button id="btn-search-next"
-                    class="toolbar-font-stepper disabled:opacity-50"
+                  <button id="btn-search-next" class="toolbar-font-stepper disabled:opacity-50"
                     title="Next match (Enter)">
                     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                     </svg>
                   </button>
-                  <button id="btn-search-advanced"
-                    class="toolbar-action-button"
+                  <button id="btn-search-advanced" class="toolbar-action-button"
                     title="Search options">Advanced</button>
-                  <button id="btn-search-close"
-                    class="toolbar-font-stepper"
-                    title="Close search (Escape)">
+                  <button id="btn-search-close" class="toolbar-font-stepper" title="Close search (Escape)">
                     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
@@ -911,74 +911,74 @@
                 <div id="git-actions-section" class="flex-shrink-0 border-t border-gray-700 bg-gray-850 overflow-y-auto"
                   style="max-height: 45%;">
                   <div id="git-auth-gated-content">
-                  <!-- Commit Section -->
-                  <div class="p-3 pb-2">
-                    <div class="flex items-center justify-between mb-1">
-                      <label class="text-xs font-semibold text-gray-400">Commit Message</label>
-                      <a href="#" id="btn-generate-commit-msg"
-                        class="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1"
-                        title="Generate commit message with AI">
-                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M13 10V3L4 14h7v7l9-11h-7z" />
-                        </svg>
-                        Generate
-                      </a>
+                    <!-- Commit Section -->
+                    <div class="p-3 pb-2">
+                      <div class="flex items-center justify-between mb-1">
+                        <label class="text-xs font-semibold text-gray-400">Commit Message</label>
+                        <a href="#" id="btn-generate-commit-msg"
+                          class="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1"
+                          title="Generate commit message with AI">
+                          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M13 10V3L4 14h7v7l9-11h-7z" />
+                          </svg>
+                          Generate
+                        </a>
+                      </div>
+                      <textarea id="git-commit-message" rows="4"
+                        class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-xs text-gray-100 resize-y focus:outline-none focus:border-purple-500"
+                        placeholder="Enter commit message..."></textarea>
+                      <button id="btn-git-commit"
+                        class="mt-2 w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-3 py-1.5 rounded text-xs transition-colors">
+                        Commit
+                      </button>
                     </div>
-                    <textarea id="git-commit-message" rows="4"
-                      class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-xs text-gray-100 resize-y focus:outline-none focus:border-purple-500"
-                      placeholder="Enter commit message..."></textarea>
-                    <button id="btn-git-commit"
-                      class="mt-2 w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-3 py-1.5 rounded text-xs transition-colors">
-                      Commit
-                    </button>
-                  </div>
 
-                  <!-- Push/Pull Section -->
-                  <div class="flex gap-2 px-3 pb-2">
-                    <button id="btn-git-push"
-                      class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-xs flex-1 transition-colors">
-                      Push
-                    </button>
-                    <button id="btn-git-pull"
-                      class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1.5 rounded text-xs flex-1 transition-colors">
-                      Pull
-                    </button>
-                  </div>
-
-                  <div class="px-3 pb-2">
-                    <button id="btn-git-restore-commit"
-                      class="w-full bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded text-xs transition-colors">
-                      Restore (Checkout Commit)
-                    </button>
-                  </div>
-
-                  <div class="px-3 pb-2">
-                    <button id="btn-git-merge-main"
-                      class="w-full bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded text-xs transition-colors">
-                      Merge Current Branch To Master
-                    </button>
-                  </div>
-
-                  <!-- Branches Section -->
-                  <div class="px-3 pb-2">
-                    <label class="text-xs font-semibold text-gray-400 mb-1 block">Branches</label>
-                    <div id="git-branches-list" class="max-h-20 overflow-y-auto bg-gray-700/50 rounded p-1 text-xs">
-                      <div class="text-gray-500 text-center py-1">No branches</div>
+                    <!-- Push/Pull Section -->
+                    <div class="flex gap-2 px-3 pb-2">
+                      <button id="btn-git-push"
+                        class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-xs flex-1 transition-colors">
+                        Push
+                      </button>
+                      <button id="btn-git-pull"
+                        class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1.5 rounded text-xs flex-1 transition-colors">
+                        Pull
+                      </button>
                     </div>
-                  </div>
 
-                  <!-- Tags Section -->
-                  <div class="px-3 pb-3">
-                    <div class="flex items-center justify-between mb-1">
-                      <label class="text-xs font-semibold text-gray-400">Tags</label>
-                      <button id="btn-git-new-tag"
-                        class="text-xs text-purple-400 hover:text-purple-300 transition-colors">+ New</button>
+                    <div class="px-3 pb-2">
+                      <button id="btn-git-restore-commit"
+                        class="w-full bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded text-xs transition-colors">
+                        Restore (Checkout Commit)
+                      </button>
                     </div>
-                    <div id="git-tags-list" class="max-h-20 overflow-y-auto bg-gray-700/50 rounded p-1 text-xs">
-                      <div class="text-gray-500 text-center py-1">No tags</div>
+
+                    <div class="px-3 pb-2">
+                      <button id="btn-git-merge-main"
+                        class="w-full bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded text-xs transition-colors">
+                        Merge Current Branch To Master
+                      </button>
                     </div>
-                  </div>
+
+                    <!-- Branches Section -->
+                    <div class="px-3 pb-2">
+                      <label class="text-xs font-semibold text-gray-400 mb-1 block">Branches</label>
+                      <div id="git-branches-list" class="max-h-20 overflow-y-auto bg-gray-700/50 rounded p-1 text-xs">
+                        <div class="text-gray-500 text-center py-1">No branches</div>
+                      </div>
+                    </div>
+
+                    <!-- Tags Section -->
+                    <div class="px-3 pb-3">
+                      <div class="flex items-center justify-between mb-1">
+                        <label class="text-xs font-semibold text-gray-400">Tags</label>
+                        <button id="btn-git-new-tag"
+                          class="text-xs text-purple-400 hover:text-purple-300 transition-colors">+ New</button>
+                      </div>
+                      <div id="git-tags-list" class="max-h-20 overflow-y-auto bg-gray-700/50 rounded p-1 text-xs">
+                        <div class="text-gray-500 text-center py-1">No tags</div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1104,11 +1104,11 @@
             </div>
           </div>
           <div id="file-upload-progress" class="hidden mb-2">
-            <div class="flex items-center gap-2 text-xs text-cyan-300 bg-cyan-900/20 border border-cyan-700/40 rounded px-2 py-1">
+            <div
+              class="flex items-center gap-2 text-xs text-cyan-300 bg-cyan-900/20 border border-cyan-700/40 rounded px-2 py-1">
               <svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
-                <path class="opacity-90" fill="currentColor"
-                  d="M4 12a8 8 0 018-8v3a5 5 0 00-5 5H4z"></path>
+                <path class="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8v3a5 5 0 00-5 5H4z"></path>
               </svg>
               <span id="file-upload-progress-text">Uploading files...</span>
             </div>
@@ -1122,17 +1122,16 @@
           <form id="form-send-message" class="input-composer">
             <div class="input-composer-shell">
               <div class="input-composer-field">
-                <textarea id="input-message" name="message" rows="2"
-                  class="textarea-auto-resize"
+                <textarea id="input-message" name="message" rows="2" class="textarea-auto-resize"
                   placeholder="Message Superengineer"></textarea>
               </div>
               <div class="input-composer-toolbar">
                 <div class="input-composer-tools">
                   <div class="input-plus-anchor">
-                    <button type="button" id="btn-input-plus" class="input-tool-button" title="More actions" aria-label="More actions">
+                    <button type="button" id="btn-input-plus" class="input-tool-button" title="More actions"
+                      aria-label="More actions">
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
-                          d="M12 5v14M5 12h14" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 5v14M5 12h14" />
                       </svg>
                     </button>
                     <div id="input-plus-menu" class="hidden input-plus-menu">
@@ -1141,7 +1140,8 @@
                     </div>
                   </div>
                   <div class="input-plus-anchor">
-                    <button type="button" id="btn-input-model" class="input-tool-button" title="Select model" aria-label="Select model">
+                    <button type="button" id="btn-input-model" class="input-tool-button" title="Select model"
+                      aria-label="Select model">
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
                           d="M9 3l1.9 3.9L15 9l-4.1 2.1L9 15l-1.9-3.9L3 9l4.1-2.1L9 3z" />
@@ -1150,46 +1150,40 @@
                       </svg>
                     </button>
                     <div id="input-model-menu" class="hidden input-plus-menu input-model-menu">
-                      <button type="button" class="input-model-option" data-model="claude-sonnet-4-6">Sonnet 4.6</button>
-                      <button type="button" class="input-model-option" data-model="claude-sonnet-4-6[1m]">Sonnet 4.6 1M</button>
+                      <button type="button" class="input-model-option" data-model="claude-sonnet-4-6">Sonnet
+                        4.6</button>
+                      <button type="button" class="input-model-option" data-model="claude-sonnet-4-6[1m]">Sonnet 4.6
+                        1M</button>
                       <button type="button" class="input-model-option" data-model="claude-opus-4-6">Opus 4.6</button>
-                      <button type="button" class="input-model-option" data-model="claude-sonnet-4-5-20250929">Sonnet 4.5</button>
-                      <button type="button" class="input-model-option" data-model="claude-haiku-4-5-20251001">Haiku 4.5</button>
+                      <button type="button" class="input-model-option" data-model="claude-sonnet-4-5-20250929">Sonnet
+                        4.5</button>
+                      <button type="button" class="input-model-option" data-model="claude-haiku-4-5-20251001">Haiku
+                        4.5</button>
                     </div>
                   </div>
                 </div>
                 <div class="input-composer-actions">
-                  <button type="button" id="btn-input-permission-mode"
-                    class="input-composer-icon"
-                    title="Plan mode enabled"
-                    aria-label="Toggle permission mode">
+                  <button type="button" id="btn-input-permission-mode" class="input-composer-icon"
+                    title="Plan mode enabled" aria-label="Toggle permission mode">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
-                        d="M9 18h6" />
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
-                        d="M10 22h4" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 18h6" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M10 22h4" />
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
                         d="M12 2a7 7 0 00-4 12.75c.62.44 1 1.15 1 1.91V18h6v-1.34c0-.76.38-1.47 1-1.91A7 7 0 0012 2z" />
                     </svg>
                   </button>
-                  <button type="button" id="btn-cancel-agent"
-                    class="input-composer-icon hidden"
-                    title="Cancel"
+                  <button type="button" id="btn-cancel-agent" class="input-composer-icon hidden" title="Cancel"
                     aria-label="Cancel">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
                         d="M6 6l12 12M18 6L6 18" />
                     </svg>
                   </button>
-                  <button type="submit" id="btn-send-message"
-                    class="input-composer-send"
-                    title="Send"
+                  <button type="submit" id="btn-send-message" class="input-composer-send" title="Send"
                     aria-label="Send">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M4 12h13" />
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M12 7l5 5-5 5" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 12h13" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 7l5 5-5 5" />
                     </svg>
                   </button>
                 </div>
@@ -2874,7 +2868,8 @@
             <p class="text-xs text-gray-400">This checks out a commit in detached HEAD state.</p>
           </div>
           <div class="p-3 border-t border-gray-700 flex justify-end gap-2">
-            <button type="button" class="modal-close px-3 py-1.5 text-sm text-gray-300 hover:text-white transition-colors">Cancel</button>
+            <button type="button"
+              class="modal-close px-3 py-1.5 text-sm text-gray-300 hover:text-white transition-colors">Cancel</button>
             <button type="submit" id="btn-restore-commit-confirm"
               class="px-3 py-1.5 text-sm bg-amber-600 hover:bg-amber-700 text-white rounded transition-colors">Checkout</button>
           </div>
@@ -2899,7 +2894,8 @@
         <div class="p-3 space-y-3">
           <p class="text-sm text-gray-300">Go to <a id="git-auth-device-link" href="https://github.com/login/device"
               target="_blank" rel="noopener noreferrer"
-              class="text-indigo-400 hover:text-indigo-300 underline">https://github.com/login/device</a> and enter this code:</p>
+              class="text-indigo-400 hover:text-indigo-300 underline">https://github.com/login/device</a> and enter this
+            code:</p>
           <div class="flex items-center gap-2">
             <input id="git-auth-device-code" type="text" readonly value="---- ----"
               class="flex-1 bg-gray-900 border border-gray-700 rounded px-3 py-2 text-center text-xl tracking-wider font-mono text-green-400" />
@@ -3002,7 +2998,8 @@
               class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-purple-500"
               placeholder="Search by name, id, or description">
           </div>
-          <div id="abilities-cards" class="abilities-cards-grid" role="listbox" aria-multiselectable="true" aria-label="Abilities catalog"></div>
+          <div id="abilities-cards" class="abilities-cards-grid" role="listbox" aria-multiselectable="true"
+            aria-label="Abilities catalog"></div>
           <div id="abilities-pagination" class="abilities-pagination"></div>
           <div class="space-y-1">
             <p id="abilities-help" class="text-xs text-gray-400"></p>
@@ -3017,7 +3014,8 @@
           </div> -->
         </div>
         <div class="p-3 border-t border-gray-700 flex justify-end gap-2">
-          <button type="button" class="modal-close px-3 py-1.5 text-sm text-gray-300 hover:text-white transition-colors">Cancel</button>
+          <button type="button"
+            class="modal-close px-3 py-1.5 text-sm text-gray-300 hover:text-white transition-colors">Cancel</button>
           <button type="button" id="btn-install-ability"
             class="px-3 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded transition-colors">Install</button>
         </div>
@@ -3057,13 +3055,15 @@
           <div class="flex items-center justify-between gap-3 p-2 bg-gray-700/50 rounded">
             <p class="text-xs text-gray-400">Need a token first?</p>
             <button type="button" id="btn-open-supabase-token-page"
-              class="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-500 text-white rounded transition-colors">Open Supabase Auth Page</button>
+              class="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-500 text-white rounded transition-colors">Open Supabase
+              Auth Page</button>
           </div>
           <div class="flex justify-end gap-2 pt-2 border-t border-gray-700">
             <button type="button"
               class="modal-close px-3 py-1.5 text-sm text-gray-300 hover:text-white transition-colors">Cancel</button>
             <button type="submit" id="btn-save-supabase-mcp"
-              class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded text-sm transition-colors">Connect MCP</button>
+              class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded text-sm transition-colors">Connect
+              MCP</button>
           </div>
         </form>
       </div>
@@ -4344,8 +4344,7 @@
           <div class="flex items-center gap-2 mb-3">
             <button id="tab-fly-deploy-output"
               class="toolbar-action-button toolbar-action-button-primary text-xs min-h-0 px-3 py-2">Deploy Logs</button>
-            <button id="tab-fly-app-logs"
-              class="toolbar-action-button text-xs min-h-0 px-3 py-2">App Logs</button>
+            <button id="tab-fly-app-logs" class="toolbar-action-button text-xs min-h-0 px-3 py-2">App Logs</button>
           </div>
           <pre id="fly-deploy-output"
             class="bg-gray-900 border border-gray-700 rounded p-3 text-xs text-gray-200 font-mono whitespace-pre-wrap break-words h-96 overflow-auto"></pre>
@@ -4377,15 +4376,13 @@
         <div class="p-3 space-y-3">
           <div class="rounded border border-gray-700 bg-gray-900/60 p-3">
             <div id="fly-deploy-actions-app-name" class="text-sm text-gray-200 font-medium">Not deployed yet</div>
-            <a id="fly-deploy-actions-app-link" class="hidden text-xs text-blue-400 hover:text-blue-300 mt-1 break-all" href="#"
-              target="_blank" rel="noopener noreferrer"></a>
+            <a id="fly-deploy-actions-app-link" class="hidden text-xs text-blue-400 hover:text-blue-300 mt-1 break-all"
+              href="#" target="_blank" rel="noopener noreferrer"></a>
             <div id="fly-deploy-actions-app-link-empty" class="text-xs text-gray-500 mt-1">No app link yet</div>
           </div>
           <div class="grid grid-cols-1 gap-2">
             <a id="btn-open-deployed-app"
-              class="hidden toolbar-action-button toolbar-action-button-primary justify-center"
-              href="#"
-              target="_blank"
+              class="hidden toolbar-action-button toolbar-action-button-primary justify-center" href="#" target="_blank"
               rel="noopener noreferrer">
               Open App
             </a>

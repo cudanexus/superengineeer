@@ -25,6 +25,7 @@
   var activeConfigId = null;
   var resizeObserver = null;
   var isReloadingConfigs = false;
+  var pendingPreviewConfigId = null;
 
   // =========================================================================
   // Initialization
@@ -42,6 +43,7 @@
     // Config list actions (delegated)
     $(document).on('click', '#btn-add-run-config', handleAddClick);
     $(document).on('click', '#btn-import-run-config', handleImportClick);
+    $(document).on('click', '#btn-run-preview-project', handleRunPreviewProjectClick);
     $(document).on('click', '.rc-start-btn', handleStartClick);
     $(document).on('click', '.rc-stop-btn', handleStopClick);
     $(document).on('click', '.rc-edit-btn', handleEditClick);
@@ -378,6 +380,134 @@
     openEditorModal(null);
   }
 
+  function guessPort(config) {
+    if (!config) return '5173';
+    var cmd = (config.command + ' ' + (config.args || []).join(' ')).toLowerCase();
+
+    // Look for --port 1234 or -p 1234
+    var match = cmd.match(/(?:--port|-p)\s+(\d+)/);
+    if (match) return match[1];
+
+    // Common defaults
+    if (cmd.indexOf('vite') !== -1) return '5173';
+    if (cmd.indexOf('start') !== -1 || cmd.indexOf('next') !== -1 || cmd.indexOf('react') !== -1) return '3000';
+    if (cmd.indexOf('astro') !== -1) return '4321';
+    if (cmd.indexOf('nuxt') !== -1) return '3000';
+
+    return '5173';
+  }
+
+  function handleRunPreviewProjectClick() {
+    if (!state.selectedProjectId) {
+      showToast('No project selected.', 'error');
+      return;
+    }
+
+    if (configs && configs.length > 0) {
+      proceedWithRunConfig();
+    } else {
+      api.getRunConfigs(state.selectedProjectId)
+        .done(function (data) {
+          configs = data;
+          proceedWithRunConfig();
+        })
+        .fail(function (xhr) {
+          showErrorToast(xhr, 'Failed to load run configurations');
+        });
+    }
+
+    function proceedWithRunConfig() {
+      if (!configs || configs.length === 0) {
+        showToast('No run configurations found. Please create one starting the dev server.', 'error');
+        return;
+      }
+
+      var configToRun = configs[0];
+      var $card = $('#rc-card-' + configToRun.id);
+      var currentState = $card.length ? $card.data('state') : 'stopped';
+
+      // Mark this config as pending a preview launch
+      pendingPreviewConfigId = configToRun.id;
+
+      if (currentState !== 'running') {
+        showToast('Starting run configuration ' + escapeHtml(configToRun.name) + '...', 'info');
+        api.startRunConfig(state.selectedProjectId, configToRun.id)
+          .done(function (status) {
+            updateConfigStatus(configToRun.id, status);
+            activeConfigId = configToRun.id;
+            renderOutputTabs();
+            // We do not launch the preview here. We wait for `handleOutput` to parse the port.
+          })
+          .fail(function (xhr) {
+            showErrorToast(xhr, 'Failed to start run configuration');
+            pendingPreviewConfigId = null;
+          });
+      } else {
+        // Already running. The port might have already been emitted. Let's try parsing the history buffer.
+        var term = terminals[configToRun.id];
+        if (term && term.buffer && term.buffer.active) {
+          var buffer = term.buffer.active;
+          var content = '';
+          for (var i = 0; i < buffer.length; i++) {
+            var line = buffer.getLine(i);
+            if (line) content += line.translateToString(true) + '\n';
+          }
+          if (openPreviewFromLogs(content)) return; // Successfully opened
+        }
+
+        // If we couldn't parse it from the buffer, use the fallback guesstimate immediately
+        fallbackLaunchPreviewForConfig(configToRun);
+      }
+    }
+
+    function openPreviewFromLogs(text) {
+      if (!pendingPreviewConfigId) return false;
+
+      // Match common localhost URLs, Vite, Next, React log outputs
+      // Ex: `Local:   http://localhost:5175/` or `started server on 0.0.0.0:3000`
+      var urlRegex = /http:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|[^:\/\s]+):(\d+)/ig;
+      var match;
+      var lastPort = null;
+
+      while ((match = urlRegex.exec(text)) !== null) {
+        lastPort = match[1];
+      }
+
+      if (lastPort) {
+        launchPreviewForPort(lastPort);
+        return true;
+      }
+      return false;
+    }
+
+    function fallbackLaunchPreviewForConfig(config) {
+      if (!pendingPreviewConfigId) return;
+      var port = guessPort(config);
+      launchPreviewForPort(port);
+    }
+
+    function launchPreviewForPort(port) {
+      pendingPreviewConfigId = null; // Clear pending state
+
+      var host = window.location.host;
+      var protocol = window.location.protocol;
+      var url = '';
+
+      var daytonaMatch = host.match(/^(\d+)(-[a-zA-Z0-9-]+\.(?:daytonaproxy01\.net|proxy\.daytona\.works|daytona\.works|daytona\.app|daytona\.link|proxy\.daytona\.xyz|proxy\.dev))$/i);
+      if (daytonaMatch) {
+        url = protocol + '//' + port + daytonaMatch[2];
+      } else {
+        url = protocol + '//' + window.location.hostname + ':' + port;
+      }
+
+      if (typeof window['showPreviewPaneGlobal'] === 'function') {
+        window['showPreviewPaneGlobal'](url);
+      } else {
+        window.open(url, '_blank');
+      }
+    }
+  }
+
   function handleStartClick() {
     var configId = $(this).data('id');
 
@@ -580,6 +710,50 @@
 
     var terminal = getOrCreateTerminal(data.configId);
     terminal.write(data.data);
+
+    // If this config is pending a preview launch, scan for port output 
+    if (pendingPreviewConfigId === data.configId) {
+      if (terminal && terminal.buffer && terminal.buffer.active) {
+        var buffer = terminal.buffer.active;
+        var startLine = Math.max(0, buffer.length - 20);
+        var recentText = '';
+        for (var i = startLine; i < buffer.length; i++) {
+          var lineStr = buffer.getLine(i);
+          if (lineStr) recentText += lineStr.translateToString(true) + '\n';
+        }
+
+        var urlRegex = /http:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|[^:\/\s]+):(\d+)/ig;
+        var match;
+        var lastPort = null;
+
+        while ((match = urlRegex.exec(recentText)) !== null) {
+          lastPort = match[1];
+        }
+
+        if (lastPort) {
+          var port = lastPort;
+          pendingPreviewConfigId = null; // Clear pending state
+
+
+          var host = window.location.host;
+          var protocol = window.location.protocol;
+          var url = '';
+
+          var daytonaMatch = host.match(/^(\d+)(-[a-zA-Z0-9-]+\.(?:daytonaproxy01\.net|proxy\.daytona\.works|daytona\.works|daytona\.app|daytona\.link|proxy\.daytona\.xyz|proxy\.dev))$/i);
+          if (daytonaMatch) {
+            url = protocol + '//' + port + daytonaMatch[2];
+          } else {
+            url = protocol + '//' + window.location.hostname + ':' + port;
+          }
+
+          if (typeof window['showPreviewPaneGlobal'] === 'function') {
+            window['showPreviewPaneGlobal'](url);
+          } else {
+            window.open(url, '_blank');
+          }
+        }
+      }
+    }
 
     // Auto-switch to this config's output
     if (!activeConfigId) {

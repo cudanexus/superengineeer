@@ -22,11 +22,19 @@ export const getDefaultWorkflowRules = (currentUrl?: string, projectId?: string)
 When creating any web application or project, always use Vite as the build tool unless explicitly instructed otherwise.
 
 ### Running Vite Development Server
+Never Use port 3000 for running the vite development server or anyother service its internal port which is running important system do not do it even if user ask you to do it.
+Never say user to run any command you have the permission to run it on your own.
+Never display local url to the user show only daytona url.
+Never use localhost or absolute URLs for API calls in the frontend code.
+
+Remeber there should not be any cors error.
+Use Supabase MCP for database operations. until unless user explicitly asks for another database.
+If supabase MCP is not available say the user to go to abilities and enable it and then restart the agent and try again.
 
 When instructed to run a Vite project:
 
 1. Execute \`npm run dev\` (or the appropriate package manager command)
-2. Wait for the server to start successfully
+2. Wait for the server to start successfully. If the command is taking more than a few minutes or running continuously, use the stop command to terminate it.
 3. The application's viewing environment is available through the Daytona proxy host at: ${baseUrl}. When you start the development server, access the application using the Daytona port-based format by prefixing the running port to the host (for example, if the development server runs on port 5173, open here is the example url https://5173-bf32fb03-f1e8-4445-80f5-505249ce964f.proxy.daytona.works
 ). Always use this Daytona URL structure for testing and navigation.
 4. Keep the response concise—provide the URL and brief status, avoiding verbose logs unless errors occur
@@ -39,7 +47,7 @@ After generating app code and verifying the project can start, **you MUST regist
 
 **Step 1 — Register and start the run config in a single call:**
 \`\`\`bash
-curl -s -X POST ${baseUrl}:3000/api/projects/${projectId ?? 'YOUR_PROJECT_ID'}/run-configs/create-and-start \\
+curl -s -X POST ${baseUrl}/api/projects/${projectId ?? 'YOUR_PROJECT_ID'}/run-configs/create-and-start \\
   -H "Content-Type: application/json" \\
   -d '{"name":"dev","command":"npm","args":["run","dev"],"cwd":"."}'
 \`\`\`
@@ -49,9 +57,9 @@ curl -s -X POST ${baseUrl}:3000/api/projects/${projectId ?? 'YOUR_PROJECT_ID'}/r
 - If a config with that name already exists, the API returns an error — skip creating a duplicate and call \`POST /api/projects/PROJECT_ID/run-configs/CONFIG_ID/start\` instead.
 
 **Step 2 — Output the preview URL so the browser auto-opens it:**
-After the curl succeeds, output the running URL on its own line in exactly this format:
-\`Preview: http://HOST:PORT\`
-Example: \`Preview: http://localhost:5173\`
+After the curl succeeds, output the running URL on its own line in exactly this format, using the Daytona proxy host pattern:
+\`Preview: https://PORT-PROXY_URL\`
+Example (if running on port 5173): \`Preview: https://5173-bf32fb03-f1e8-4445-80f5-505249ce964f.proxy.daytona.works\`
 
 **Always do these steps** whenever you generate or update a runnable app (web app, API server, etc.). Do NOT leave the dev server running as a detached background process managed by you — Superengineer's process manager handles that after the run config is registered.
 
