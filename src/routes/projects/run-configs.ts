@@ -3,6 +3,7 @@
  * CRUD endpoints + start/stop for project run configurations
  */
 
+import path from 'path';
 import { Router, Request, Response } from 'express';
 import { asyncHandler } from '../../utils';
 import { ProjectRouterDependencies } from './types';
@@ -56,6 +57,37 @@ export function createRunConfigsRouter(deps: ProjectRouterDependencies): Router 
     }),
   );
 
+  // Create a run configuration AND immediately start it in one shot.
+  // Designed for AI agents: a single curl call registers and launches the dev server.
+  router.post(
+    '/create-and-start',
+    validateProjectExists(projectRepository),
+    validateBody(createRunConfigSchema),
+    asyncHandler(async (req: Request, res: Response) => {
+      if (!runConfigurationService) {
+        res.status(503).json({ error: 'Run configuration service not available' });
+        return;
+      }
+      if (!runProcessManager) {
+        res.status(503).json({ error: 'Run process manager not available' });
+        return;
+      }
+
+      const id = req.params['id'] as string;
+      const body = req.body as CreateRunConfigData;
+      const project = req.project!;
+
+      const config = await runConfigurationService.create(id, {
+        ...body,
+        cwd: normalizeCwd(body.cwd, project.path),
+      });
+
+      const status = await runProcessManager.start(id, project.path, config.id);
+
+      res.status(201).json({ config, status });
+    }),
+  );
+
   // Create a run configuration
   router.post(
     '/',
@@ -68,7 +100,12 @@ export function createRunConfigsRouter(deps: ProjectRouterDependencies): Router 
       }
 
       const id = req.params['id'] as string;
-      const config = await runConfigurationService.create(id, req.body as CreateRunConfigData);
+      const body = req.body as CreateRunConfigData;
+      const project = req.project!;
+      const config = await runConfigurationService.create(id, {
+        ...body,
+        cwd: normalizeCwd(body.cwd, project.path),
+      });
       res.status(201).json(config);
     }),
   );
@@ -86,7 +123,12 @@ export function createRunConfigsRouter(deps: ProjectRouterDependencies): Router 
       }
 
       const { id, configId } = req.params as { id: string; configId: string };
-      const updated = await runConfigurationService.update(id, configId, req.body as UpdateRunConfigData);
+      const body = req.body as UpdateRunConfigData;
+      const project = req.project!;
+      const updated = await runConfigurationService.update(id, configId, {
+        ...body,
+        cwd: normalizeCwd(body.cwd, project.path),
+      });
 
       if (!updated) {
         res.status(404).json({ error: 'Run configuration not found' });
@@ -179,4 +221,27 @@ export function createRunConfigsRouter(deps: ProjectRouterDependencies): Router 
   );
 
   return router;
+}
+
+/**
+ * If cwd is an absolute path that starts with projectRoot, strip the prefix
+ * to make it relative. Otherwise return it unchanged so the service's own
+ * validation can catch any remaining issues.
+ */
+function normalizeCwd(cwd: string | undefined, projectRoot: string): string | undefined {
+  if (!cwd) return cwd;
+
+  const isAbsolute = cwd.startsWith('/') || cwd.startsWith('\\') || /^[A-Za-z]:/.test(cwd);
+  if (!isAbsolute) return cwd;
+
+  const normalizedRoot = projectRoot.endsWith('/') ? projectRoot : projectRoot + '/';
+  const normalizedCwd = cwd.endsWith('/') ? cwd : cwd + '/';
+
+  if (normalizedCwd.startsWith(normalizedRoot)) {
+    const relative = path.relative(projectRoot, cwd);
+    return relative || '.';
+  }
+
+  // Absolute path outside project root — return as-is so service validation fires
+  return cwd;
 }

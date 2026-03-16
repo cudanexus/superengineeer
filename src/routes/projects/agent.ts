@@ -252,7 +252,7 @@ export function createAgentRouter(deps: ProjectRouterDependencies): Router {
       }
 
       const { strippedContent } = stripProtectedSection(content);
-      const newContent = getDefaultWorkflowRules(body?.currentUrl) + strippedContent;
+      const newContent = getDefaultWorkflowRules(body?.currentUrl, project.id) + strippedContent;
       await fs.promises.writeFile(claudeMdPath, newContent, 'utf-8');
     } catch (error) {
       // silently skip if we cannot write or read claude md
@@ -379,7 +379,7 @@ export function createAgentRouter(deps: ProjectRouterDependencies): Router {
       }
 
       const { strippedContent } = stripProtectedSection(content);
-      const newContent = getDefaultWorkflowRules(body?.currentUrl) + strippedContent;
+      const newContent = getDefaultWorkflowRules(body?.currentUrl, project.id) + strippedContent;
       await fs.promises.writeFile(claudeMdPath, newContent, 'utf-8');
     } catch (error) {
       // silently skip if we cannot write or read claude md

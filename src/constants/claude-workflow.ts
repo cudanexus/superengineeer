@@ -1,4 +1,4 @@
-export const getDefaultWorkflowRules = (currentUrl?: string) => {
+export const getDefaultWorkflowRules = (currentUrl?: string, projectId?: string) => {
     let baseUrl = 'http://localhost';
     if (currentUrl) {
         try {
@@ -27,12 +27,33 @@ When instructed to run a Vite project:
 
 1. Execute \`npm run dev\` (or the appropriate package manager command)
 2. Wait for the server to start successfully
-3. The application's viewing environment is available through the Daytona proxy host at: ${baseUrl}. When you start the development server, access the application using the Daytona port-based format by prefixing the running port to the host (for example, if the development server runs on port 5173, open https://5173-bf32fb03-f1e8-4445-80f5-505249ce964f.proxy.daytona.works
+3. The application's viewing environment is available through the Daytona proxy host at: ${baseUrl}. When you start the development server, access the application using the Daytona port-based format by prefixing the running port to the host (for example, if the development server runs on port 5173, open here is the example url https://5173-bf32fb03-f1e8-4445-80f5-505249ce964f.proxy.daytona.works
 ). Always use this Daytona URL structure for testing and navigation.
 4. Keep the response concise—provide the URL and brief status, avoiding verbose logs unless errors occur
 
 If the server fails to start, provide a clear error summary to help with troubleshooting.
 
+### Run Configuration & Preview
+
+After generating app code and verifying the project can start, **you MUST register it as a Superengineer run configuration** using the following steps (executed via Bash):
+
+**Step 1 — Register and start the run config in a single call:**
+\`\`\`bash
+curl -s -X POST ${baseUrl}:3000/api/projects/${projectId ?? 'YOUR_PROJECT_ID'}/run-configs/create-and-start \\
+  -H "Content-Type: application/json" \\
+  -d '{"name":"dev","command":"npm","args":["run","dev"],"cwd":"."}'
+\`\`\`
+- Replace \`YOUR_PROJECT_ID\` with the Superengineer project ID${projectId ? ` — for this session it is \`${projectId}\`` : ''}. This is the \`id\` route segment visible in the browser URL bar when the user has this project open. The Superengineer API always runs on port 3000 on the same host.
+- Set \`cwd\` to \`.\` if the app is at the project root, or a relative sub-path (e.g. \`frontend\`) if the app lives in a subfolder.
+- Use a meaningful \`name\` like \`dev\`, \`api\`, or \`frontend\`.
+- If a config with that name already exists, the API returns an error — skip creating a duplicate and call \`POST /api/projects/PROJECT_ID/run-configs/CONFIG_ID/start\` instead.
+
+**Step 2 — Output the preview URL so the browser auto-opens it:**
+After the curl succeeds, output the running URL on its own line in exactly this format:
+\`Preview: http://HOST:PORT\`
+Example: \`Preview: http://localhost:5173\`
+
+**Always do these steps** whenever you generate or update a runnable app (web app, API server, etc.). Do NOT leave the dev server running as a detached background process managed by you — Superengineer's process manager handles that after the run config is registered.
 
 These deployment defaults apply on every message by default unless the user explicitly asks for a different platform or explicitly says deployment/containerization is not needed.
 

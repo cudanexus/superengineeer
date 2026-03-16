@@ -2,13 +2,13 @@
  * Run Configurations Module
  * Manages run configuration list, editor modal, xterm.js output, and WebSocket events
  */
-(function(root, factory) {
+(function (root, factory) {
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = factory();
   } else {
     root.RunConfigsModule = factory();
   }
-}(typeof self !== 'undefined' ? self : this, function() {
+}(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
   // Dependencies (injected via init)
@@ -24,6 +24,7 @@
   var fitAddons = {};
   var activeConfigId = null;
   var resizeObserver = null;
+  var isReloadingConfigs = false;
 
   // =========================================================================
   // Initialization
@@ -34,7 +35,7 @@
     api = deps.api;
     showToast = deps.showToast;
     showErrorToast = deps.showErrorToast;
-    escapeHtml = deps.escapeHtml || function(s) { return s; };
+    escapeHtml = deps.escapeHtml || function (s) { return s; };
   }
 
   function setupHandlers() {
@@ -60,7 +61,7 @@
 
     // Env vars dynamic rows
     $(document).on('click', '#btn-add-env-var', addEnvVarRow);
-    $(document).on('click', '.rc-remove-env', function() {
+    $(document).on('click', '.rc-remove-env', function () {
       $(this).closest('.rc-env-row').remove();
     });
 
@@ -102,20 +103,20 @@
 
   function loadConfigs(projectId) {
     api.getRunConfigs(projectId)
-      .done(function(data) {
+      .done(function (data) {
         configs = data;
         renderConfigList();
         loadAllStatuses(projectId);
       })
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         showErrorToast(xhr, 'Failed to load run configurations');
       });
   }
 
   function loadAllStatuses(projectId) {
-    configs.forEach(function(config) {
+    configs.forEach(function (config) {
       api.getRunConfigStatus(projectId, config.id)
-        .done(function(status) {
+        .done(function (status) {
           updateConfigStatus(config.id, status);
         });
     });
@@ -133,7 +134,7 @@
     if (configs.length === 0) {
       $list.html(
         '<div class="text-gray-500 text-sm text-center py-8">' +
-          'No run configurations yet. Click "Add" to create one.' +
+        'No run configurations yet. Click "Add" to create one.' +
         '</div>'
       );
       return;
@@ -141,7 +142,7 @@
 
     var html = '';
 
-    configs.forEach(function(config) {
+    configs.forEach(function (config) {
       html += renderConfigCard(config);
     });
 
@@ -173,31 +174,31 @@
 
     return '<div id="rc-card-' + config.id + '" class="rc-card bg-gray-700/50 rounded p-3 flex items-center justify-between" data-config-id="' + config.id + '" data-state="' + currentState + '">' +
       '<div class="flex-1 min-w-0">' +
-        '<div class="flex items-center gap-2">' +
-          '<span class="font-medium text-sm text-white truncate">' + escapeHtml(config.name) + '</span>' +
-          '<span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ' + statusClass + ' text-white">' + statusText + '</span>' +
-        '</div>' +
-        '<div class="text-xs text-gray-400 mt-1 truncate font-mono">' + cmdPreview + '</div>' +
+      '<div class="flex items-center gap-2">' +
+      '<span class="font-medium text-sm text-white truncate">' + escapeHtml(config.name) + '</span>' +
+      '<span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ' + statusClass + ' text-white">' + statusText + '</span>' +
+      '</div>' +
+      '<div class="text-xs text-gray-400 mt-1 truncate font-mono">' + cmdPreview + '</div>' +
       '</div>' +
       '<div class="flex items-center gap-1 ml-2 flex-shrink-0">' +
-        (currentState === 'running'
-          ? '<button class="rc-stop-btn p-1 text-red-400 hover:text-red-300" data-id="' + config.id + '" title="Stop">' +
-              '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1" stroke-width="2"/></svg>' +
-            '</button>'
-          : '<button class="rc-start-btn p-1 text-green-400 hover:text-green-300" data-id="' + config.id + '" title="Start">' +
-              '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/></svg>' +
-            '</button>') +
-        '<button class="rc-output-btn p-1 text-gray-400 hover:text-gray-200" data-id="' + config.id + '" title="View Output">' +
-          '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>' +
-        '</button>' +
-        '<button class="rc-edit-btn p-1 text-gray-400 hover:text-gray-200" data-id="' + config.id + '" title="Edit">' +
-          '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>' +
-        '</button>' +
-        '<button class="rc-delete-btn p-1 text-gray-400 hover:text-red-400" data-id="' + config.id + '" title="Delete">' +
-          '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>' +
-        '</button>' +
+      (currentState === 'running'
+        ? '<button class="rc-stop-btn p-1 text-red-400 hover:text-red-300" data-id="' + config.id + '" title="Stop">' +
+        '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1" stroke-width="2"/></svg>' +
+        '</button>'
+        : '<button class="rc-start-btn p-1 text-green-400 hover:text-green-300" data-id="' + config.id + '" title="Start">' +
+        '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/></svg>' +
+        '</button>') +
+      '<button class="rc-output-btn p-1 text-gray-400 hover:text-gray-200" data-id="' + config.id + '" title="View Output">' +
+      '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>' +
+      '</button>' +
+      '<button class="rc-edit-btn p-1 text-gray-400 hover:text-gray-200" data-id="' + config.id + '" title="Edit">' +
+      '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>' +
+      '</button>' +
+      '<button class="rc-delete-btn p-1 text-gray-400 hover:text-red-400" data-id="' + config.id + '" title="Delete">' +
+      '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>' +
+      '</button>' +
       '</div>' +
-    '</div>';
+      '</div>';
   }
 
   function renderOutputTabs() {
@@ -214,7 +215,7 @@
 
     var html = '';
 
-    configs.forEach(function(config) {
+    configs.forEach(function (config) {
       var isActive = config.id === activeConfigId;
       html += '<button class="rc-output-tab px-3 py-1.5 text-xs rounded-t ' +
         (isActive ? 'bg-gray-900 text-white border-b-2 border-purple-500' : 'bg-gray-700 text-gray-400 hover:text-gray-200') +
@@ -302,7 +303,7 @@
   }
 
   function disposeAllTerminals() {
-    Object.keys(terminals).forEach(function(id) {
+    Object.keys(terminals).forEach(function (id) {
       try { terminals[id].dispose(); } catch (_e) { /* ignore */ }
     });
     terminals = {};
@@ -313,14 +314,14 @@
   function setupResizeObserver() {
     if (typeof ResizeObserver === 'undefined') return;
 
-    resizeObserver = new ResizeObserver(function() {
+    resizeObserver = new ResizeObserver(function () {
       if (activeConfigId && fitAddons[activeConfigId]) {
         try { fitAddons[activeConfigId].fit(); } catch (_e) { /* ignore */ }
       }
     });
 
     // Observe once the container exists
-    setTimeout(function() {
+    setTimeout(function () {
       var container = document.getElementById('rc-terminal-container');
 
       if (container) {
@@ -336,12 +337,31 @@
   function updateConfigStatus(configId, status) {
     var $card = $('#rc-card-' + configId);
 
-    if (!$card.length) return;
+    if (!$card.length) {
+      // If we got a status update for a config we don't know about,
+      // it was probably created by the AI. Reload the list.
+      if (state && state.selectedProjectId) {
+        // Prevent spamming the API if multiple status events arrive quickly
+        if (!isReloadingConfigs) {
+          isReloadingConfigs = true;
+          api.getRunConfigs(state.selectedProjectId)
+            .done(function (data) {
+              configs = data;
+              renderConfigList();
+              loadAllStatuses(state.selectedProjectId);
+            })
+            .always(function () {
+              setTimeout(function () { isReloadingConfigs = false; }, 1000);
+            });
+        }
+      }
+      return;
+    }
 
     $card.data('state', status.state);
 
     // Re-render card
-    var config = configs.find(function(c) { return c.id === configId; });
+    var config = configs.find(function (c) { return c.id === configId; });
 
     if (config) {
       $card.replaceWith(renderConfigCard(config));
@@ -364,13 +384,13 @@
     if (!state.selectedProjectId) return;
 
     api.startRunConfig(state.selectedProjectId, configId)
-      .done(function(status) {
+      .done(function (status) {
         updateConfigStatus(configId, status);
         activeConfigId = configId;
         renderOutputTabs();
         showToast('Run config started', 'success');
       })
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         showErrorToast(xhr, 'Failed to start');
       });
   }
@@ -381,18 +401,18 @@
     if (!state.selectedProjectId) return;
 
     api.stopRunConfig(state.selectedProjectId, configId)
-      .done(function() {
+      .done(function () {
         updateConfigStatus(configId, { state: 'stopped' });
         showToast('Run config stopped', 'success');
       })
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         showErrorToast(xhr, 'Failed to stop');
       });
   }
 
   function handleEditClick() {
     var configId = $(this).data('id');
-    var config = configs.find(function(c) { return c.id === configId; });
+    var config = configs.find(function (c) { return c.id === configId; });
 
     if (config) {
       openEditorModal(config);
@@ -401,20 +421,20 @@
 
   function handleDeleteClick() {
     var configId = $(this).data('id');
-    var config = configs.find(function(c) { return c.id === configId; });
+    var config = configs.find(function (c) { return c.id === configId; });
 
     if (!config || !state.selectedProjectId) return;
 
     if (!confirm('Delete run configuration "' + config.name + '"?')) return;
 
     api.deleteRunConfig(state.selectedProjectId, configId)
-      .done(function() {
-        configs = configs.filter(function(c) { return c.id !== configId; });
+      .done(function () {
+        configs = configs.filter(function (c) { return c.id !== configId; });
         renderConfigList();
         renderOutputTabs();
         showToast('Deleted', 'success');
       })
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         showErrorToast(xhr, 'Failed to delete');
       });
   }
@@ -461,7 +481,7 @@
     $envContainer.empty();
 
     if (config && config.env) {
-      Object.keys(config.env).forEach(function(key) {
+      Object.keys(config.env).forEach(function (key) {
         addEnvVarRow(null, key, config.env[key]);
       });
     }
@@ -478,7 +498,7 @@
     $select.empty();
     $select.append('<option value="">None</option>');
 
-    configs.forEach(function(c) {
+    configs.forEach(function (c) {
       if (currentConfig && c.id === currentConfig.id) return;
       var selected = currentConfig && currentConfig.preLaunchConfigId === c.id ? ' selected' : '';
       $select.append('<option value="' + c.id + '"' + selected + '>' + escapeHtml(c.name) + '</option>');
@@ -491,7 +511,7 @@
       '<input type="text" class="rc-env-key bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm w-1/3" placeholder="KEY" value="' + (key || '') + '">' +
       '<input type="text" class="rc-env-val bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm flex-1" placeholder="value" value="' + (value || '') + '">' +
       '<button class="rc-remove-env text-red-400 hover:text-red-300 text-sm px-1">&times;</button>' +
-    '</div>';
+      '</div>';
     $container.append(html);
   }
 
@@ -504,7 +524,7 @@
 
     // Collect env vars
     var env = {};
-    $('#rc-env-vars .rc-env-row').each(function() {
+    $('#rc-env-vars .rc-env-row').each(function () {
       var k = $(this).find('.rc-env-key').val().trim();
       var v = $(this).find('.rc-env-val').val();
 
@@ -541,12 +561,12 @@
       : api.createRunConfig(state.selectedProjectId, data);
 
     promise
-      .done(function() {
+      .done(function () {
         closeEditorModal();
         loadConfigs(state.selectedProjectId);
         showToast(isEdit ? 'Updated' : 'Created', 'success');
       })
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         showErrorToast(xhr, 'Failed to save');
       });
   }
@@ -588,10 +608,10 @@
     $modal.removeClass('hidden');
 
     api.getImportableRunConfigs(state.selectedProjectId)
-      .done(function(result) {
+      .done(function (result) {
         renderImportResults(result);
       })
-      .fail(function(xhr) {
+      .fail(function (xhr) {
         $body.html(
           '<div class="text-red-400 text-sm text-center py-4">Failed to scan project files.</div>'
         );
@@ -606,24 +626,24 @@
     if (importable.length === 0) {
       $body.html(
         '<div class="text-gray-500 text-sm text-center py-4">' +
-          'No importable configurations found.<br>' +
-          '<span class="text-xs">Supported: package.json, Cargo.toml, go.mod, Makefile, pyproject.toml</span>' +
+        'No importable configurations found.<br>' +
+        '<span class="text-xs">Supported: package.json, Cargo.toml, go.mod, Makefile, pyproject.toml</span>' +
         '</div>'
       );
       return;
     }
 
-    var existingNames = configs.map(function(c) { return c.name.toLowerCase(); });
+    var existingNames = configs.map(function (c) { return c.name.toLowerCase(); });
     var html = '';
 
-    importable.forEach(function(group) {
+    importable.forEach(function (group) {
       html += '<div class="mb-3">';
       html += '<div class="text-xs text-purple-400 font-medium mb-1">' +
         escapeHtml(group.source) +
         ' <span class="text-gray-500">(' + escapeHtml(group.sourceFile) + ')</span>' +
-      '</div>';
+        '</div>';
 
-      group.configs.forEach(function(cfg, idx) {
+      group.configs.forEach(function (cfg, idx) {
         var isDuplicate = existingNames.indexOf(cfg.name.toLowerCase()) !== -1;
         var checkId = 'rc-import-' + group.source.replace(/\./g, '-') + '-' + idx;
         var argsStr = cfg.args ? cfg.args.join(' ') : '';
@@ -674,10 +694,10 @@
     var importable = $('#rc-import-body').data('importable') || [];
     var toImport = [];
 
-    $('.rc-import-check:checked').each(function() {
+    $('.rc-import-check:checked').each(function () {
       var source = $(this).data('source');
       var idx = $(this).data('index');
-      var group = importable.find(function(g) { return g.source === source; });
+      var group = importable.find(function (g) { return g.source === source; });
 
       if (group && group.configs[idx]) {
         toImport.push(group.configs[idx]);
@@ -691,11 +711,11 @@
 
     $('#btn-confirm-import-rc').prop('disabled', true).text('Importing...');
 
-    toImport.forEach(function(cfg) {
+    toImport.forEach(function (cfg) {
       api.createRunConfig(state.selectedProjectId, cfg)
-        .done(function() { completed++; })
-        .fail(function() { failed++; })
-        .always(function() {
+        .done(function () { completed++; })
+        .fail(function () { failed++; })
+        .always(function () {
           if (completed + failed >= toImport.length) {
             finishImport(completed, failed);
           }
