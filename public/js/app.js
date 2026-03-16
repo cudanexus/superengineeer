@@ -42,6 +42,9 @@
   var lastParentActivitySentAt = 0;
   var SUPABASE_MCP_ABILITY_ID = '__supabase_mcp_connect__';
   var SUPABASE_TOKEN_PAGE_URL = 'https://supabase.com/dashboard/account/tokens';
+  var DEFAULT_PROJECT_PATH = '/home/superengineer/super-code';
+  var DEFAULT_PROJECT_NAME = 'super-code';
+  var defaultProjectBootstrapAttempted = false;
 
   // Generate unique client ID for this session
   var clientId = sessionStorage.getItem('superengineer-client-id');
@@ -6738,12 +6741,40 @@
     }
   }
 
+  function ensureDefaultProjectExists() {
+    if (defaultProjectBootstrapAttempted) {
+      return;
+    }
+
+    defaultProjectBootstrapAttempted = true;
+
+    api.addProject({
+      name: DEFAULT_PROJECT_NAME,
+      path: DEFAULT_PROJECT_PATH,
+      createNew: false
+    })
+      .done(function (project) {
+        state.projects = project ? [project] : [];
+        renderProjectList();
+        if (project && project.id) {
+          selectProject(project.id);
+        }
+      })
+      .fail(function () {
+        renderProjectList();
+      });
+  }
+
   // Load initial data
   function loadProjects() {
     api.getProjects()
       .done(function (projects) {
         state.projects = projects || [];
         renderProjectList();
+
+        var defaultProject = state.projects.find(function (project) {
+          return project.path === DEFAULT_PROJECT_PATH;
+        });
 
         // Update current project if selected
         if (state.selectedProjectId) {
@@ -6756,9 +6787,22 @@
         // Restore saved project selection
         var savedProjectId = loadFromLocalStorage(LOCAL_STORAGE_KEYS.SELECTED_PROJECT, null);
 
+        if (defaultProject) {
+          selectProject(defaultProject.id);
+          return;
+        }
+
         if (savedProjectId && findProjectById(savedProjectId)) {
           selectProject(savedProjectId);
+          return;
         }
+
+        if (state.projects.length > 0) {
+          selectProject(state.projects[0].id);
+          return;
+        }
+
+        ensureDefaultProjectExists();
       })
       .fail(function (xhr) {
         showErrorToast(xhr, 'Failed to load projects');
