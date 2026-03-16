@@ -85,6 +85,7 @@ describe('FileProjectRepository', () => {
   const dataDir = '/data';
   const projectsDir = normalizePath(path.join(dataDir, 'projects'));
   const indexPath = normalizePath(path.join(projectsDir, 'index.json'));
+  const runConfigsPath = '/test/superengineer.run-configs.json';
 
   beforeEach(() => {
     mockFs = createMockFileSystem();
@@ -184,6 +185,65 @@ describe('FileProjectRepository', () => {
       // Data is now stored in {project-root}/.superengineer-v5/
       const projectDataDir = '/test/path/.superengineer-v5';
       expect(mockFs.dirs.has(projectDataDir)).toBe(true);
+    });
+
+    it('should restore existing project state from workspace data when index is missing', async () => {
+      const restoredStatusPath = '/path/to/project/.superengineer-v5/status.json';
+      const restoredRunConfigsPath = '/path/to/project/superengineer.run-configs.json';
+      const restoredStatus: ProjectStatus = {
+        id: '_path_to_project',
+        name: 'Old Project Name',
+        path: '/path/to/project',
+        status: 'running',
+        currentConversationId: 'conv-123',
+        nextItem: null,
+        currentItem: null,
+        lastContextUsage: null,
+        permissionOverrides: null,
+        modelOverride: null,
+        mcpOverrides: null,
+        flyDeployment: null,
+        runConfigurations: [
+          {
+            id: 'run-1',
+            name: 'Dev Server',
+            command: 'npm run dev',
+            args: [],
+            cwd: '.',
+            env: {},
+            shell: null,
+            autoRestart: false,
+            autoRestartDelay: 1000,
+            autoRestartMaxRetries: 5,
+            preLaunchConfigId: null,
+            createdAt: '2026-03-15T00:00:00.000Z',
+            updatedAt: '2026-03-15T00:00:00.000Z',
+          },
+        ],
+        createdAt: '2026-03-15T00:00:00.000Z',
+        updatedAt: '2026-03-15T00:00:00.000Z',
+      };
+
+      mockFs.dirs.add('/path/to/project/.superengineer-v5');
+      mockFs.files.set(restoredStatusPath, JSON.stringify(restoredStatus, null, 2));
+      mockFs.files.set(restoredRunConfigsPath, JSON.stringify(restoredStatus.runConfigurations, null, 2));
+
+      const project = await repository.create({
+        name: 'Test Project',
+        path: '/path/to/project',
+      });
+
+      expect(project.name).toBe('Test Project');
+      expect(project.path).toBe('/path/to/project');
+      expect(project.currentConversationId).toBe('conv-123');
+      expect(project.runConfigurations).toHaveLength(1);
+      expect(project.runConfigurations?.[0]?.name).toBe('Dev Server');
+
+      const indexContent = mockFs.files.get(indexPath);
+      expect(indexContent).toBeDefined();
+      expect(JSON.parse(indexContent!)).toEqual([
+        { id: '_path_to_project', name: 'Test Project', path: '/path/to/project' },
+      ]);
     });
   });
 
@@ -469,16 +529,73 @@ describe('FileProjectRepository', () => {
   });
 
   describe('caching behavior', () => {
-    it('should cache status after first load', async () => {
+    it('should reload status from disk after external edits', async () => {
       const created = await repository.create({ name: 'Test', path: '/test' });
+      const statusPath = '/test/.superengineer-v5/status.json';
 
-      await repository.findById(created.id);
-      await repository.findById(created.id);
+      const initial = await repository.findById(created.id);
+      expect(initial!.status).toBe('stopped');
 
-      const readCalls = (mockFs.readFileSync as jest.Mock).mock.calls.filter(
-        (call: string[]) => call[0]?.includes('status.json') && call[0]?.includes('_test')
-      );
-      expect(readCalls.length).toBeLessThanOrEqual(1);
+      const updatedStatus = {
+        ...JSON.parse(mockFs.files.get(statusPath)!) as ProjectStatus,
+        status: 'running' as const,
+      };
+      mockFs.files.set(statusPath, JSON.stringify(updatedStatus, null, 2));
+      mockFs.files.set(runConfigsPath, JSON.stringify([
+        {
+          id: 'run-1',
+          name: 'dev',
+          command: 'npm',
+          args: ['run', 'dev'],
+          cwd: '.',
+          env: {},
+          shell: null,
+          autoRestart: false,
+          autoRestartDelay: 1000,
+          autoRestartMaxRetries: 5,
+          preLaunchConfigId: null,
+          createdAt: '2026-03-16T03:50:00.170Z',
+          updatedAt: '2026-03-16T03:50:00.170Z',
+        },
+      ], null, 2));
+
+      const reloaded = await repository.findById(created.id);
+
+      expect(reloaded!.status).toBe('running');
+      expect(reloaded!.runConfigurations).toHaveLength(1);
+      expect(reloaded!.runConfigurations?.[0]?.name).toBe('dev');
+    });
+
+    it('should fall back to legacy run configurations from status.json when root file is missing', async () => {
+      const created = await repository.create({ name: 'Test', path: '/test' });
+      const statusPath = '/test/.superengineer-v5/status.json';
+      const legacyStatus = {
+        ...JSON.parse(mockFs.files.get(statusPath)!) as ProjectStatus,
+        runConfigurations: [
+          {
+            id: 'legacy-1',
+            name: 'legacy',
+            command: 'npm',
+            args: ['run', 'legacy'],
+            cwd: '.',
+            env: {},
+            shell: null,
+            autoRestart: false,
+            autoRestartDelay: 1000,
+            autoRestartMaxRetries: 5,
+            preLaunchConfigId: null,
+            createdAt: '2026-03-16T03:50:00.170Z',
+            updatedAt: '2026-03-16T03:50:00.170Z',
+          },
+        ],
+      };
+
+      mockFs.files.set(statusPath, JSON.stringify(legacyStatus, null, 2));
+
+      const reloaded = await repository.findById(created.id);
+
+      expect(reloaded!.runConfigurations).toHaveLength(1);
+      expect(reloaded!.runConfigurations?.[0]?.name).toBe('legacy');
     });
 
     it('should update cache on status change', async () => {
@@ -488,6 +605,33 @@ describe('FileProjectRepository', () => {
       const found = await repository.findById(created.id);
 
       expect(found!.status).toBe('running');
+    });
+
+    it('should persist run configurations in a project-root file instead of status.json', async () => {
+      const created = await repository.create({ name: 'Test', path: '/test' });
+      const config = {
+        id: 'cfg-1',
+        name: 'dev',
+        command: 'npm',
+        args: ['run', 'dev'],
+        cwd: '.',
+        env: {},
+        shell: null,
+        autoRestart: false,
+        autoRestartDelay: 1000,
+        autoRestartMaxRetries: 5,
+        preLaunchConfigId: null,
+        createdAt: '2026-03-16T03:50:00.170Z',
+        updatedAt: '2026-03-16T03:50:00.170Z',
+      };
+
+      await repository.updateRunConfigurations(created.id, [config]);
+
+      expect(mockFs.files.get(runConfigsPath)).toBeDefined();
+      expect(JSON.parse(mockFs.files.get(runConfigsPath)!)).toEqual([config]);
+
+      const persistedStatus = JSON.parse(mockFs.files.get('/test/.superengineer-v5/status.json')!) as ProjectStatus;
+      expect(persistedStatus.runConfigurations).toBeUndefined();
     });
 
     it('should clear cache on delete', async () => {

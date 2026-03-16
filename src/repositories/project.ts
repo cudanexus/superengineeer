@@ -79,6 +79,8 @@ export interface RunConfiguration {
   updatedAt: string;
 }
 
+const RUN_CONFIGS_FILE_NAME = 'superengineer.run-configs.json';
+
 export interface ProjectIndexEntry {
   id: string;
   name: string;
@@ -191,11 +193,51 @@ export class FileProjectRepository implements ProjectRepository {
     return path.join(this.getProjectDataDir(projectPath), 'status.json');
   }
 
-  private loadStatus(id: string): ProjectStatus | null {
-    if (this.statusCache.has(id)) {
-      return { ...this.statusCache.get(id)! };
+  private getRunConfigsPath(projectPath: string): string {
+    return path.join(projectPath, RUN_CONFIGS_FILE_NAME);
+  }
+
+  private loadRunConfigurations(projectPath: string, fallback?: RunConfiguration[]): RunConfiguration[] | undefined {
+    const runConfigsPath = this.getRunConfigsPath(projectPath);
+
+    if (this.fileSystem.existsSync(runConfigsPath)) {
+      try {
+        const data = this.fileSystem.readFileSync(runConfigsPath, 'utf-8');
+        return JSON.parse(data) as RunConfiguration[];
+      } catch {
+        return fallback;
+      }
     }
 
+    return fallback;
+  }
+
+  private saveRunConfigurations(projectPath: string, configs: RunConfiguration[]): void {
+    const runConfigsPath = this.getRunConfigsPath(projectPath);
+    const data = JSON.stringify(configs, null, 2);
+    const tempPath = `${runConfigsPath}.tmp`;
+    this.fileSystem.writeFileSync(tempPath, data);
+    this.fileSystem.renameSync(tempPath, runConfigsPath);
+  }
+
+  private loadStatusFromProjectPath(projectPath: string): ProjectStatus | null {
+    const statusPath = this.getStatusPath(projectPath);
+
+    if (!this.fileSystem.existsSync(statusPath)) {
+      return null;
+    }
+
+    try {
+      const data = this.fileSystem.readFileSync(statusPath, 'utf-8');
+      const status = JSON.parse(data) as ProjectStatus;
+      status.runConfigurations = this.loadRunConfigurations(projectPath, status.runConfigurations);
+      return status;
+    } catch {
+      return null;
+    }
+  }
+
+  private loadStatus(id: string): ProjectStatus | null {
     const entry = this.index.get(id);
 
     if (!entry) {
@@ -211,6 +253,7 @@ export class FileProjectRepository implements ProjectRepository {
         try {
           const data = this.fileSystem.readFileSync(oldStatusPath, 'utf-8');
           const status = JSON.parse(data) as ProjectStatus;
+          status.runConfigurations = this.loadRunConfigurations(status.path, status.runConfigurations);
 
           // Update index with path from status
           entry.path = status.path;
@@ -238,6 +281,7 @@ export class FileProjectRepository implements ProjectRepository {
     try {
       const data = this.fileSystem.readFileSync(statusPath, 'utf-8');
       const status = JSON.parse(data) as ProjectStatus;
+      status.runConfigurations = this.loadRunConfigurations(entry.path, status.runConfigurations);
       this.statusCache.set(id, status);
       return { ...status };
     } catch {
@@ -313,7 +357,11 @@ export class FileProjectRepository implements ProjectRepository {
     status.updatedAt = new Date().toISOString();
     this.statusCache.set(status.id, status);
     const statusPath = this.getStatusPath(status.path);
-    const data = JSON.stringify(status, null, 2);
+    const persistedStatus: ProjectStatus = {
+      ...status,
+      runConfigurations: undefined,
+    };
+    const data = JSON.stringify(persistedStatus, null, 2);
     // Atomic write: write to temp file, then rename
     const tempPath = `${statusPath}.tmp`;
     this.fileSystem.writeFileSync(tempPath, data);
@@ -354,6 +402,24 @@ export class FileProjectRepository implements ProjectRepository {
 
     if (existingProject) {
       throw new Error('Project with this path already exists');
+    }
+
+    const persistedStatus = this.loadStatusFromProjectPath(data.path);
+
+    if (persistedStatus) {
+      const restoredStatus: ProjectStatus = {
+        ...persistedStatus,
+        id,
+        name: data.name,
+        path: data.path,
+      };
+
+      const indexEntry: ProjectIndexEntryWithPath = { id, name: data.name, path: data.path };
+      this.index.set(id, indexEntry);
+      this.saveIndex();
+      this.saveStatus(restoredStatus);
+
+      return { ...restoredStatus };
     }
 
     const now = new Date().toISOString();
@@ -499,6 +565,7 @@ export class FileProjectRepository implements ProjectRepository {
     }
 
     status.runConfigurations = configs;
+    this.saveRunConfigurations(status.path, configs);
     this.saveStatus(status);
     return Promise.resolve({ ...status });
   }
