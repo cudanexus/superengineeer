@@ -43,8 +43,8 @@ describe('Models Configuration', () => {
     });
 
     it('should have correct display names', () => {
-      expect(MODEL_DISPLAY_NAMES['claude-sonnet-4-6[1m]']).toBe('Claude Sonnet 4.6 1M');
       expect(MODEL_DISPLAY_NAMES['claude-opus-4-6[1m]']).toBe('Claude Opus 4.6 1M');
+      expect(MODEL_DISPLAY_NAMES['claude-sonnet-4-6[1m]']).toBe('Claude Sonnet 4.6 1M');
       expect(MODEL_DISPLAY_NAMES['claude-haiku-4-5']).toBe('Claude Haiku 4.5');
     });
   });
@@ -108,7 +108,7 @@ describe('Models Configuration', () => {
   describe('Type safety', () => {
     it('should maintain type safety for SupportedModel', () => {
       // This test ensures TypeScript compilation works correctly
-      const model: SupportedModel = 'claude-opus-4-6[1m]';
+      const model: SupportedModel = 'claude-sonnet-4-6[1m]';
       expect(isValidModel(model)).toBe(true);
 
       const displayName: string = MODEL_DISPLAY_NAMES[model];

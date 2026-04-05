@@ -619,7 +619,7 @@
   }
 
   function syncModelPills(modelValue) {
-    var selectedModel = modelValue || $('#project-model-select').val() || 'claude-sonnet-4-6';
+    var selectedModel = modelValue || $('#project-model-select').val() || 'claude-sonnet-4-6[1m]';
     $('.input-model-option').removeClass('active');
     $('.input-model-option[data-model="' + selectedModel + '"]').addClass('active');
     $('#btn-input-model').attr('title', 'Model: ' + getModelDisplayName(selectedModel));
@@ -4644,8 +4644,8 @@
     api.getProjectModel(projectId)
       .done(function (data) {
         // data = { projectModel, effectiveModel, globalDefault }
-        // If no project override, default to Opus
-        var modelValue = data.projectModel || 'claude-sonnet-4-6';
+        // If no project override, default to Sonnet
+        var modelValue = data.projectModel || 'claude-sonnet-4-6[1m]';
         $('#project-model-select').val(modelValue);
         syncModelPills(modelValue);
         state.currentProjectModel = data.projectModel;
@@ -4654,9 +4654,9 @@
         updateModelSelectorTitle(data);
       })
       .fail(function () {
-        // On failure, default to Opus
-        $('#project-model-select').val('claude-sonnet-4-6');
-        syncModelPills('claude-sonnet-4-6');
+        // On failure, default to Sonnet
+        $('#project-model-select').val('claude-sonnet-4-6[1m]');
+        syncModelPills('claude-sonnet-4-6[1m]');
         state.currentProjectModel = null;
       });
   }
@@ -4667,7 +4667,7 @@
     if (modelData.projectModel) {
       title = 'Using: ' + getModelDisplayName(modelData.projectModel) + ' (project override)';
     } else {
-      title = 'Using: Opus 4.6 (default)';
+      title = 'Using: Sonnet 4.6 1M (default)';
     }
 
     $('#model-selector').attr('title', title);
@@ -4675,11 +4675,9 @@
 
   function getModelDisplayName(modelId) {
     var displayNames = {
-      'claude-sonnet-4-6': 'Sonnet 4.6',
-      'claude-sonnet-4-6[1m]': 'Sonnet 4.6 1M',
-      'claude-opus-4-6': 'Opus 4.6',
-      'claude-sonnet-4-5-20250929': 'Sonnet 4.5',
-      'claude-haiku-4-5-20251001': 'Haiku 4.5'
+      'claude-opus-4-6[1m]': 'Opus 4.6 1M',
+      'claude-haiku-4-5': 'Haiku 4.5',
+      'claude-sonnet-4-6[1m]': 'Sonnet 4.6 1M'
     };
 
     return displayNames[modelId] || modelId;
@@ -4718,8 +4716,8 @@
         }
       })
       .fail(function (xhr) {
-        // Revert the selector to the previous value or Opus if no override
-        var revertModel = state.currentProjectModel || 'claude-sonnet-4-6';
+        // Revert the selector to the previous value or Sonnet if no override
+        var revertModel = state.currentProjectModel || 'claude-sonnet-4-6[1m]';
         $('#project-model-select').val(revertModel);
         syncModelPills(revertModel);
         showErrorToast(xhr, 'Failed to change model');
@@ -6244,14 +6242,10 @@
         // Reset form with default values from settings
         $('#ralph-config-task-description').val('');
         $('#ralph-config-max-turns').val(state.settings?.ralphLoop?.defaultMaxTurns || 5);
-        // Always default to Opus for worker model
-        var workerModel = state.settings?.ralphLoop?.defaultWorkerModel || 'claude-opus-4-6';
-        // Override old model IDs with new defaults
-        if (workerModel === 'claude-sonnet-4-20250514' || workerModel === 'claude-opus-4-20250514') {
-          workerModel = 'claude-opus-4-6';
-        }
+        var workerModel = state.settings?.ralphLoop?.defaultWorkerModel || 'claude-sonnet-4-6[1m]';
         $('#ralph-config-worker-model').val(workerModel);
-        $('#ralph-config-reviewer-model').val(state.settings?.ralphLoop?.defaultReviewerModel || 'claude-sonnet-4-5-20250929');
+        var reviewerModel = state.settings?.ralphLoop?.defaultReviewerModel || 'claude-sonnet-4-6[1m]';
+        $('#ralph-config-reviewer-model').val(reviewerModel);
         $('#ralph-config-worker-system-prompt').val('');
         $('#ralph-config-reviewer-system-prompt').val('');
 
@@ -6275,14 +6269,10 @@
         // Reset form with default values from settings
         $('#ralph-config-task-description').val('');
         $('#ralph-config-max-turns').val(state.settings?.ralphLoop?.defaultMaxTurns || 5);
-        // Always default to Opus for worker model
-        var workerModel = state.settings?.ralphLoop?.defaultWorkerModel || 'claude-opus-4-6';
-        // Override old model IDs with new defaults
-        if (workerModel === 'claude-sonnet-4-20250514' || workerModel === 'claude-opus-4-20250514') {
-          workerModel = 'claude-opus-4-6';
-        }
+        var workerModel = state.settings?.ralphLoop?.defaultWorkerModel || 'claude-sonnet-4-6[1m]';
         $('#ralph-config-worker-model').val(workerModel);
-        $('#ralph-config-reviewer-model').val(state.settings?.ralphLoop?.defaultReviewerModel || 'claude-sonnet-4-5-20250929');
+        var reviewerModel = state.settings?.ralphLoop?.defaultReviewerModel || 'claude-sonnet-4-6[1m]';
+        $('#ralph-config-reviewer-model').val(reviewerModel);
         $('#ralph-config-worker-system-prompt').val('');
         $('#ralph-config-reviewer-system-prompt').val('');
 
@@ -8039,7 +8029,7 @@
     SearchModule.setupHandlers();
     ConversationHistoryModule.setupHandlers();
     ImageAttachmentModule.setupHandlers();
-    syncModelPills('claude-sonnet-4-6');
+    syncModelPills('claude-sonnet-4-6[1m]');
     syncComposerPermissionMode();
     TaskDisplayModule.setupHandlers();
     PermissionModeModule.setupHandlers();

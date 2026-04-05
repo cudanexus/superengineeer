@@ -43,7 +43,7 @@ describe('OneOffToolbarModule', () => {
   beforeEach(() => {
     mockState = {
       permissionMode: 'plan',
-      currentProjectModel: 'claude-opus-4-6',
+      currentProjectModel: 'claude-opus-4-6[1m]',
       fontSize: 14,
       selectedProjectId: 'project-1',
       oneOffTabs: {
@@ -124,7 +124,7 @@ describe('OneOffToolbarModule', () => {
 
       expect(html).toContain('oneoff-model-select');
       expect(html).toContain('Opus 4.6');
-      expect(html).toContain('Sonnet 4.5');
+      expect(html).toContain('Sonnet 4.6 1M');
       expect(html).toContain('Haiku 4.5');
     });
 
@@ -272,17 +272,17 @@ describe('OneOffToolbarModule', () => {
 
   describe('syncModel', () => {
     it('should update all oneoff model selectors', () => {
-      OneOffToolbarModule.syncModel('claude-sonnet-4-5-20250929');
+      OneOffToolbarModule.syncModel('claude-opus-4-6[1m]');
 
       expect(global.$).toHaveBeenCalledWith('.oneoff-model-select');
     });
 
-    it('should default to opus when null', () => {
+    it('should default to sonnet when null', () => {
       OneOffToolbarModule.syncModel(null);
 
       expect(global.$).toHaveBeenCalledWith('.oneoff-model-select');
       const mockEl = global.$();
-      expect(mockEl.val).toHaveBeenCalledWith('claude-opus-4-6');
+      expect(mockEl.val).toHaveBeenCalledWith('claude-sonnet-4-6[1m]');
     });
   });
 

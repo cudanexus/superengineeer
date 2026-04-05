@@ -337,7 +337,7 @@ const DEFAULT_SETTINGS: GlobalSettings = {
   ralphLoop: {
     defaultMaxTurns: 5,
     defaultWorkerModel: 'claude-opus-4-6',
-    defaultReviewerModel: 'claude-sonnet-4-5-20250929',
+    defaultReviewerModel: 'claude-sonnet-4-6[1m]',
     defaultWorkerSystemPrompt: `# Worker Agent Instructions
 
 You are a software development worker agent. Your role is to implement the requested changes or features with precision and thoroughness.

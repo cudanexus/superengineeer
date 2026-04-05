@@ -13,8 +13,8 @@ export type SupportedModel = (typeof SUPPORTED_MODELS)[number];
 export const DEFAULT_MODEL: SupportedModel = 'claude-sonnet-4-6[1m]';
 
 export const MODEL_DISPLAY_NAMES: Record<SupportedModel, string> = {
-  'claude-sonnet-4-6[1m]': 'Claude Sonnet 4.6 1M',
   'claude-opus-4-6[1m]': 'Claude Opus 4.6 1M',
+  'claude-sonnet-4-6[1m]': 'Claude Sonnet 4.6 1M',
   'claude-haiku-4-5': 'Claude Haiku 4.5',
 };
 
