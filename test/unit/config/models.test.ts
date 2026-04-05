@@ -11,9 +11,9 @@ describe('Models Configuration', () => {
   describe('SUPPORTED_MODELS', () => {
     it('should contain expected models', () => {
       expect(SUPPORTED_MODELS).toEqual([
-        'claude-opus-4-6',
-        'claude-sonnet-4-5-20250929',
-        'claude-haiku-4-5-20251001',
+        'claude-sonnet-4-6[1m]',
+        'claude-opus-4-6[1m]',
+        'claude-haiku-4-5',
       ]);
     });
 
@@ -28,8 +28,8 @@ describe('Models Configuration', () => {
       expect(SUPPORTED_MODELS).toContain(DEFAULT_MODEL);
     });
 
-    it('should be claude-opus-4-6', () => {
-      expect(DEFAULT_MODEL).toBe('claude-opus-4-6');
+    it('should be claude-sonnet-4-6[1m]', () => {
+      expect(DEFAULT_MODEL).toBe('claude-sonnet-4-6[1m]');
     });
   });
 
@@ -43,9 +43,9 @@ describe('Models Configuration', () => {
     });
 
     it('should have correct display names', () => {
-      expect(MODEL_DISPLAY_NAMES['claude-opus-4-6']).toBe('Claude Opus 4.6');
-      expect(MODEL_DISPLAY_NAMES['claude-sonnet-4-5-20250929']).toBe('Claude Sonnet 4.5');
-      expect(MODEL_DISPLAY_NAMES['claude-haiku-4-5-20251001']).toBe('Claude Haiku 4.5');
+      expect(MODEL_DISPLAY_NAMES['claude-sonnet-4-6[1m]']).toBe('Claude Sonnet 4.6 1M');
+      expect(MODEL_DISPLAY_NAMES['claude-opus-4-6[1m]']).toBe('Claude Opus 4.6 1M');
+      expect(MODEL_DISPLAY_NAMES['claude-haiku-4-5']).toBe('Claude Haiku 4.5');
     });
   });
 
@@ -108,7 +108,7 @@ describe('Models Configuration', () => {
   describe('Type safety', () => {
     it('should maintain type safety for SupportedModel', () => {
       // This test ensures TypeScript compilation works correctly
-      const model: SupportedModel = 'claude-opus-4-6';
+      const model: SupportedModel = 'claude-opus-4-6[1m]';
       expect(isValidModel(model)).toBe(true);
 
       const displayName: string = MODEL_DISPLAY_NAMES[model];

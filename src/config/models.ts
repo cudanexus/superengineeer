@@ -3,23 +3,19 @@
  */
 
 export const SUPPORTED_MODELS = [
-  'claude-sonnet-4-6',
   'claude-sonnet-4-6[1m]',
-  'claude-opus-4-6',
-  'claude-sonnet-4-5-20250929',
-  'claude-haiku-4-5-20251001',
+  'claude-opus-4-6[1m]',
+  'claude-haiku-4-5',
 ] as const;
 
 export type SupportedModel = (typeof SUPPORTED_MODELS)[number];
 
-export const DEFAULT_MODEL: SupportedModel = 'claude-sonnet-4-6';
+export const DEFAULT_MODEL: SupportedModel = 'claude-sonnet-4-6[1m]';
 
 export const MODEL_DISPLAY_NAMES: Record<SupportedModel, string> = {
-  'claude-sonnet-4-6': 'Claude Sonnet 4.6',
   'claude-sonnet-4-6[1m]': 'Claude Sonnet 4.6 1M',
-  'claude-opus-4-6': 'Claude Opus 4.6',
-  'claude-sonnet-4-5-20250929': 'Claude Sonnet 4.5',
-  'claude-haiku-4-5-20251001': 'Claude Haiku 4.5',
+  'claude-opus-4-6[1m]': 'Claude Opus 4.6 1M',
+  'claude-haiku-4-5': 'Claude Haiku 4.5',
 };
 
 export function isValidModel(model: string): model is SupportedModel {

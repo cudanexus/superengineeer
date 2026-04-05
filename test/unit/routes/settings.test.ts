@@ -74,15 +74,15 @@ describe('SettingsRouter', () => {
       }
     });
 
-    it('should include sonnet model', async () => {
+    it('should include opus model', async () => {
       const response = await request(app).get('/settings/models');
 
       expect(response.status).toBe(200);
       const opusModel = response.body.models.find(
-        (m: { id: string }) => m.id === 'claude-opus-4-6'
+        (m: { id: string }) => m.id === 'claude-opus-4-6[1m]'
       );
       expect(opusModel).toBeDefined();
-      expect(opusModel.displayName).toBe('Claude Opus 4.6');
+      expect(opusModel.displayName).toBe('Claude Opus 4.6 1M');
     });
 
     it('should include sonnet model', async () => {
@@ -90,10 +90,21 @@ describe('SettingsRouter', () => {
 
       expect(response.status).toBe(200);
       const sonnetModel = response.body.models.find(
-        (m: { id: string }) => m.id === 'claude-sonnet-4-5-20250929'
+        (m: { id: string }) => m.id === 'claude-sonnet-4-6[1m]'
       );
       expect(sonnetModel).toBeDefined();
-      expect(sonnetModel.displayName).toBe('Claude Sonnet 4.5');
+      expect(sonnetModel.displayName).toBe('Claude Sonnet 4.6 1M');
+    });
+
+    it('should include haiku model', async () => {
+      const response = await request(app).get('/settings/models');
+
+      expect(response.status).toBe(200);
+      const haikuModel = response.body.models.find(
+        (m: { id: string }) => m.id === 'claude-haiku-4-5'
+      );
+      expect(haikuModel).toBeDefined();
+      expect(haikuModel.displayName).toBe('Claude Haiku 4.5');
     });
   });
 

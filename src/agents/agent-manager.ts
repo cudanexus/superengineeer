@@ -399,6 +399,7 @@ const ZERO_COST: CostTotals = {
 const MODEL_PRICING: Record<string, ModelPricing> = {
   // ── Opus 4 family ─────────────────────────────────────────────────────────
   'claude-opus-4-6': { inputPerMTok: 5, outputPerMTok: 25, cacheWritePerMTok: 6.25, cacheWrite1hPerMTok: 10, cacheReadPerMTok: 0.5 },
+  'claude-opus-4-6[1m]': { inputPerMTok: 5, outputPerMTok: 25, cacheWritePerMTok: 6.25, cacheWrite1hPerMTok: 10, cacheReadPerMTok: 0.5 },
   'claude-opus-4-5': { inputPerMTok: 5, outputPerMTok: 25, cacheWritePerMTok: 6.25, cacheWrite1hPerMTok: 10, cacheReadPerMTok: 0.5 },
   'claude-opus-4-5-20250929': { inputPerMTok: 5, outputPerMTok: 25, cacheWritePerMTok: 6.25, cacheWrite1hPerMTok: 10, cacheReadPerMTok: 0.5 },
   'claude-opus-4-1': { inputPerMTok: 15, outputPerMTok: 75, cacheWritePerMTok: 18.75, cacheWrite1hPerMTok: 30, cacheReadPerMTok: 1.5 },
@@ -408,6 +409,7 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
   'claude-3-opus-20240229': { inputPerMTok: 15, outputPerMTok: 75, cacheWritePerMTok: 18.75, cacheWrite1hPerMTok: 30, cacheReadPerMTok: 1.5 },
   // ── Sonnet 4 family ───────────────────────────────────────────────────────
   'claude-sonnet-4-6': { inputPerMTok: 3, outputPerMTok: 15, cacheWritePerMTok: 3.75, cacheWrite1hPerMTok: 6, cacheReadPerMTok: 0.3 },
+  'claude-sonnet-4-6[1m]': { inputPerMTok: 3, outputPerMTok: 15, cacheWritePerMTok: 3.75, cacheWrite1hPerMTok: 6, cacheReadPerMTok: 0.3 },
   'claude-sonnet-4-5': { inputPerMTok: 3, outputPerMTok: 15, cacheWritePerMTok: 3.75, cacheWrite1hPerMTok: 6, cacheReadPerMTok: 0.3 },
   'claude-sonnet-4-5-20250929': { inputPerMTok: 3, outputPerMTok: 15, cacheWritePerMTok: 3.75, cacheWrite1hPerMTok: 6, cacheReadPerMTok: 0.3 },
   'claude-sonnet-4': { inputPerMTok: 3, outputPerMTok: 15, cacheWritePerMTok: 3.75, cacheWrite1hPerMTok: 6, cacheReadPerMTok: 0.3 },
@@ -913,7 +915,7 @@ export class DefaultAgentManager implements AgentManager {
   getProjectCostSummary(projectId: string): ProjectCostSummary {
     const sessionsMap = this.usageByProject.get(projectId) || new Map<string, SessionUsageAggregate>();
     const sessions: SessionCostSummary[] = [];
-    let projectTotals: TokenTotals = { ...ZERO_TOKENS };
+    const projectTotals: TokenTotals = { ...ZERO_TOKENS };
 
     for (const [sessionId, aggregate] of sessionsMap.entries()) {
       const modelBreakdown: Record<string, TokenTotals> = {};
@@ -1048,12 +1050,12 @@ export class DefaultAgentManager implements AgentManager {
     }
 
     if (normalized.includes('opus')) {
-      return MODEL_PRICING['claude-opus-4-6']!;
+      return MODEL_PRICING['claude-opus-4-6[1m]']!;
     }
     if (normalized.includes('haiku')) {
       return MODEL_PRICING['claude-haiku-4-5']!;
     }
-    return MODEL_PRICING['claude-sonnet-4-6']!;
+    return MODEL_PRICING['claude-sonnet-4-6[1m]']!;
   }
 
   getTrackedProcesses(): TrackedProcessInfo[] {
