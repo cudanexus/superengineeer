@@ -200,6 +200,31 @@
     abilitiesPageSize: 10,
     supabaseMcpActionLoading: false
   };
+  var pendingCreditSyncResolvers = [];
+
+  function requestFreshCreditStateFromParent() {
+    if (!isEmbeddedInParent || !window.parent || window.parent === window) {
+      return Promise.resolve(false);
+    }
+
+    return new Promise(function (resolve) {
+      var resolver = {
+        resolve: resolve,
+        timeoutId: setTimeout(function () {
+          pendingCreditSyncResolvers = pendingCreditSyncResolvers.filter(function (entry) {
+            return entry !== resolver;
+          });
+          resolve(false);
+        }, 2000)
+      };
+
+      pendingCreditSyncResolvers.push(resolver);
+      window.parent.postMessage({
+        type: 'superengineer_credit_state_sync_request',
+        source: 'superengineer'
+      }, '*');
+    });
+  }
 
   function isCreditsBlocked() {
     if (!isEmbeddedInParent) {
@@ -4147,6 +4172,14 @@
         state.superwebEmail = String(data.superwebEmail || '');
         if (data.superwebAuthToken) {
           sessionStorage.setItem('superweb-auth-token', String(data.superwebAuthToken));
+        } else {
+          sessionStorage.removeItem('superweb-auth-token');
+        }
+        if (pendingCreditSyncResolvers.length > 0) {
+          pendingCreditSyncResolvers.splice(0).forEach(function (entry) {
+            clearTimeout(entry.timeoutId);
+            entry.resolve(true);
+          });
         }
         updateInputArea();
       }
@@ -4184,7 +4217,7 @@
     });
   }
 
-  function doSendMessage(message) {
+  function doSendMessage(message, billingRetryAttempted) {
     if (state.messageSending) return;
     if (isCreditsBlocked()) return;
 
@@ -4241,6 +4274,27 @@
         clearPendingFiles();
       })
       .fail(function (xhr) {
+        if (Number(xhr && xhr.status || 0) === 401 && !billingRetryAttempted) {
+          sessionStorage.removeItem('superweb-auth-token');
+          requestFreshCreditStateFromParent().then(function (didSync) {
+            if (didSync) {
+              doSendMessage(message, true);
+              return;
+            }
+
+            if (handleBillingGuardFailure(xhr, 'Failed to send message')) {
+              ImageAttachmentModule.removeWaitingIndicator();
+              delete state.pendingChatCommitByProject[projectId];
+              return;
+            }
+
+            showErrorToast(xhr, 'Failed to send message');
+            ImageAttachmentModule.removeWaitingIndicator();
+            delete state.pendingChatCommitByProject[projectId];
+          });
+          return;
+        }
+
         if (handleBillingGuardFailure(xhr, 'Failed to send message')) {
           ImageAttachmentModule.removeWaitingIndicator();
           delete state.pendingChatCommitByProject[projectId];
@@ -4257,7 +4311,7 @@
       });
   }
 
-  function startInteractiveAgentWithMessage(message) {
+  function startInteractiveAgentWithMessage(message, billingRetryAttempted) {
     if (state.agentStarting) return;
     if (isCreditsBlocked()) {
       updateInputArea();
@@ -4348,6 +4402,25 @@
           setTimeout(function () {
             retryRecoveredMessageWhenReady(projectId);
           }, 400);
+          return;
+        }
+
+        if (Number(xhr && xhr.status || 0) === 401 && !billingRetryAttempted) {
+          sessionStorage.removeItem('superweb-auth-token');
+          requestFreshCreditStateFromParent().then(function (didSync) {
+            if (didSync) {
+              startInteractiveAgentWithMessage(message, true);
+              return;
+            }
+
+            if (handleBillingGuardFailure(xhr, 'Failed to start agent')) {
+              delete state.pendingChatCommitByProject[projectId];
+              return;
+            }
+
+            showErrorToast(xhr, 'Failed to start agent');
+            delete state.pendingChatCommitByProject[projectId];
+          });
           return;
         }
 
