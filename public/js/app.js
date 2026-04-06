@@ -247,6 +247,17 @@
     $('#no-credits-modal-debug').text(debugText);
   }
 
+  function openSuperwebCreditPurchase() {
+    if (isEmbeddedInParent) {
+      window.parent.postMessage({
+        type: 'superengineer_open_credit_purchase',
+        source: 'superengineer'
+      }, '*');
+    } else {
+      window.location.href = '/';
+    }
+  }
+
   // Local storage keys - use module's KEYS
   var LOCAL_STORAGE_KEYS = LocalStorage.KEYS;
 
@@ -527,14 +538,7 @@
 
     $('#btn-no-credits-recharge').on('click.noCredits', function () {
       cleanup();
-      if (isEmbeddedInParent) {
-        window.parent.postMessage({
-          type: 'superengineer_open_credit_purchase',
-          source: 'superengineer'
-        }, '*');
-      } else {
-        window.location.href = '/';
-      }
+      openSuperwebCreditPurchase();
     });
 
     $('#modal-no-credits .modal-close, #modal-no-credits .modal-backdrop').on('click.noCredits', function () {
@@ -543,6 +547,10 @@
 
     $('#modal-no-credits').removeClass('hidden');
   }
+
+  $('#btn-credit-lock-recharge').on('click', function () {
+    openSuperwebCreditPurchase();
+  });
 
   function handleBillingGuardFailure(xhr, fallbackMessage) {
     var status = Number(xhr && xhr.status || 0);
