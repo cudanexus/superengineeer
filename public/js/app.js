@@ -108,6 +108,7 @@
     pendingFiles: [], // Array of { id, fileName, url } uploaded via attach-file
     creditBalanceUsd: 0,
     creditsKnown: false,
+    superwebEmail: '',
     currentSessionId: null, // Claude session ID for session resumption
     currentPlanFile: null, // Path to current plan file from ExitPlanMode
     allClientResources: {}, // Resources from all clients { clientId: { resources: [], stats: {} } }
@@ -205,6 +206,20 @@
       return false;
     }
     return !state.creditsKnown || state.creditBalanceUsd <= 0;
+  }
+
+  function updateCreditDebugText() {
+    var debugText = '';
+    if (isEmbeddedInParent) {
+      if (!state.creditsKnown) {
+        debugText = 'Billing sync pending from SuperWeb.';
+      } else {
+        var balance = Number(state.creditBalanceUsd || 0).toFixed(2);
+        debugText = 'Current SuperWeb account: ' + (state.superwebEmail || 'unknown') + ' | Balance: $' + balance;
+      }
+    }
+    $('#credit-lock-debug').text(debugText);
+    $('#no-credits-modal-debug').text(debugText);
   }
 
   // Local storage keys - use module's KEYS
@@ -502,6 +517,25 @@
     });
 
     $('#modal-no-credits').removeClass('hidden');
+  }
+
+  function handleBillingGuardFailure(xhr, fallbackMessage) {
+    var status = Number(xhr && xhr.status || 0);
+    var responseError = (xhr && xhr.responseJSON && (xhr.responseJSON.error || xhr.responseJSON.message)) || fallbackMessage || 'Unable to send message.';
+
+    if (status === 402) {
+      showRechargeCreditsModal(String(responseError || 'No credits available. Recharge your SuperWeb account to continue chatting.'));
+      updateInputArea();
+      return true;
+    }
+
+    if (status === 401) {
+      showRechargeCreditsModal('Your SuperWeb billing session expired. Refresh the workspace, then try again.');
+      updateInputArea();
+      return true;
+    }
+
+    return false;
   }
 
   // Check for unsaved MCP changes and show confirmation dialog
@@ -2255,6 +2289,7 @@
   function updateInputHint() {
     var isMobile = FileBrowser.isMobileView();
     var creditsBlocked = isCreditsBlocked();
+    updateCreditDebugText();
 
     if (creditsBlocked) {
       if (!state.creditsKnown) {
@@ -4109,6 +4144,7 @@
       if (data.type === 'superweb_credit_state') {
         state.creditBalanceUsd = Number(data.creditBalanceUsd || 0);
         state.creditsKnown = true;
+        state.superwebEmail = String(data.superwebEmail || '');
         if (data.superwebAuthToken) {
           sessionStorage.setItem('superweb-auth-token', String(data.superwebAuthToken));
         }
@@ -4205,6 +4241,11 @@
         clearPendingFiles();
       })
       .fail(function (xhr) {
+        if (handleBillingGuardFailure(xhr, 'Failed to send message')) {
+          ImageAttachmentModule.removeWaitingIndicator();
+          delete state.pendingChatCommitByProject[projectId];
+          return;
+        }
         showErrorToast(xhr, 'Failed to send message');
         ImageAttachmentModule.removeWaitingIndicator();
         delete state.pendingChatCommitByProject[projectId];
@@ -4307,6 +4348,11 @@
           setTimeout(function () {
             retryRecoveredMessageWhenReady(projectId);
           }, 400);
+          return;
+        }
+
+        if (handleBillingGuardFailure(xhr, 'Failed to start agent')) {
+          delete state.pendingChatCommitByProject[projectId];
           return;
         }
 

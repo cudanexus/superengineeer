@@ -19,17 +19,77 @@ import {
 } from './schemas';
 
 const execFileAsync = promisify(execFile);
-const SUPERWEB_BILLING_API_URL = process.env.SUPERWEB_BILLING_API_URL || 'http://localhost:3005/api/user/billing';
+
+function readSiblingSuperwebBackendEnv(): Record<string, string> {
+  try {
+    const envPath = path.resolve(process.cwd(), '../super-web/backend/.env');
+    const raw = fs.readFileSync(envPath, 'utf-8');
+    const values: Record<string, string> = {};
+
+    for (const line of raw.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+
+      const separatorIndex = trimmed.indexOf('=');
+      if (separatorIndex <= 0) continue;
+
+      const key = trimmed.slice(0, separatorIndex).trim();
+      let value = trimmed.slice(separatorIndex + 1).trim();
+      if (
+        (value.startsWith('"') && value.endsWith('"'))
+        || (value.startsWith("'") && value.endsWith("'"))
+      ) {
+        value = value.slice(1, -1);
+      }
+
+      if (key) {
+        values[key] = value;
+      }
+    }
+
+    return values;
+  } catch {
+    return {};
+  }
+}
+
+function getSuperwebBillingApiUrl(): string {
+  const explicitUrl = String(process.env.SUPERWEB_BILLING_API_URL || '').trim();
+  if (explicitUrl) {
+    return explicitUrl;
+  }
+
+  const siblingEnv = readSiblingSuperwebBackendEnv();
+  const siblingExplicitUrl = String(siblingEnv.SUPERWEB_BILLING_API_URL || '').trim();
+  if (siblingExplicitUrl) {
+    return siblingExplicitUrl;
+  }
+
+  const baseUrl = String(
+    process.env.SUPER_WEB_BACKEND_URL
+    || process.env.BACKEND_PUBLIC_URL
+    || siblingEnv.BACKEND_PUBLIC_URL
+    || siblingEnv.SUPER_WEB_BACKEND_URL
+    || 'http://localhost:3005',
+  ).trim();
+
+  try {
+    const normalizedBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+    return new URL('api/user/billing', normalizedBase).toString();
+  } catch {
+    return 'http://localhost:3005/api/user/billing';
+  }
+}
 
 async function ensureUserHasCredits(superwebAuthToken: string | undefined): Promise<void> {
   const token = String(superwebAuthToken || '').trim();
   if (!token) {
     const error = new Error('Missing billing auth token');
-    (error as any).statusCode = 402;
+    (error as any).statusCode = 401;
     throw error;
   }
 
-  const response = await fetch(SUPERWEB_BILLING_API_URL, {
+  const response = await fetch(getSuperwebBillingApiUrl(), {
     headers: {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
@@ -38,7 +98,7 @@ async function ensureUserHasCredits(superwebAuthToken: string | undefined): Prom
 
   if (!response.ok) {
     const error = new Error('Unable to verify credit balance');
-    (error as any).statusCode = response.status === 401 ? 401 : 502;
+    (error as any).statusCode = response.status === 401 ? 401 : response.status === 402 ? 402 : 502;
     throw error;
   }
 
@@ -394,7 +454,12 @@ export function createAgentRouter(deps: ProjectRouterDependencies): Router {
       await ensureUserHasCredits(superwebAuthToken);
     } catch (error) {
       const statusCode = Number((error as any)?.statusCode || 402);
-      res.status(statusCode).json({ error: statusCode === 401 ? 'Billing session expired. Refresh SuperWeb and try again.' : 'No credits available. Add credits in SuperWeb to continue.' });
+      const errorMessage = statusCode === 401
+        ? 'Billing session expired. Refresh SuperWeb and try again.'
+        : statusCode === 502
+          ? 'Unable to verify your SuperWeb credits right now.'
+          : 'No credits available. Add credits in SuperWeb to continue.';
+      res.status(statusCode).json({ error: errorMessage });
       return;
     }
 
@@ -531,7 +596,12 @@ export function createAgentRouter(deps: ProjectRouterDependencies): Router {
       await ensureUserHasCredits(superwebAuthToken);
     } catch (error) {
       const statusCode = Number((error as any)?.statusCode || 402);
-      res.status(statusCode).json({ error: statusCode === 401 ? 'Billing session expired. Refresh SuperWeb and try again.' : 'No credits available. Add credits in SuperWeb to continue.' });
+      const errorMessage = statusCode === 401
+        ? 'Billing session expired. Refresh SuperWeb and try again.'
+        : statusCode === 502
+          ? 'Unable to verify your SuperWeb credits right now.'
+          : 'No credits available. Add credits in SuperWeb to continue.';
+      res.status(statusCode).json({ error: errorMessage });
       return;
     }
 
