@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../super-web"
+		}
+	],
+	"settings": {
+		"python.languageServer": "None"
+	}
+}

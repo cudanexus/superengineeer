@@ -105,6 +105,8 @@
     contextMenuTarget: null, // { path, isDir, name } for context menu actions
     pendingImages: [], // Array of { id, dataUrl, mimeType, size } for images to send with message
     pendingFiles: [], // Array of { id, fileName, url } uploaded via attach-file
+    creditBalanceUsd: 0,
+    creditsKnown: false,
     currentSessionId: null, // Claude session ID for session resumption
     currentPlanFile: null, // Path to current plan file from ExitPlanMode
     allClientResources: {}, // Resources from all clients { clientId: { resources: [], stats: {} } }
@@ -2215,6 +2217,17 @@
 
   function updateInputHint() {
     var isMobile = FileBrowser.isMobileView();
+    var creditsBlocked = state.creditsKnown && state.creditBalanceUsd <= 0;
+
+    if (creditsBlocked) {
+      $('#input-hint-text').text('Add credits in SuperWeb to unlock AI chat');
+      $('#input-message').attr('placeholder', 'Credits required to message Superengineer');
+      $('#btn-send-message').attr('title', 'Credits required');
+      $('#credit-lock-banner').removeClass('hidden');
+      return;
+    }
+
+    $('#credit-lock-banner').addClass('hidden');
 
     if (state.sendWithCtrlEnter) {
       if (isMobile) {
@@ -3732,10 +3745,11 @@
   function setPromptBlockingState(promptType) {
     state.activePromptType = promptType;
     var isBlocked = promptType !== null;
+    var creditsBlocked = state.creditsKnown && state.creditBalanceUsd <= 0;
 
     // Disable input and send button when prompt is active
-    $('#input-message').prop('disabled', isBlocked);
-    $('#btn-send-message').prop('disabled', isBlocked);
+    $('#input-message').prop('disabled', isBlocked || creditsBlocked);
+    $('#btn-send-message').prop('disabled', isBlocked || creditsBlocked);
 
     if (isBlocked) {
       var placeholder = promptType === 'compacting'
@@ -3751,8 +3765,8 @@
         $('#input-message').val('');
       }
     } else {
-      $('#input-message').attr('placeholder', 'Message Superengineer');
       $('#form-send-message').removeClass('opacity-50');
+      updateInputHint();
 
       // Restore the pending message if it was cleared due to a question
       // But only if the input is currently empty (user hasn't typed anything new)
@@ -3828,11 +3842,12 @@
     var isRunning = project && project.status === 'running';
     var isInteractive = state.currentAgentMode === 'interactive';
     var isInteractiveMode = true; // Always in interactive mode now
+    var creditsBlocked = state.creditsKnown && state.creditBalanceUsd <= 0;
 
     // Interactive mode: always enable input (will auto-start agent if needed)
     if (isInteractiveMode) {
-      $('#input-message').prop('disabled', false);
-      $('#btn-send-message').prop('disabled', false);
+      $('#input-message').prop('disabled', creditsBlocked);
+      $('#btn-send-message').prop('disabled', creditsBlocked);
       updateInputHint();
     } else if (isRunning && !isInteractive) {
       // Autonomous mode running
@@ -3848,6 +3863,12 @@
   }
 
   function sendMessage() {
+    if (state.creditsKnown && state.creditBalanceUsd <= 0) {
+      updateInputArea();
+      showToast('Add credits in SuperWeb before sending another AI message.', 'error');
+      return;
+    }
+
     // If a one-off tab is active, route to the one-off agent
     if (state.activeOneOffTabId && typeof OneOffTabsModule !== 'undefined') {
       OneOffTabsModule.sendOneOffMessage(state.activeOneOffTabId);
@@ -4034,8 +4055,18 @@
   function setupParentUsageSyncBridge() {
     window.addEventListener('message', function (event) {
       var data = event.data || {};
-      if (!data || data.type !== 'superweb_request_usage_cost') return;
-      postUsageSummaryToParent(event.origin, data.projectId || null);
+      if (!data) return;
+
+      if (data.type === 'superweb_request_usage_cost') {
+        postUsageSummaryToParent(event.origin, data.projectId || null);
+        return;
+      }
+
+      if (data.type === 'superweb_credit_state') {
+        state.creditBalanceUsd = Number(data.creditBalanceUsd || 0);
+        state.creditsKnown = true;
+        updateInputArea();
+      }
     });
   }
 
@@ -4064,6 +4095,7 @@
 
   function doSendMessage(message) {
     if (state.messageSending) return;
+    if (state.creditsKnown && state.creditBalanceUsd <= 0) return;
 
     var projectId = state.selectedProjectId;
     var $input = $('#input-message');
@@ -4132,6 +4164,10 @@
 
   function startInteractiveAgentWithMessage(message) {
     if (state.agentStarting) return;
+    if (state.creditsKnown && state.creditBalanceUsd <= 0) {
+      updateInputArea();
+      return;
+    }
 
     // Don't start agent if Ralph Loop is running
     if (state.isRalphLoopRunning) {
