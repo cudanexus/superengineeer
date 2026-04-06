@@ -2972,6 +2972,37 @@
     </div>
   </div>
 
+  <!-- No Credits Modal -->
+  <div id="modal-no-credits" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-md">
+        <div class="p-3 border-b border-gray-700 flex items-center justify-between">
+          <h3 class="font-semibold text-white">No Credits Available</h3>
+          <button class="modal-close text-gray-400 hover:text-white">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div class="p-4 space-y-3">
+          <p id="no-credits-modal-message" class="text-sm text-gray-300">
+            Your SuperWeb account does not have enough credits to continue chatting.
+          </p>
+          <div class="rounded-lg border border-yellow-700/60 bg-yellow-950/30 px-3 py-2 text-xs text-yellow-200">
+            Recharge credits in SuperWeb, then come back to this workspace.
+          </div>
+        </div>
+        <div class="p-3 border-t border-gray-700 flex justify-end gap-2">
+          <button type="button"
+            class="modal-close px-3 py-1.5 text-sm text-gray-300 hover:text-white transition-colors">Not now</button>
+          <button type="button" id="btn-no-credits-recharge"
+            class="px-3 py-1.5 text-sm bg-purple-600 hover:bg-purple-700 text-white rounded transition-colors">Buy Credits</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Abilities Modal -->
   <div id="modal-abilities" class="modal hidden">
     <div class="modal-backdrop"></div>

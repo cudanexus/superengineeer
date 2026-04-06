@@ -19,6 +19,37 @@ import {
 } from './schemas';
 
 const execFileAsync = promisify(execFile);
+const SUPERWEB_BILLING_API_URL = process.env.SUPERWEB_BILLING_API_URL || 'http://localhost:3005/api/user/billing';
+
+async function ensureUserHasCredits(superwebAuthToken: string | undefined): Promise<void> {
+  const token = String(superwebAuthToken || '').trim();
+  if (!token) {
+    const error = new Error('Missing billing auth token');
+    (error as any).statusCode = 402;
+    throw error;
+  }
+
+  const response = await fetch(SUPERWEB_BILLING_API_URL, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const error = new Error('Unable to verify credit balance');
+    (error as any).statusCode = response.status === 401 ? 401 : 502;
+    throw error;
+  }
+
+  const payload = await response.json().catch(() => ({} as { creditBalanceUsd?: number }));
+  const creditBalanceUsd = Number(payload.creditBalanceUsd || 0);
+  if (!Number.isFinite(creditBalanceUsd) || creditBalanceUsd <= 0) {
+    const error = new Error('No credits available');
+    (error as any).statusCode = 402;
+    throw error;
+  }
+}
 
 function getClaudeSessionFilePath(projectPath: string, sessionId: string): string {
   const encodedPath = projectPath.replace(/\//g, '-');
@@ -357,7 +388,15 @@ export function createAgentRouter(deps: ProjectRouterDependencies): Router {
   router.post('/interactive', validateBody(agentMessageSchema), validateProjectExists(projectRepository), agentOperationRateLimit, asyncHandler(async (req: Request, res: Response) => {
     const id = req.params['id'] as string;
     const body = req.body as AgentMessageBody;
-    const { message, images, files, sessionId, permissionMode } = body;
+    const { message, images, files, sessionId, permissionMode, superwebAuthToken } = body;
+
+    try {
+      await ensureUserHasCredits(superwebAuthToken);
+    } catch (error) {
+      const statusCode = Number((error as any)?.statusCode || 402);
+      res.status(statusCode).json({ error: statusCode === 401 ? 'Billing session expired. Refresh SuperWeb and try again.' : 'No credits available. Add credits in SuperWeb to continue.' });
+      return;
+    }
 
     if (agentManager.isRunning(id)) {
       const currentMode = agentManager.getAgentMode(id);
@@ -468,7 +507,7 @@ export function createAgentRouter(deps: ProjectRouterDependencies): Router {
     const logger = getLogger('agent-send');
     const id = req.params['id'] as string;
     const body = req.body as AgentMessageBody;
-    const { message, images, files } = body;
+    const { message, images, files, superwebAuthToken } = body;
 
     logger.info('Received send request', {
       projectId: id,
@@ -486,6 +525,14 @@ export function createAgentRouter(deps: ProjectRouterDependencies): Router {
     if (mode !== 'interactive') {
       logger.warn('Agent not in interactive mode', { projectId: id, mode });
       throw new ValidationError('Agent is not in interactive mode');
+    }
+
+    try {
+      await ensureUserHasCredits(superwebAuthToken);
+    } catch (error) {
+      const statusCode = Number((error as any)?.statusCode || 402);
+      res.status(statusCode).json({ error: statusCode === 401 ? 'Billing session expired. Refresh SuperWeb and try again.' : 'No credits available. Add credits in SuperWeb to continue.' });
+      return;
     }
 
     logger.info('Sending input to agent', { projectId: id });

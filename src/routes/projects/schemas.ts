@@ -90,6 +90,7 @@ export const agentMessageSchema = z.object({
   message: z.string().optional(),
   images: z.array(imageSchema).optional(),
   files: z.array(attachedFileSchema).optional(),
+  superwebAuthToken: z.string().optional(),
   sessionId: z.string().optional(),
   permissionMode: z.enum(['acceptEdits', 'plan']).optional(),
   currentUrl: z.string().optional(),
@@ -99,6 +100,7 @@ export const agentSendMessageSchema = z.object({
   message: z.string().min(1, 'Message is required').optional(),
   images: z.array(imageSchema).optional(),
   files: z.array(attachedFileSchema).optional(),
+  superwebAuthToken: z.string().optional(),
 }).refine((data) => data.message || (data.images && data.images.length > 0) || (data.files && data.files.length > 0), {
   message: 'Either message, images, or files must be provided',
 });

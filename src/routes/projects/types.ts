@@ -96,6 +96,7 @@ export interface AgentMessageBody {
     url: string;
     fileName?: string;
   }>;
+  superwebAuthToken?: string;
   sessionId?: string;
   permissionMode?: 'acceptEdits' | 'plan';
   currentUrl?: string;

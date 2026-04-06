@@ -594,6 +594,7 @@
    */
   ApiClient.startInteractiveAgent = function (id, message, images, files, sessionId, permissionMode) {
     var payload = { message: message || '' };
+    var superwebAuthToken = sessionStorage.getItem('superweb-auth-token');
 
     if (images && images.length > 0) {
       payload.images = images.map(function (img) {
@@ -619,6 +620,10 @@
 
     if (permissionMode) {
       payload.permissionMode = permissionMode;
+    }
+
+    if (superwebAuthToken) {
+      payload.superwebAuthToken = superwebAuthToken;
     }
 
     payload.currentUrl = window.location.href;
@@ -652,6 +657,7 @@
    */
   ApiClient.sendAgentMessage = function (id, message, images, files) {
     var payload = { message: message };
+    var superwebAuthToken = sessionStorage.getItem('superweb-auth-token');
 
     if (images && images.length > 0) {
       payload.images = images.map(function (img) {
@@ -669,6 +675,10 @@
           fileName: file.fileName
         };
       });
+    }
+
+    if (superwebAuthToken) {
+      payload.superwebAuthToken = superwebAuthToken;
     }
 
     return $.ajax({

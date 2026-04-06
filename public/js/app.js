@@ -45,6 +45,7 @@
   var DEFAULT_PROJECT_PATH = '/home/superengineer/super-code';
   var DEFAULT_PROJECT_NAME = 'super-code';
   var defaultProjectBootstrapAttempted = false;
+  var isEmbeddedInParent = !!(window.parent && window.parent !== window);
 
   // Generate unique client ID for this session
   var clientId = sessionStorage.getItem('superengineer-client-id');
@@ -198,6 +199,13 @@
     abilitiesPageSize: 10,
     supabaseMcpActionLoading: false
   };
+
+  function isCreditsBlocked() {
+    if (!isEmbeddedInParent) {
+      return false;
+    }
+    return !state.creditsKnown || state.creditBalanceUsd <= 0;
+  }
 
   // Local storage keys - use module's KEYS
   var LOCAL_STORAGE_KEYS = LocalStorage.KEYS;
@@ -465,6 +473,35 @@
       $('#modal-prompt').removeClass('hidden');
       $('#prompt-modal-input').focus();
     });
+  }
+
+  function showRechargeCreditsModal(message) {
+    $('#no-credits-modal-message').text(message || 'Your SuperWeb account does not have enough credits to continue chatting.');
+
+    var cleanup = function () {
+      $('#btn-no-credits-recharge').off('click.noCredits');
+      $('#modal-no-credits .modal-close').off('click.noCredits');
+      $('#modal-no-credits .modal-backdrop').off('click.noCredits');
+      $('#modal-no-credits').addClass('hidden');
+    };
+
+    $('#btn-no-credits-recharge').on('click.noCredits', function () {
+      cleanup();
+      if (isEmbeddedInParent) {
+        window.parent.postMessage({
+          type: 'superengineer_open_credit_purchase',
+          source: 'superengineer'
+        }, '*');
+      } else {
+        window.location.href = '/';
+      }
+    });
+
+    $('#modal-no-credits .modal-close, #modal-no-credits .modal-backdrop').on('click.noCredits', function () {
+      cleanup();
+    });
+
+    $('#modal-no-credits').removeClass('hidden');
   }
 
   // Check for unsaved MCP changes and show confirmation dialog
@@ -2217,11 +2254,16 @@
 
   function updateInputHint() {
     var isMobile = FileBrowser.isMobileView();
-    var creditsBlocked = state.creditsKnown && state.creditBalanceUsd <= 0;
+    var creditsBlocked = isCreditsBlocked();
 
     if (creditsBlocked) {
-      $('#input-hint-text').text('Add credits in SuperWeb to unlock AI chat');
-      $('#input-message').attr('placeholder', 'Credits required to message Superengineer');
+      if (!state.creditsKnown) {
+        $('#input-hint-text').text('Checking credits from SuperWeb...');
+        $('#input-message').attr('placeholder', 'Checking your credit balance...');
+      } else {
+        $('#input-hint-text').text('Add credits in SuperWeb to unlock AI chat');
+        $('#input-message').attr('placeholder', 'Credits required to message Superengineer');
+      }
       $('#btn-send-message').attr('title', 'Credits required');
       $('#credit-lock-banner').removeClass('hidden');
       return;
@@ -3745,7 +3787,7 @@
   function setPromptBlockingState(promptType) {
     state.activePromptType = promptType;
     var isBlocked = promptType !== null;
-    var creditsBlocked = state.creditsKnown && state.creditBalanceUsd <= 0;
+    var creditsBlocked = isCreditsBlocked();
 
     // Disable input and send button when prompt is active
     $('#input-message').prop('disabled', isBlocked || creditsBlocked);
@@ -3842,7 +3884,7 @@
     var isRunning = project && project.status === 'running';
     var isInteractive = state.currentAgentMode === 'interactive';
     var isInteractiveMode = true; // Always in interactive mode now
-    var creditsBlocked = state.creditsKnown && state.creditBalanceUsd <= 0;
+    var creditsBlocked = isCreditsBlocked();
 
     // Interactive mode: always enable input (will auto-start agent if needed)
     if (isInteractiveMode) {
@@ -3863,9 +3905,11 @@
   }
 
   function sendMessage() {
-    if (state.creditsKnown && state.creditBalanceUsd <= 0) {
+    if (isCreditsBlocked()) {
       updateInputArea();
-      showToast('Add credits in SuperWeb before sending another AI message.', 'error');
+      showRechargeCreditsModal(state.creditsKnown
+        ? 'No credits available. Recharge your SuperWeb account to continue chatting.'
+        : 'We are still checking your SuperWeb credit balance. If you already know you have no credits, recharge now.');
       return;
     }
 
@@ -4065,9 +4109,20 @@
       if (data.type === 'superweb_credit_state') {
         state.creditBalanceUsd = Number(data.creditBalanceUsd || 0);
         state.creditsKnown = true;
+        if (data.superwebAuthToken) {
+          sessionStorage.setItem('superweb-auth-token', String(data.superwebAuthToken));
+        }
         updateInputArea();
       }
     });
+
+    if (isEmbeddedInParent) {
+      window.parent.postMessage({
+        type: 'superengineer_credit_state_sync_request',
+        source: 'superengineer'
+      }, '*');
+      updateInputArea();
+    }
   }
 
   function postUserActivityToParent() {
@@ -4095,7 +4150,7 @@
 
   function doSendMessage(message) {
     if (state.messageSending) return;
-    if (state.creditsKnown && state.creditBalanceUsd <= 0) return;
+    if (isCreditsBlocked()) return;
 
     var projectId = state.selectedProjectId;
     var $input = $('#input-message');
@@ -4156,15 +4211,14 @@
       })
       .always(function () {
         state.messageSending = false;
-        $input.prop('disabled', false);
-        $('#btn-send-message').prop('disabled', false);
+        updateInputArea();
         $input.focus();
       });
   }
 
   function startInteractiveAgentWithMessage(message) {
     if (state.agentStarting) return;
-    if (state.creditsKnown && state.creditBalanceUsd <= 0) {
+    if (isCreditsBlocked()) {
       updateInputArea();
       return;
     }
